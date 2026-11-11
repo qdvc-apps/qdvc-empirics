@@ -212,7 +212,7 @@ struct CodesTable: View {
                 } label: {
                     Label(kind == .open ? "New Open Code" : "New Axial Code", systemImage: "plus")
                 }
-                LayerMenu()
+                LayerMenu(model: model)
                     .fixedSize()
             }
         }
@@ -285,8 +285,9 @@ struct CodebooksTable: View {
 // MARK: - People
 
 /// A person's real name for a table cell: shown, hidden, or not mapped.
+/// (Table cells take the model directly rather than from the environment.)
 struct RealNameCell: View {
-    @Environment(AppModel.self) private var model
+    let model: AppModel
     var key: String
 
     var body: some View {
@@ -337,7 +338,7 @@ struct ResearchersTable: View {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
                 TableColumn("First Name", value: \Researcher.firstName)
                 TableColumn("Last Name", value: \Researcher.lastName)
-                TableColumn("Real Name") { (r: Researcher) in RealNameCell(key: r.key) }
+                TableColumn("Real Name") { (r: Researcher) in RealNameCell(model: model, key: r.key) }
                 TableColumn("This Mac") { (r: Researcher) in
                     if r.key == model.currentResearcher { Image(systemName: "checkmark") }
                 }
@@ -388,9 +389,9 @@ struct IntervieweesTable: View {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
                 TableColumn("First Name", value: \Interviewee.firstName)
                 TableColumn("Last Name", value: \Interviewee.lastName)
-                TableColumn("Real Name") { (i: Interviewee) in RealNameCell(key: i.key) }
+                TableColumn("Real Name") { (i: Interviewee) in RealNameCell(model: model, key: i.key) }
                 TableColumn("Consent Form") { (i: Interviewee) in
-                    ConsentStatus(interviewee: i)
+                    ConsentStatus(model: model, interviewee: i)
                 }
                 .width(min: 90, ideal: 110, max: 140)
                 TableColumn("Transcripts") { (i: Interviewee) in
@@ -422,7 +423,7 @@ struct IntervieweesTable: View {
 }
 
 struct ConsentStatus: View {
-    @Environment(AppModel.self) private var model
+    let model: AppModel
     var interviewee: Interviewee
 
     var body: some View {

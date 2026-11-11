@@ -102,6 +102,19 @@ Area; `sidebarChanged(from:)` (from the view's `onChange`) records history
 and resets per-page state. Tables bind their selection to
 `AppModel.tableSelection`, which the inspector reads.
 
+**Never read `@Environment(AppModel.self)` in views that SwiftUI hosts
+apart from the window's view tree:** toolbar items, table cells and
+context-menu content. Pass the model in (`MainToolbar(model:)`,
+`LayerMenu(model:)`, `RealNameCell(model:)`, `ConsentStatus(model:)`,
+`WorkingAreaRow(model:)`), or capture it in a local constant in `body`.
+When the toolbar was rebuilt after a sidebar click, a toolbar item with
+`@Environment(AppModel.self)` found no model and the app trapped in
+`EnvironmentValues.subscript.getter`. The toolbar is attached to the
+detail column, not the split view: attached to the split view, items with
+placement `.navigation` (Back, Forward) went into the sidebar's title bar
+beside the window buttons. Each split-view column also gets the model
+injected again with `.environment(model)`.
+
 SwiftUI Tables and long closure chains are slow to type-check: give table
 columns explicit row types (`{ (f: EmpiricalFile) in … }`), keep cells
 simple, and split sorts into statements (the compiler gave up on one chain

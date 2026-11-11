@@ -13,6 +13,7 @@ struct ContentView: View {
         @Bindable var model = model
         NavigationSplitView(columnVisibility: $columns) {
             Sidebar()
+                .environment(model)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 420)
         } detail: {
             VStack(spacing: 0) {
@@ -23,12 +24,19 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             }
+            .environment(model)
+            // The toolbar belongs to the detail column, as Apple recommends for
+            // split views: attached to the split view itself, Back and Forward
+            // (placement .navigation) landed in the sidebar's title bar, beside
+            // the window buttons, and toolbar items lost the environment when
+            // the toolbar was rebuilt.
+            .toolbar { MainToolbar(model: model) }
         }
         .inspector(isPresented: $model.showInspector) {
             InspectorView()
+                .environment(model)
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
         }
-        .toolbar { toolbar }
         .navigationTitle(model.isOpen ? model.project.settings.title : "QDVC Empirics")
         .navigationSubtitle(subtitle)
         .sheet(item: $model.sheet) { kind in
@@ -92,9 +100,15 @@ struct ContentView: View {
                                    description: Text("Choose a page in the sidebar."))
         }
     }
+}
 
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
+/// The main window's toolbar, on the detail column. It holds the model
+/// directly: toolbar items are hosted apart from the window's views and are
+/// re-evaluated outside ContentView's updates.
+struct MainToolbar: ToolbarContent {
+    let model: AppModel
+
+    var body: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
             Button {
                 model.goBack()
@@ -112,7 +126,7 @@ struct ContentView: View {
             .help("Forward (⌃⌘→)")
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            LayerMenu()
+            LayerMenu(model: model)
             if model.hasRealNameFiles {
                 Toggle(isOn: Binding(get: { model.showRealNames }, set: { model.showRealNames = $0 })) {
                     Label("Real Names", systemImage: model.showRealNames ? "eye" : "eye.slash")
@@ -154,8 +168,11 @@ struct ContentView: View {
 
 /// The toolbar's layer menu: the active layer (where new coding goes), and
 /// which other layers show (as underlines).
+///
+/// Takes the model directly rather than from the environment: toolbar items
+/// are hosted apart from the window's views, and must not depend on it.
 struct LayerMenu: View {
-    @Environment(AppModel.self) private var model
+    let model: AppModel
 
     var body: some View {
         Menu {
@@ -275,9 +292,9 @@ struct Sidebar: View {
             }
             Section("Working Area") {
                 ForEach(model.workingArea, id: \.self) { item in
-                    WorkingAreaRow(item: item)
+                    WorkingAreaRow(model: model, item: item)
                         .tag(item)
-                        .contextMenu { workingAreaMenu(item) }
+                        .contextMenu { workingAreaMenu(item, model) }
                 }
                 .onMove { from, to in model.moveWorkingArea(from: from, to: to) }
                 if model.workingArea.isEmpty {
@@ -301,8 +318,9 @@ struct Sidebar: View {
         }
     }
 
+    /// (Takes the model directly: menu content is built apart from the row.)
     @ViewBuilder
-    func workingAreaMenu(_ item: SidebarItem) -> some View {
+    func workingAreaMenu(_ item: SidebarItem, _ model: AppModel) -> some View {
         Button("Open") { model.show(item) }
         if case .file(let k) = item, let f = model.project.files[k] {
             Divider()
@@ -322,7 +340,7 @@ struct Sidebar: View {
 /// A Working Area row: files as in the Empirical Files list; codes,
 /// codebooks and people with their icon.
 struct WorkingAreaRow: View {
-    @Environment(AppModel.self) private var model
+    let model: AppModel
     var item: SidebarItem
 
     var body: some View {

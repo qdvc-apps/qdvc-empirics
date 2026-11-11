@@ -283,7 +283,7 @@ struct PersonForm: View {
                     Button("Choose Consent Form…") { model.chooseConsentForm(for: key) }
                         .controlSize(.small)
                 } else {
-                    ConsentStatus(interviewee: i)
+                    ConsentStatus(model: model, interviewee: i)
                     Text(i.consentForm).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2)
                     HStack {
                         Button("View") { model.sheet = .consent(key) }

@@ -101,6 +101,9 @@ struct QuickCodeStrip: View {
     var compact: Bool
 
     var body: some View {
+        // Captured here, so the context menu (built apart from the view)
+        // doesn't read the environment.
+        let model = self.model
         let slots = model.quickCodes.enumerated().compactMap { i, key -> (Int, QDACode)? in
             guard !key.isEmpty, let c = model.activeLayer?.codes[key] else { return nil }
             return (i + 1, c)
