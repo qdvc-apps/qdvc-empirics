@@ -51,7 +51,7 @@ sections:
 - **Analysis:** Codebooks, Open Codes, Axial Codes, Layers.
 - **Working Area:** the files, codes, codebooks and people you are working
   on. Double-click a row in any table to open its page and put it here;
-  right-click to remove it (or the others), drag to reorder. It is
+  right-click to move it up or down, or to remove it (or the others). It is
   remembered on this Mac.
 
 The list pages are plain tables (click a column heading to sort, filter at

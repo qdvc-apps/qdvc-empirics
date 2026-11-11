@@ -40,7 +40,7 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   Project Settings), *Analysis* (Codebooks, Open Codes, Axial Codes,
   Layers), and the *Working Area*: the items being worked on, like open
   documents. Double-clicking a row in any table opens its page and puts it
-  there; it is kept on this Mac, in the order you drag it to. Moving to the
+  there; it is kept on this Mac (reorder from the context menu). Moving to the
   next file (⌥⌘], ⌥⌘N) swaps the file in its place, so a session of coding
   file after file doesn't fill the Working Area. A progress bar of coded
   files sits at the bottom.

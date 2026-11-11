@@ -287,17 +287,16 @@ struct Sidebar: View {
                 Label("Layers", systemImage: "square.3.layers.3d")
                     .tag(SidebarItem.layers)
             }
+            // Every sidebar row is a single line of fixed height. A wrapping
+            // hint row here ("Double-click a file…") was measured at the wrong
+            // width when the selection changed, grew hundreds of points tall
+            // and pushed the rows above it up under the window buttons. Rows
+            // aren't draggable either (reorder from the context menu).
             Section("Working Area") {
                 ForEach(model.workingArea, id: \.self) { item in
                     WorkingAreaRow(model: model, item: item)
                         .tag(item)
                         .contextMenu { workingAreaMenu(item, model) }
-                }
-                .onMove { from, to in model.moveWorkingArea(from: from, to: to) }
-                if model.workingArea.isEmpty {
-                    Text("Double-click a file, code, codebook or person in a table to work on it here.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -311,6 +310,7 @@ struct Sidebar: View {
                     .tint(.green)
                 Text(all == 0 ? "No files yet" : "\(coded) of \(all) files coded")
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    .lineLimit(1)
             }
             .padding(10)
         }
@@ -327,6 +327,11 @@ struct Sidebar: View {
                     .disabled(f.status == s)
             }
         }
+        Divider()
+        Button("Move Up") { model.moveInWorkingArea(item, by: -1) }
+            .disabled(model.workingArea.first == item)
+        Button("Move Down") { model.moveInWorkingArea(item, by: 1) }
+            .disabled(model.workingArea.last == item)
         Divider()
         Button("Remove from Working Area") { model.removeFromWorkingArea(item) }
         Button("Remove Others from Working Area") { model.clearWorkingArea(except: item) }
@@ -360,11 +365,11 @@ struct WorkingAreaRow: View {
                 }
             }
         case .codebook(let k):
-            Label(model.project.codebooks[k]?.title ?? "", systemImage: "text.book.closed")
+            Label(model.project.codebooks[k]?.title ?? "", systemImage: "text.book.closed").lineLimit(1)
         case .researcher(let k):
-            Label(model.personName(k) ?? "", systemImage: "graduationcap")
+            Label(model.personName(k) ?? "", systemImage: "graduationcap").lineLimit(1)
         case .interviewee(let k):
-            Label(model.personName(k) ?? "", systemImage: "person.bubble")
+            Label(model.personName(k) ?? "", systemImage: "person.bubble").lineLimit(1)
         default:
             EmptyView()
         }
@@ -376,6 +381,7 @@ struct FileRow: View {
     var count: Int
 
     var body: some View {
+        // Two lines exactly, neither of which wraps (see Sidebar).
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: file.status.symbol)
                 .foregroundStyle(file.status.tint)
@@ -383,7 +389,7 @@ struct FileRow: View {
                 .padding(.top, 2)
                 .help(file.status.label)
             VStack(alignment: .leading, spacing: 1) {
-                Text(file.displayTitle).lineLimit(2)
+                Text(file.displayTitle).lineLimit(1).truncationMode(.tail)
                 HStack(spacing: 6) {
                     if !file.customID.isEmpty {
                         Text(file.customID).font(.caption.monospaced())
@@ -397,6 +403,7 @@ struct FileRow: View {
                             .help("\(count) selection\(count == 1 ? "" : "s") (all layers)")
                     }
                 }
+                .lineLimit(1)
                 .foregroundStyle(.secondary)
             }
         }

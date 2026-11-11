@@ -770,8 +770,11 @@ final class AppModel {
         if let s = sidebar, s.key != nil, s != keep { sidebar = listPage(for: s) }
     }
 
-    func moveWorkingArea(from: IndexSet, to: Int) {
-        workingArea.move(fromOffsets: from, toOffset: to)
+    func moveInWorkingArea(_ item: SidebarItem, by step: Int) {
+        guard let i = workingArea.firstIndex(of: item) else { return }
+        let j = i + step
+        guard workingArea.indices.contains(j) else { return }
+        workingArea.swapAt(i, j)
         saveWorkingArea()
     }
 

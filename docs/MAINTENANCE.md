@@ -115,12 +115,14 @@ placement `.navigation` (Back, Forward) went into the sidebar's title bar
 beside the window buttons. Each split-view column also gets the model
 injected again with `.environment(model)`.
 
-**No `.badge()` on sidebar rows.** With count badges on the sidebar's
-rows, clicking a badged row left the list's rows laid out wrongly: pushed up
-under the window buttons, mostly off-screen, and not repaired by resizing.
-Rows without badges (Project Settings, Working Area files) were unaffected.
-Counts live in each table's footer instead. Likewise keep the sidebar's
-`safeAreaInset` content unconditional.
+**Keep every sidebar row a single line of fixed height.** No wrapping text
+(a hint row such as "Double-click a file… to work on it here"), no
+`lineLimit(2)` titles, no `.badge()`, no drag-to-reorder (`.onMove`), and no
+conditional `safeAreaInset` content. The sidebar is an NSOutlineView that
+measures SwiftUI rows itself; a wrapping row measured at the wrong width
+during a selection change grew very tall and pushed the rows above it up
+under the window buttons, mostly off-screen, and resizing didn't repair it.
+Explanations belong on the pages (each table's header), not in the sidebar.
 
 SwiftUI Tables and long closure chains are slow to type-check: give table
 columns explicit row types (`{ (f: EmpiricalFile) in … }`), keep cells
