@@ -89,7 +89,7 @@ Working Area, documents, interlocutors, response sheets, real names;
 `@Observable`, main actor), `AppModel+Coding` (coding operations, files,
 layers), `DeviceStore` (UserDefaults and security-scoped bookmarks),
 `ContentView` (split view, sidebar and Working Area, toolbar, document page),
-`ListPages` (the tables), `ItemPages` (code, codebook and person pages),
+`ListPages` (the list pages), `DataTable` (their table), `ItemPages` (code, codebook and person pages),
 `TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
 `CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
 by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
@@ -124,10 +124,18 @@ during a selection change grew very tall and pushed the rows above it up
 under the window buttons, mostly off-screen, and resizing didn't repair it.
 Explanations belong on the pages (each table's header), not in the sidebar.
 
-SwiftUI Tables and long closure chains are slow to type-check: give table
-columns explicit row types (`{ (f: EmpiricalFile) in … }`), keep cells
-simple, and split sorts into statements (the compiler gave up on one chain
-in `CodingBar`).
+**No SwiftUI `Table` in the main window.** With a `Table` (an AppKit table
+view in its own scroll view) in the detail column, the sidebar's rows were
+thrown out of place, pushed up under the window buttons and not repaired by
+resizing, every time a table page opened; pages built on a SwiftUI
+ScrollView (Layers, Project Settings, documents) never did it. The list
+pages use `DataTable` (DataTable.swift): a header of sortable columns over a
+LazyVStack in a ScrollView, with selection, double-click and Return to open,
+↑ ↓, and a context menu per row. Give its columns explicit row types
+(`DataColumn<EmpiricalFile>(…) { (f: EmpiricalFile) in … }`).
+
+Long closure chains are slow to type-check: split sorts into statements
+(the compiler gave up on one chain in `CodingBar`).
 
 ### 2.1 Changes, undo and saving
 

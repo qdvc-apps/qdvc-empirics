@@ -44,9 +44,11 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   next file (⌥⌘], ⌥⌘N) swaps the file in its place, so a session of coding
   file after file doesn't fill the Working Area. A progress bar of coded
   files sits at the bottom.
-- **List pages** are plain Tables (sortable columns, a filter, add buttons
+- **List pages** are plain tables (sortable columns, a filter, add buttons
   in a bar at the bottom), as in Finder's list view: selecting a row shows
-  it in the inspector, double-clicking opens it.
+  it in the inspector, double-clicking (or Return) opens it. They are drawn
+  by the app's own `DataTable`, not SwiftUI's `Table`, which disturbed the
+  sidebar (docs/MAINTENANCE.md); columns sort but can't be resized.
 - **Item pages.** An empirical file (the document), a code (its evidence), a
   codebook (its questions), a person (a card laid out like Contacts, with a
   monogram, labelled fields and the transcripts they speak in).

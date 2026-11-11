@@ -54,7 +54,7 @@ struct PageHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.title2.weight(.semibold))
-            Text(subtitle).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -66,54 +66,55 @@ struct PageHeader: View {
 
 struct FilesTable: View {
     @Environment(AppModel.self) private var model
-    @State private var sortOrder = [KeyPathComparator(\EmpiricalFile.sortID)]
+
+    var columns: [DataColumn<EmpiricalFile>] {
+        let model = self.model
+        var c: [DataColumn<EmpiricalFile>] = []
+        c.append(DataColumn<EmpiricalFile>("Status", width: 120, order: DataColumn<EmpiricalFile>.number { $0.statusOrder }) { (f: EmpiricalFile) in
+            Label(f.status.label, systemImage: f.status.symbol).foregroundStyle(f.status.tint)
+        })
+        c.append(DataColumn<EmpiricalFile>("ID", width: 130, order: DataColumn<EmpiricalFile>.text { $0.customID }) { (f: EmpiricalFile) in
+            Text(f.customID).font(.body.monospaced())
+        })
+        c.append(DataColumn<EmpiricalFile>("Title", minWidth: 140, order: DataColumn<EmpiricalFile>.text { $0.displayTitle }) { (f: EmpiricalFile) in
+            Text(f.displayTitle)
+        })
+        c.append(DataColumn<EmpiricalFile>("Date", width: 100, order: DataColumn<EmpiricalFile>.text { $0.date }) { (f: EmpiricalFile) in
+            Text(f.date).monospacedDigit()
+        })
+        c.append(DataColumn<EmpiricalFile>("Kind", width: 90, order: DataColumn<EmpiricalFile>.text { $0.kindLabel }) { (f: EmpiricalFile) in
+            Text(f.kindLabel)
+        })
+        c.append(DataColumn<EmpiricalFile>("Selections", width: 84, alignment: .trailing,
+                            order: DataColumn<EmpiricalFile>.number { model.index.selectionCount[$0.key] ?? 0 }) { (f: EmpiricalFile) in
+            Text("\(model.index.selectionCount[f.key] ?? 0)").monospacedDigit()
+        })
+        c.append(DataColumn<EmpiricalFile>("Location", minWidth: 120, order: DataColumn<EmpiricalFile>.text { $0.path }) { (f: EmpiricalFile) in
+            Text(f.path).font(.caption.monospaced()).foregroundStyle(.secondary)
+        })
+        return c
+    }
 
     var body: some View {
         @Bindable var model = model
-        let rows: [EmpiricalFile] = model.visibleFiles.sorted(using: sortOrder)
         let coded = model.project.files.values.filter { $0.status == .coded }.count
         VStack(spacing: 0) {
             PageHeader(title: "Empirical Files",
                        subtitle: "Transcripts, notes and articles in the full-texts folder. Double-click one to code it.")
             Divider()
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
-                TableColumn("Status", value: \EmpiricalFile.statusOrder) { (f: EmpiricalFile) in
-                    Label(f.status.label, systemImage: f.status.symbol)
-                        .foregroundStyle(f.status.tint)
+            DataTable(rows: model.visibleFiles, columns: columns, selection: $model.tableSelection, defaultSort: 1,
+                      emptyText: "No files yet. Add them from the full-texts folder with Add below.",
+                      onOpen: { key in model.show(.file(key)) }) { (f: EmpiricalFile) in
+                Button("Open") { model.show(.file(f.key)) }
+                Button("Add to Working Area") { model.addToWorkingArea(.file(f.key)) }
+                    .disabled(model.workingArea.contains(.file(f.key)))
+                Divider()
+                ForEach(CodingStatus.allCases, id: \.self) { s in
+                    Button("Mark as \(s.label)") { model.setStatus(s, file: f.key) }
+                        .disabled(f.status == s)
                 }
-                .width(min: 90, ideal: 110, max: 130)
-                TableColumn("ID", value: \EmpiricalFile.customID) { (f: EmpiricalFile) in
-                    Text(f.customID).font(.body.monospaced())
-                }
-                .width(min: 60, ideal: 120, max: 200)
-                TableColumn("Title", value: \EmpiricalFile.displayTitle)
-                TableColumn("Date", value: \EmpiricalFile.date)
-                    .width(min: 70, ideal: 90, max: 120)
-                TableColumn("Kind", value: \EmpiricalFile.kindLabel)
-                    .width(min: 60, ideal: 80, max: 110)
-                TableColumn("Selections") { (f: EmpiricalFile) in
-                    Text("\(model.index.selectionCount[f.key] ?? 0)").monospacedDigit()
-                }
-                .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Location", value: \EmpiricalFile.path) { (f: EmpiricalFile) in
-                    Text(f.path).font(.caption.monospaced()).foregroundStyle(.secondary)
-                }
-            }
-            .contextMenu(forSelectionType: String.self) { keys in
-                if let key = keys.first, let f = model.project.files[key] {
-                    Button("Open") { model.show(.file(key)) }
-                    Button("Add to Working Area") { model.addToWorkingArea(.file(key)) }
-                        .disabled(model.workingArea.contains(.file(key)))
-                    Divider()
-                    ForEach(CodingStatus.allCases, id: \.self) { s in
-                        Button("Mark as \(s.label)") { model.setStatus(s, file: key) }
-                            .disabled(f.status == s)
-                    }
-                    Divider()
-                    Button("Remove from Project…") { model.removeFile(key) }
-                }
-            } primaryAction: { keys in
-                if let key = keys.first { model.show(.file(key)) }
+                Divider()
+                Button("Remove from Project…") { model.removeFile(f.key) }
             }
             TableFooter(count: "\(coded) of \(model.project.files.count) coded", filter: $model.fileFilter) {
                 Menu {
@@ -136,8 +137,36 @@ struct FilesTable: View {
 struct CodesTable: View {
     @Environment(AppModel.self) private var model
     let kind: CodeKind
-    @State private var sortOrder = [KeyPathComparator(\QDACode.name)]
     @State private var filter = ""
+
+    var columns: [DataColumn<QDACode>] {
+        let model = self.model
+        var c: [DataColumn<QDACode>] = []
+        c.append(DataColumn<QDACode>("Name", minWidth: 160, order: DataColumn<QDACode>.text { $0.name }) { (code: QDACode) in
+            HStack(spacing: 6) {
+                CodeDot(color: code.color)
+                Text(code.name)
+            }
+        })
+        c.append(DataColumn<QDACode>("Evidence", width: 80, alignment: .trailing, order: DataColumn<QDACode>.number { $0.evidenceCount }) { (code: QDACode) in
+            Text("\(code.evidence.count)").monospacedDigit()
+        })
+        c.append(DataColumn<QDACode>("Files", width: 60, alignment: .trailing,
+                            order: DataColumn<QDACode>.number { model.index.filesForCode[$0.key]?.count ?? 0 }) { (code: QDACode) in
+            Text("\(model.index.filesForCode[code.key]?.count ?? 0)").monospacedDigit()
+        })
+        c.append(DataColumn<QDACode>("Evidence For", minWidth: 120, order: DataColumn<QDACode>.text { self.parentNames($0) }) { (code: QDACode) in
+            Text(self.parentNames(code)).foregroundStyle(.secondary)
+        })
+        c.append(DataColumn<QDACode>("Questions", width: 84, alignment: .trailing, order: DataColumn<QDACode>.number { $0.questionCount }) { (code: QDACode) in
+            Text(code.questions.isEmpty ? "" : "\(code.questions.count)").monospacedDigit()
+        })
+        c.append(DataColumn<QDACode>("Quick", width: 56, alignment: .trailing,
+                            order: DataColumn<QDACode>.number { model.quickSlot(of: $0.key) ?? 99 }) { (code: QDACode) in
+            Text(model.quickSlot(of: code.key).map { "\($0)" } ?? "").monospacedDigit()
+        })
+        return c
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -146,65 +175,34 @@ struct CodesTable: View {
         let shown: [QDACode] = q.isEmpty ? all : all.filter { c in
             c.name.localizedCaseInsensitiveContains(q) || c.description.localizedCaseInsensitiveContains(q)
         }
-        let rows: [QDACode] = shown.sorted(using: sortOrder)
+        let what = kind == .open ? "Codes evidenced directly by selections" : "Codes built from open codes and other axial codes"
+        let layerName = model.activeLayer?.name ?? ""
         VStack(spacing: 0) {
             PageHeader(title: kind == .open ? "Open Codes" : "Axial Codes",
-                       subtitle: (kind == .open
-                                  ? "Codes evidenced directly by selections"
-                                  : "Codes built from open codes and other axial codes")
-                           + " in the layer “\(model.activeLayer?.name ?? "")”. Double-click one to open its evidence.")
+                       subtitle: "\(what), in the layer “\(layerName)”. Double-click one to open its evidence.")
             Divider()
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
-                TableColumn("Name", value: \QDACode.name) { (c: QDACode) in
-                    HStack(spacing: 6) {
-                        CodeDot(color: c.color)
-                        Text(c.name)
-                    }
-                }
-                TableColumn("Evidence", value: \QDACode.evidenceCount) { (c: QDACode) in
-                    Text("\(c.evidence.count)").monospacedDigit()
-                }
-                .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Files") { (c: QDACode) in
-                    Text("\(model.index.filesForCode[c.key]?.count ?? 0)").monospacedDigit()
-                }
-                .width(min: 40, ideal: 50, max: 70)
-                TableColumn("Evidence For") { (c: QDACode) in
-                    Text(parentNames(c)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                TableColumn("Questions", value: \QDACode.questionCount) { (c: QDACode) in
-                    Text(c.questions.isEmpty ? "" : "\(c.questions.count)").monospacedDigit()
-                }
-                .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Quick") { (c: QDACode) in
-                    Text(model.quickSlot(of: c.key).map { "\($0)" } ?? "").monospacedDigit()
-                }
-                .width(min: 40, ideal: 44, max: 60)
-            }
-            .contextMenu(forSelectionType: String.self) { keys in
-                if let key = keys.first, let code = model.project.code(key) {
-                    Button("Open") { model.show(.code(key)) }
-                    Button("Add to Working Area") { model.addToWorkingArea(.code(key)) }
-                        .disabled(model.workingArea.contains(.code(key)))
-                    if code.kind == .open {
-                        Menu("Quick Code") {
-                            ForEach(1...9, id: \.self) { n in
-                                Button("\(n)") { model.assignQuickCode(key, slot: n) }
-                            }
-                            Divider()
-                            Button("None") {
-                                if let s = model.quickSlot(of: key) { model.assignQuickCode(nil, slot: s) }
-                            }
+            DataTable(rows: shown, columns: columns, selection: $model.tableSelection, defaultSort: 0,
+                      emptyText: kind == .open ? "No open codes in this layer yet." : "No axial codes in this layer yet.",
+                      onOpen: { key in model.show(.code(key)) }) { (code: QDACode) in
+                Button("Open") { model.show(.code(code.key)) }
+                Button("Add to Working Area") { model.addToWorkingArea(.code(code.key)) }
+                    .disabled(model.workingArea.contains(.code(code.key)))
+                if code.kind == .open {
+                    Menu("Quick Code") {
+                        ForEach(1...9, id: \.self) { n in
+                            Button("\(n)") { model.assignQuickCode(code.key, slot: n) }
+                        }
+                        Divider()
+                        Button("None") {
+                            if let s = model.quickSlot(of: code.key) { model.assignQuickCode(nil, slot: s) }
                         }
                     }
-                    if model.project.layers.count > 1 {
-                        Button("Move to Layer…") { model.sheet = .moveToLayer(key) }
-                    }
-                    Divider()
-                    Button("Delete Code…") { model.deleteCode(key) }
                 }
-            } primaryAction: { keys in
-                if let key = keys.first { model.show(.code(key)) }
+                if model.project.layers.count > 1 {
+                    Button("Move to Layer…") { model.sheet = .moveToLayer(code.key) }
+                }
+                Divider()
+                Button("Delete Code…") { model.deleteCode(code.key) }
             }
             TableFooter(count: "\(all.count) code\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
@@ -227,42 +225,42 @@ struct CodesTable: View {
 
 struct CodebooksTable: View {
     @Environment(AppModel.self) private var model
-    @State private var sortOrder = [KeyPathComparator(\Codebook.title)]
     @State private var filter = ""
+
+    var columns: [DataColumn<Codebook>] {
+        var c: [DataColumn<Codebook>] = []
+        c.append(DataColumn<Codebook>("Title", minWidth: 180, order: DataColumn<Codebook>.text { $0.title }) { (cb: Codebook) in
+            Label(cb.title, systemImage: "text.book.closed")
+        })
+        c.append(DataColumn<Codebook>("Questions", width: 84, alignment: .trailing, order: DataColumn<Codebook>.number { $0.questionCount }) { (cb: Codebook) in
+            Text("\(cb.questions.count)").monospacedDigit()
+        })
+        c.append(DataColumn<Codebook>("Applies To", minWidth: 160, order: DataColumn<Codebook>.text { $0.appliesToLabel }) { (cb: Codebook) in
+            Text(cb.appliesToLabel)
+        })
+        c.append(DataColumn<Codebook>("Response Sheets", width: 150) { (cb: Codebook) in
+            Text(self.sheetSummary(cb)).foregroundStyle(.secondary)
+        })
+        return c
+    }
 
     var body: some View {
         @Bindable var model = model
         let q = filter.trimmingCharacters(in: .whitespaces)
         let all: [Codebook] = Array(model.project.codebooks.values)
         let shown: [Codebook] = q.isEmpty ? all : all.filter { $0.title.localizedCaseInsensitiveContains(q) }
-        let rows: [Codebook] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             PageHeader(title: "Codebooks",
-                       subtitle: "Sets of questions answered about each empirical file, open code or axial code they are associated with. Double-click one to edit its questions.")
+                       subtitle: "Questions answered about each file, open code or axial code they are associated with. Double-click one to edit its questions.")
             Divider()
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
-                TableColumn("Title", value: \Codebook.title) { (cb: Codebook) in
-                    Label(cb.title, systemImage: "text.book.closed")
-                }
-                TableColumn("Questions", value: \Codebook.questionCount) { (cb: Codebook) in
-                    Text("\(cb.questions.count)").monospacedDigit()
-                }
-                .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Applies To", value: \Codebook.appliesToLabel)
-                TableColumn("Response Sheets") { (cb: Codebook) in
-                    Text(sheetSummary(cb)).foregroundStyle(.secondary)
-                }
-            }
-            .contextMenu(forSelectionType: String.self) { keys in
-                if let key = keys.first {
-                    Button("Open") { model.show(.codebook(key)) }
-                    Button("Add to Working Area") { model.addToWorkingArea(.codebook(key)) }
-                        .disabled(model.workingArea.contains(.codebook(key)))
-                    Divider()
-                    Button("Delete Codebook…") { model.deleteCodebook(key) }
-                }
-            } primaryAction: { keys in
-                if let key = keys.first { model.show(.codebook(key)) }
+            DataTable(rows: shown, columns: columns, selection: $model.tableSelection, defaultSort: 0,
+                      emptyText: "No codebooks yet.",
+                      onOpen: { key in model.show(.codebook(key)) }) { (cb: Codebook) in
+                Button("Open") { model.show(.codebook(cb.key)) }
+                Button("Add to Working Area") { model.addToWorkingArea(.codebook(cb.key)) }
+                    .disabled(model.workingArea.contains(.codebook(cb.key)))
+                Divider()
+                Button("Delete Codebook…") { model.deleteCodebook(cb.key) }
             }
             TableFooter(count: "\(all.count) codebook\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
@@ -305,15 +303,35 @@ struct RealNameCell: View {
 
 struct ResearchersTable: View {
     @Environment(AppModel.self) private var model
-    @State private var sortOrder = [KeyPathComparator(\Researcher.lastName)]
     @State private var filter = ""
+
+    var columns: [DataColumn<Researcher>] {
+        let model = self.model
+        var c: [DataColumn<Researcher>] = []
+        c.append(DataColumn<Researcher>("First Name", minWidth: 110, order: DataColumn<Researcher>.text { $0.firstName }) { (r: Researcher) in
+            Text(r.firstName)
+        })
+        c.append(DataColumn<Researcher>("Last Name", minWidth: 110, order: DataColumn<Researcher>.text { $0.lastName }) { (r: Researcher) in
+            Text(r.lastName)
+        })
+        c.append(DataColumn<Researcher>("Real Name", minWidth: 120) { (r: Researcher) in
+            RealNameCell(model: model, key: r.key)
+        })
+        c.append(DataColumn<Researcher>("This Mac", width: 74, alignment: .center) { (r: Researcher) in
+            Image(systemName: "checkmark").opacity(r.key == model.currentResearcher ? 1 : 0)
+        })
+        c.append(DataColumn<Researcher>("Layers", minWidth: 100) { (r: Researcher) in
+            Text(model.project.layers.filter { $0.researcher == r.key }.map(\.name).joined(separator: ", "))
+                .foregroundStyle(.secondary)
+        })
+        return c
+    }
 
     var body: some View {
         @Bindable var model = model
         let q = filter.trimmingCharacters(in: .whitespaces)
         let all = model.project.researchers
         let shown: [Researcher] = q.isEmpty ? all : all.filter { $0.fullName.localizedCaseInsensitiveContains(q) }
-        let rows: [Researcher] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             PageHeader(title: "Researchers",
                        subtitle: "The people doing the analysis, by pseudonym. Real names can come from a mapping file in the full-texts folder (Project Settings).")
@@ -329,36 +347,21 @@ struct ResearchersTable: View {
                 .labelsHidden()
                 .fixedSize()
                 Text("Your selections and codebook answers are filed under this name.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
             Divider()
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
-                TableColumn("First Name", value: \Researcher.firstName)
-                TableColumn("Last Name", value: \Researcher.lastName)
-                TableColumn("Real Name") { (r: Researcher) in RealNameCell(model: model, key: r.key) }
-                TableColumn("This Mac") { (r: Researcher) in
-                    if r.key == model.currentResearcher { Image(systemName: "checkmark") }
-                }
-                .width(min: 60, ideal: 70, max: 80)
-                TableColumn("Layers") { (r: Researcher) in
-                    Text(model.project.layers.filter { $0.researcher == r.key }.map(\.name).joined(separator: ", "))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .contextMenu(forSelectionType: String.self) { keys in
-                if let key = keys.first {
-                    Button("Open") { model.show(.researcher(key)) }
-                    Button("Add to Working Area") { model.addToWorkingArea(.researcher(key)) }
-                        .disabled(model.workingArea.contains(.researcher(key)))
-                    Button("This Is Me on This Mac") { model.setCurrentResearcher(key) }
-                    Divider()
-                    Button("Delete Researcher") { model.perform("Delete Researcher") { p in p.deleteResearcher(key) } }
-                }
-            } primaryAction: { keys in
-                if let key = keys.first { model.show(.researcher(key)) }
+            DataTable(rows: shown, columns: columns, selection: $model.tableSelection, defaultSort: 1,
+                      emptyText: "No researchers yet.",
+                      onOpen: { key in model.show(.researcher(key)) }) { (r: Researcher) in
+                Button("Open") { model.show(.researcher(r.key)) }
+                Button("Add to Working Area") { model.addToWorkingArea(.researcher(r.key)) }
+                    .disabled(model.workingArea.contains(.researcher(r.key)))
+                Button("This Is Me on This Mac") { model.setCurrentResearcher(r.key) }
+                Divider()
+                Button("Delete Researcher") { model.perform("Delete Researcher") { p in p.deleteResearcher(r.key) } }
             }
             TableFooter(count: "\(all.count) researcher\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
@@ -373,43 +376,48 @@ struct ResearchersTable: View {
 
 struct IntervieweesTable: View {
     @Environment(AppModel.self) private var model
-    @State private var sortOrder = [KeyPathComparator(\Interviewee.lastName)]
     @State private var filter = ""
+
+    var columns: [DataColumn<Interviewee>] {
+        let model = self.model
+        var c: [DataColumn<Interviewee>] = []
+        c.append(DataColumn<Interviewee>("First Name", minWidth: 110, order: DataColumn<Interviewee>.text { $0.firstName }) { (i: Interviewee) in
+            Text(i.firstName)
+        })
+        c.append(DataColumn<Interviewee>("Last Name", minWidth: 110, order: DataColumn<Interviewee>.text { $0.lastName }) { (i: Interviewee) in
+            Text(i.lastName)
+        })
+        c.append(DataColumn<Interviewee>("Real Name", minWidth: 120) { (i: Interviewee) in
+            RealNameCell(model: model, key: i.key)
+        })
+        c.append(DataColumn<Interviewee>("Consent Form", width: 120) { (i: Interviewee) in
+            ConsentStatus(model: model, interviewee: i)
+        })
+        c.append(DataColumn<Interviewee>("Transcripts", width: 90, alignment: .trailing,
+                            order: DataColumn<Interviewee>.number { model.transcripts(of: $0.key).count }) { (i: Interviewee) in
+            Text("\(model.transcripts(of: i.key).count)").monospacedDigit()
+        })
+        return c
+    }
 
     var body: some View {
         @Bindable var model = model
         let q = filter.trimmingCharacters(in: .whitespaces)
         let all = model.project.interviewees
         let shown: [Interviewee] = q.isEmpty ? all : all.filter { $0.fullName.localizedCaseInsensitiveContains(q) }
-        let rows: [Interviewee] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             PageHeader(title: "Interviewees",
                        subtitle: "Participants, by pseudonym. Real names can come from a mapping file in the full-texts folder (Project Settings); consent forms stay there too.")
             Divider()
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
-                TableColumn("First Name", value: \Interviewee.firstName)
-                TableColumn("Last Name", value: \Interviewee.lastName)
-                TableColumn("Real Name") { (i: Interviewee) in RealNameCell(model: model, key: i.key) }
-                TableColumn("Consent Form") { (i: Interviewee) in
-                    ConsentStatus(model: model, interviewee: i)
-                }
-                .width(min: 90, ideal: 110, max: 140)
-                TableColumn("Transcripts") { (i: Interviewee) in
-                    Text("\(model.transcripts(of: i.key).count)").monospacedDigit()
-                }
-                .width(min: 70, ideal: 80, max: 100)
-            }
-            .contextMenu(forSelectionType: String.self) { keys in
-                if let key = keys.first {
-                    Button("Open") { model.show(.interviewee(key)) }
-                    Button("Add to Working Area") { model.addToWorkingArea(.interviewee(key)) }
-                        .disabled(model.workingArea.contains(.interviewee(key)))
-                    Button("Choose Consent Form…") { model.chooseConsentForm(for: key) }
-                    Divider()
-                    Button("Delete Interviewee") { model.perform("Delete Interviewee") { p in p.deleteInterviewee(key) } }
-                }
-            } primaryAction: { keys in
-                if let key = keys.first { model.show(.interviewee(key)) }
+            DataTable(rows: shown, columns: columns, selection: $model.tableSelection, defaultSort: 1,
+                      emptyText: "No interviewees yet.",
+                      onOpen: { key in model.show(.interviewee(key)) }) { (i: Interviewee) in
+                Button("Open") { model.show(.interviewee(i.key)) }
+                Button("Add to Working Area") { model.addToWorkingArea(.interviewee(i.key)) }
+                    .disabled(model.workingArea.contains(.interviewee(i.key)))
+                Button("Choose Consent Form…") { model.chooseConsentForm(for: i.key) }
+                Divider()
+                Button("Delete Interviewee") { model.perform("Delete Interviewee") { p in p.deleteInterviewee(i.key) } }
             }
             TableFooter(count: "\(all.count) interviewee\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
