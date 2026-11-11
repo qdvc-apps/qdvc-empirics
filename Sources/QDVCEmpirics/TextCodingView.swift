@@ -67,6 +67,45 @@ struct ColumnLayout: Equatable {
 
     var total: CGFloat { speaker + text + stripes + labels }
 
+    static let stripeWidth: CGFloat = 56
+    static let speakerWidth: CGFloat = 132
+    static let minSpeakerWidth: CGFloat = 88
+    static let maxLabelWidth: CGFloat = 200
+    static let minLabelWidth: CGFloat = 110
+
+    static func make(width: CGFloat, reading: CGFloat, speakers: Bool, stripes: Bool, labels: Bool) -> ColumnLayout {
+        let w = max(0, width)
+        let sp: CGFloat = speakers ? speakerWidth : 24
+        let st: CGFloat = stripes ? stripeWidth : 24
+        let room = w - sp - st
+        // The text gives up a quarter of its width (not below 420) to make
+        // room for code names before they are hidden.
+        let soft = min(reading, max(420, reading * 0.75))
+        if stripes, labels, room - soft >= minLabelWidth {
+            let label = min(maxLabelWidth, room - soft)
+            return ColumnLayout(speaker: sp, text: min(reading, room - label), stripes: st, labels: label)
+        }
+        var speaker = sp
+        var text = min(reading, room)
+        if speakers, text < 380 {
+            speaker = max(minSpeakerWidth, sp - (380 - text))
+            text = min(reading, w - speaker - st)
+        }
+        return ColumnLayout(speaker: speaker, text: max(120, text), stripes: st, labels: 0)
+    }
+}
+
+/// A text or Markdown file, for reading and coding: the text in a readable
+/// column, speaker names on the left (Interlocutor layer), coding stripes on
+/// the right (with open code names beside them when there is room), and the
+/// coding bar below.
+struct TextCodingView: View {
+    @Environment(AppModel.self) private var model
+    let fileKey: String
+    let text: String
+    @State private var stripes: [PlacedMark] = []
+    @State private var turnMarks: [PlacedMark] = []
+
     var body: some View {
         let speakers = model.project.settings.interlocutorLayer && model.showSpeakers
         let deco = decorations(speakers: speakers)
