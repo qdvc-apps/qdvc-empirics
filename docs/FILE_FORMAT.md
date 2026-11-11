@@ -45,6 +45,11 @@ digits. Keys never change, so renaming touches one file and links survive.
 | `r-` | researcher |
 | `i-` | interviewee |
 
+The **working identifiers** shown in the app (`EF 31`, `CB 4`, `OC 23`,
+`AC 12`, `R 5`, `I 17`) are not stored anywhere: they are worked out from the
+titles and names each time (alphabetical order, per kind), so they change as
+items come and go. Refer to items by key in anything that must last.
+
 ## YAML
 
 The app reads and writes a subset of YAML (no anchors, aliases, tags or

@@ -127,6 +127,8 @@ struct EmpiricsCommands: Commands {
                 .keyboardShortcut("0")
             Divider()
             Toggle("Show Coding Stripes", isOn: Binding(get: { model.showStripes }, set: { model.showStripes = $0 }))
+            Toggle("Show Open Code Names Beside Stripes", isOn: Binding(get: { model.showCodeNames }, set: { model.showCodeNames = $0 }))
+                .disabled(!model.showStripes)
             Toggle("Show Other Layers", isOn: Binding(get: { model.showOtherLayers }, set: { model.showOtherLayers = $0 }))
             if model.project.settings.interlocutorLayer {
                 Toggle("Show Interlocutors", isOn: Binding(get: { model.showSpeakers }, set: { model.setShowSpeakers($0) }))
@@ -146,16 +148,16 @@ struct EmpiricsCommands: Commands {
         }
 
         CommandMenu("Code") {
-            Button("Code Selection…") { model.paletteVisible = true }
+            Button("Apply Open Code to Selection…") { model.paletteVisible = true }
                 .keyboardShortcut("k")
                 .disabled(!inFile || !model.canCode)
-            Button("Highlight Without Code") { model.highlightOnly() }
+            Button("Highlight Without Open Code") { model.highlightOnly() }
                 .keyboardShortcut("k", modifiers: [.command, .option])
                 .disabled(!model.hasTextSelection)
             Button("Mark as Irrelevant / Relevant") { model.toggleIrrelevant() }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(!model.canCode)
-            Menu("Quick Code") {
+            Menu("Quick Open Code") {
                 ForEach(1...9, id: \.self) { n in
                     let key = model.quickCodes[n - 1]
                     Button("\(n): " + (model.project.code(key)?.name ?? "—")) { model.applyQuickCode(n) }
@@ -208,10 +210,12 @@ struct EmpiricsCommands: Commands {
             let pages: [(String, SidebarItem)] = [("Empirical Files", .files), ("Researchers", .researchers),
                                                   ("Interviewees", .interviewees), ("Project Settings", .settings),
                                                   ("Codebooks", .codebooks), ("Open Codes", .openCodes),
-                                                  ("Axial Codes", .axialCodes), ("Layers", .layers)]
+                                                  ("Axial Codes", .axialCodes), ("Layers", .layers),
+                                                  ("Coding Chart", .codingChart), ("Codebook Report", .codebookReport)]
+            // ⌃⌘1 … ⌃⌘9, then ⌃⌘0 for the tenth.
             ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
                 Button(page.0) { model.sidebar = page.1 }
-                    .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .control])
+                    .keyboardShortcut(KeyEquivalent(Character(String((i + 1) % 10))), modifiers: [.command, .control])
                     .disabled(!model.isOpen)
             }
             Divider()

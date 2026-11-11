@@ -498,10 +498,13 @@ public struct ProjectIndex {
     public var filesForCode: [String: Set<String>] = [:]
     /// File key → selection count, all layers.
     public var selectionCount: [String: Int] = [:]
+    /// Key → working identifier ("EF 3", "OC 12"…); see `WorkingIDs`.
+    public var workingID: [String: String] = [:]
 
     public init() {}
 
     public init(_ project: Project) {
+        workingID = WorkingIDs.compute(project)
         for layer in project.layers {
             for (file, list) in layer.selections {
                 selectionCount[file, default: 0] += list.count
@@ -540,5 +543,41 @@ public struct ProjectIndex {
         }
         for k in codesForSelection.keys { codesForSelection[k]!.sort() }
         for k in parents.keys { parents[k]!.sort() }
+    }
+}
+
+// MARK: - Working identifiers
+
+/// Short identifiers for talking about items while working: "EF 31" (an
+/// empirical file), "CB 4" (codebook), "OC 23" (open code), "AC 12" (axial
+/// code), "R 5" (researcher), "I 17" (interviewee). Each kind is numbered
+/// from 1 in alphabetical order of its titles or names (codes across all
+/// layers), so the numbers are NOT stable: adding, renaming or removing an
+/// item can renumber others. They are never stored; keys are what last.
+public enum WorkingIDs {
+    public static let file = "EF"
+    public static let codebook = "CB"
+    public static let openCode = "OC"
+    public static let axialCode = "AC"
+    public static let researcher = "R"
+    public static let interviewee = "I"
+
+    public static func compute(_ p: Project) -> [String: String] {
+        var result: [String: String] = [:]
+        func assign(_ items: [(key: String, name: String)], _ prefix: String) {
+            let sorted = items.sorted { a, b in
+                let c = a.name.localizedStandardCompare(b.name)
+                return c == .orderedSame ? a.key < b.key : c == .orderedAscending
+            }
+            for (i, item) in sorted.enumerated() { result[item.key] = "\(prefix) \(i + 1)" }
+        }
+        assign(p.files.values.map { ($0.key, $0.displayTitle) }, file)
+        assign(p.codebooks.values.map { ($0.key, $0.title) }, codebook)
+        let codes = p.layers.flatMap { Array($0.codes.values) }
+        assign(codes.filter { $0.kind == .open }.map { ($0.key, $0.name) }, openCode)
+        assign(codes.filter { $0.kind == .axial }.map { ($0.key, $0.name) }, axialCode)
+        assign(p.researchers.map { ($0.key, $0.fullName) }, researcher)
+        assign(p.interviewees.map { ($0.key, $0.fullName) }, interviewee)
+        return result
     }
 }

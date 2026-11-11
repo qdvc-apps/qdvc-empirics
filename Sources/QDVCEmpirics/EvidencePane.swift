@@ -31,6 +31,7 @@ struct EvidencePane: View {
                 CodeDot(color: code.color, size: 14)
                 Text(code.name).font(.title2.weight(.semibold))
                 Text(code.kind.label).font(.callout).foregroundStyle(.secondary)
+                WorkingBadge(text: model.wid(code.key), color: code.color)
             }
             if !code.description.isEmpty {
                 Text(code.description).foregroundStyle(.secondary).textSelection(.enabled)
@@ -85,7 +86,7 @@ struct EvidencePane: View {
         ForEach(children) { child in
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    CodeChip(code: child)
+                    CodeChip(code: child, badge: model.wid(child.key))
                         .onTapGesture { model.showCode(child.key) }
                     Spacer()
                 }
@@ -147,7 +148,7 @@ struct QuoteCard: View {
                 }
                 let others = (model.index.codesForSelection[s.key] ?? []).filter { $0 != code.key }.compactMap { model.project.code($0) }
                 ForEach(others.prefix(4)) { o in
-                    CodeChip(code: o, compact: true).onTapGesture { model.showCode(o.key) }
+                    CodeChip(code: o, compact: true, badge: model.wid(o.key)).onTapGesture { model.showCode(o.key) }
                 }
                 Spacer()
                 if model.isLost(s.key) {

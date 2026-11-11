@@ -404,6 +404,96 @@ final class AnchoringTests: XCTestCase {
     }
 }
 
+final class WorkingIDTests: XCTestCase {
+    func testAlphabeticalAndRenumbering() throws {
+        var p = Project.new(title: "IDs")
+        let b = p.addFile(path: "b.txt", kind: .text, title: "Beta")
+        let a = p.addFile(path: "a.txt", kind: .text, title: "alpha")
+        let l = p.layers[0].key
+        let o2 = try p.addCode(layer: l, kind: .open, name: "Zebra")
+        let o1 = try p.addCode(layer: l, kind: .open, name: "Apple 10")
+        let o3 = try p.addCode(layer: l, kind: .open, name: "Apple 9")
+        let ax = try p.addCode(layer: l, kind: .axial, name: "Theme")
+        var ids = WorkingIDs.compute(p)
+        XCTAssertEqual(ids[a], "EF 1")
+        XCTAssertEqual(ids[b], "EF 2")
+        XCTAssertEqual(ids[o3], "OC 1")   // numbers in order: 9 before 10
+        XCTAssertEqual(ids[o1], "OC 2")
+        XCTAssertEqual(ids[o2], "OC 3")
+        XCTAssertEqual(ids[ax], "AC 1")
+        // A new file sorting first renumbers the others.
+        let c = p.addFile(path: "0.txt", kind: .text, title: "Aardvark")
+        ids = ProjectIndex(p).workingID
+        XCTAssertEqual(ids[c], "EF 1")
+        XCTAssertEqual(ids[a], "EF 2")
+        XCTAssertEqual(ids[b], "EF 3")
+    }
+}
+
+final class ReportTests: XCTestCase {
+    func testCodingChartColumnsLevelsAndEdges() throws {
+        var p = Project.new(title: "Chart")
+        let l = p.layers[0].key
+        let f1 = p.addFile(path: "a.txt", kind: .text, title: "A")
+        let f2 = p.addFile(path: "b.txt", kind: .text, title: "B")
+        _ = p.addFile(path: "c.txt", kind: .text, title: "C (not coded)")
+        let s1 = try p.addSelection(layer: l, file: f1, spans: [TextSpan(start: 0, length: 5)])
+        let s2 = try p.addSelection(layer: l, file: f2, spans: [TextSpan(start: 0, length: 5)])
+        let o1 = try p.addCode(layer: l, kind: .open, name: "Fatigue")
+        let o2 = try p.addCode(layer: l, kind: .open, name: "Breaks")
+        let lonely = try p.addCode(layer: l, kind: .open, name: "Unused")
+        try p.addEvidence(code: o1, target: s1)
+        try p.addEvidence(code: o1, target: s2)
+        try p.addEvidence(code: o2, target: s2)
+        let a1 = try p.addCode(layer: l, kind: .axial, name: "Work rhythm")
+        let a2 = try p.addCode(layer: l, kind: .axial, name: "Wellbeing")
+        try p.addEvidence(code: a1, target: o1)
+        try p.addEvidence(code: a1, target: o2)
+        try p.addEvidence(code: a2, target: a1)   // level 2
+        try p.addEvidence(code: a2, target: o1)   // skips a column
+
+        let chart = CodingChart.make(p, layer: l)
+        XCTAssertEqual(chart.columns.count, 4)
+        XCTAssertEqual(Set(chart.columns[0]), [f1, f2])
+        XCTAssertEqual(Set(chart.columns[1]), [o1, o2])
+        XCTAssertEqual(chart.columns[2], [a1])
+        XCTAssertEqual(chart.columns[3], [a2])
+        XCTAssertEqual(chart.unlinked, 2)   // "Unused" and the uncoded file
+        XCTAssertEqual(chart.edges.count, 3 + 2 + 2)
+        XCTAssertEqual(chart.connected(to: o2), [o2, f2, a1, a2])
+
+        let all = CodingChart.make(p, layer: l, includeUnlinked: true)
+        XCTAssertTrue(all.columns[1].contains(lonely))
+        XCTAssertEqual(all.columns[0].count, 3)
+    }
+
+    func testCodebookReportRowsAndCSV() throws {
+        var p = Project.new(title: "Report")
+        let f1 = p.addFile(path: "a.txt", kind: .text, title: "Alpha")
+        let f2 = p.addFile(path: "b.txt", kind: .text, title: "Beta")
+        let cb = p.newKey(Keys.codebook)
+        p.codebooks[cb] = Codebook(key: cb, title: "Context", appliesTo: [.files], questions: [
+            CodebookQuestion(key: "q-1", label: "Setting", type: .chooseOne, options: ["Office", "Home"], requirement: .flagged),
+            CodebookQuestion(key: "q-2", label: "Notes"),
+        ])
+        try p.associate(codebook: cb, with: f1)
+        try p.associate(codebook: cb, with: f2)
+        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: cb, target: f2), answers: ["q-1": .one("Home"), "q-2": .text("Said \"tired\", twice")]))
+        let report = try XCTUnwrap(CodebookReport.make(p, codebook: cb, title: { p.files[$0]?.displayTitle ?? "" }, person: { $0 }))
+        XCTAssertEqual(report.rows.map(\.target), [f1, f2])
+        XCTAssertEqual(report.rows[0].status, .notStarted)
+        XCTAssertEqual(report.rows[1].status, .complete)
+        let csv = report.csv(workingIDs: WorkingIDs.compute(p), title: { p.files[$0]?.displayTitle ?? "" },
+                             kind: { _ in "Empirical File" }, person: { $0 })
+        XCTAssertEqual(csv, """
+        No.,Item,Kind,Researcher,Status,Setting,Notes
+        EF 1,Alpha,Empirical File,,Not started,,
+        EF 2,Beta,Empirical File,,Complete,Home,"Said ""tired"", twice"
+
+        """)
+    }
+}
+
 final class RealNamesTests: XCTestCase {
     let people = [(key: "i-00000001", pseudonym: "John Smith"), (key: "r-00000001", pseudonym: "Alice Bob")]
 

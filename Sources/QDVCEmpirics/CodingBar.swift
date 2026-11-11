@@ -10,11 +10,27 @@ struct CodingBar: View {
     let fileKey: String
     @State private var showKeys = false
 
+    /// The bar never asks for more width than it is given (a wide bar would
+    /// push the window's columns and cut off the sidebar): it sits in an
+    /// overlay of a flexible base, falls back to a compact and then a
+    /// minimal variant, and anything still too wide is clipped.
     var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.height)
+            .overlay(alignment: .leading) { bar }
+            .clipped()
+            .background(.bar)
+    }
+
+    static let height: CGFloat = 38
+
+    var bar: some View {
         HStack(spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 content(compact: false)
                 content(compact: true)
+                minimal
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Button {
@@ -28,9 +44,40 @@ struct CodingBar: View {
         }
         .controlSize(.regular)
         .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity)
-        .background(.bar)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// For narrow windows: icon buttons only, no quick codes (the number
+    /// keys still work).
+    @ViewBuilder
+    var minimal: some View {
+        HStack(spacing: 6) {
+            if model.hasTextSelection, model.textSelectionFile == fileKey {
+                Button { model.paletteVisible = true } label: { Image(systemName: "tag") }
+                    .buttonStyle(.borderedProminent)
+                    .help("Apply an open code to the selected text (⌘K or Return)")
+                Button { model.highlightOnly() } label: { Image(systemName: "highlighter") }
+                    .help("Highlight without an open code (H)")
+                Button { model.toggleIrrelevant() } label: { Image(systemName: "eye.slash") }
+                    .help("Mark as irrelevant (0)")
+            } else if let key = model.focusedSelection, let s = model.project.selection(key), s.fileKey == fileKey {
+                if s.irrelevant {
+                    Button { model.toggleIrrelevant() } label: { Image(systemName: "eye") }
+                        .help("Mark relevant again")
+                } else {
+                    let n = model.index.codesForSelection[key]?.count ?? 0
+                    Text("\(n)").monospacedDigit().foregroundStyle(.secondary)
+                        .help("\(n) open code\(n == 1 ? "" : "s") on this selection")
+                    Button { model.paletteVisible = true } label: { Image(systemName: "plus") }
+                        .help("Add an open code to this selection (⌘K)")
+                }
+                Button(role: .destructive) { model.deleteSelection(key) } label: { Image(systemName: "trash") }
+                    .help("Delete this selection (Delete)")
+            } else {
+                Text("Select text").foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -42,12 +89,12 @@ struct CodingBar: View {
                 Button {
                     model.paletteVisible = true
                 } label: {
-                    Label(compact ? "Code" : "Code…", systemImage: "tag")
+                    Label(compact ? "Open Code" : "Open Code…", systemImage: "tag")
                 }
                 .buttonStyle(.borderedProminent)
-                .help("Code the selected text (⌘K or Return)")
+                .help("Apply an open code to the selected text (⌘K or Return)")
                 Button(compact ? "Highlight" : "Highlight Only") { model.highlightOnly() }
-                    .help("Make a selection without a code yet (H)")
+                    .help("Make a selection without an open code yet (H)")
                 Button(compact ? "Irrelevant" : "Mark Irrelevant") { model.toggleIrrelevant() }
                     .help("Mark the text as irrelevant in this layer (0)")
                 if let f = model.focusedSelection, model.project.selection(f) != nil {
@@ -61,7 +108,7 @@ struct CodingBar: View {
                 } else {
                     let codes = (model.index.codesForSelection[key] ?? []).compactMap { model.project.code($0) }
                     if codes.isEmpty {
-                        Text("No code yet").foregroundStyle(.secondary)
+                        Text("No open code yet").foregroundStyle(.secondary)
                     } else {
                         ForEach(codes.prefix(compact ? 1 : 3)) { c in
                             CodeChip(code: c, compact: true)
@@ -74,9 +121,9 @@ struct CodingBar: View {
                     Button {
                         model.paletteVisible = true
                     } label: {
-                        Label(compact ? "Add" : "Add Code…", systemImage: "plus")
+                        Label(compact ? "Add" : "Add Open Code…", systemImage: "plus")
                     }
-                    .help("Add a code to this selection (⌘K)")
+                    .help("Add an open code to this selection (⌘K)")
                 }
                 Button(role: .destructive) {
                     model.deleteSelection(key)
@@ -85,7 +132,7 @@ struct CodingBar: View {
                 }
                 .help("Delete this selection (Delete)")
             } else {
-                Text(compact ? "Select text to code it" : "Select text, then press Return to code it, or 1–9 for a quick code.")
+                Text(compact ? "Select text to code it" : "Select text, then press Return to apply an open code, or 1–9 for a quick open code.")
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -130,7 +177,7 @@ struct QuickCodeStrip: View {
                     .help("\(slot): \(code.name)")
                     .contextMenu {
                         Button("Remove from Quick Codes") { model.assignQuickCode(nil, slot: slot) }
-                        Button("Show Code") { model.showCode(code.key) }
+                        Button("Show Open Code") { model.showCode(code.key) }
                     }
                 }
             }
@@ -140,16 +187,16 @@ struct QuickCodeStrip: View {
 
 struct KeyboardHelp: View {
     let rows: [(String, String)] = [
-        ("Return or K", "Code the selection (opens the code palette)"),
-        ("1 … 9", "Apply quick code 1–9"),
+        ("Return or K", "Apply an open code to the selection (opens the palette)"),
+        ("1 … 9", "Apply quick open code 1–9"),
         ("0", "Mark irrelevant (or relevant again)"),
-        ("H", "Highlight without a code"),
+        ("H", "Highlight without an open code"),
         ("T", "Select the speaker's turn (Interlocutor layer)"),
         ("P / S", "Select the paragraph / sentence"),
         ("] / [", "Next / previous selection"),
         ("Delete", "Delete the focused selection"),
         ("Esc", "Clear the selection"),
-        ("⌘K", "Code palette (from anywhere)"),
+        ("⌘K", "Open code palette (from anywhere)"),
         ("⌥⌘] / ⌥⌘[", "Next / previous file"),
         ("⌥⌘N", "Next file not yet coded"),
         ("⌘F", "Find in the document"),
@@ -177,8 +224,9 @@ struct KeyboardHelp: View {
 
 // MARK: - Quick-code palette
 
-/// ⌘K: type to find a code (or a new code's name), Return to apply.
-/// Codes in the quick-code slots come first, then the rest by name.
+/// ⌘K: type to find an open code (by name, description or working
+/// identifier) or a new open code's name; Return to apply. Open codes in the
+/// quick-code slots come first, then the rest by name.
 struct QuickCodePalette: View {
     @Environment(AppModel.self) private var model
     @State private var query = ""
@@ -200,7 +248,10 @@ struct QuickCodePalette: View {
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             result = (quick + rest).map { Row(id: $0.key, code: $0) }
         } else {
+            // "oc 12" or "OC12" finds open code OC 12 by its working identifier.
+            let squeezed = q.replacingOccurrences(of: " ", with: "").lowercased()
             func rank(_ c: QDACode) -> Int? {
+                if model.wid(c.key).replacingOccurrences(of: " ", with: "").lowercased() == squeezed { return 0 }
                 let n = c.name
                 if n.range(of: q, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil { return 0 }
                 let words = n.split(whereSeparator: { $0 == " " || $0 == "-" || $0 == "/" })
@@ -233,7 +284,7 @@ struct QuickCodePalette: View {
                 Image(systemName: "tag").foregroundStyle(.secondary)
                 PaletteField(
                     text: $query,
-                    placeholder: model.hasTextSelection ? "Code the selection as…" : "Add a code to the selection…",
+                    placeholder: model.hasTextSelection ? "Apply open code to the selection…" : "Add an open code to the selection…",
                     onMove: { step in
                         guard !rows.isEmpty else { return }
                         highlighted = max(0, min(rows.count - 1, highlighted + step))
@@ -253,7 +304,7 @@ struct QuickCodePalette: View {
             .padding(.vertical, 10)
             Divider()
             if rows.isEmpty {
-                Text("No codes in this layer yet. Type a name to create the first one.")
+                Text("No open codes in this layer yet. Type a name to create the first one.")
                     .foregroundStyle(.secondary)
                     .padding(12)
             } else {
@@ -277,7 +328,7 @@ struct QuickCodePalette: View {
                 }
             }
             Divider()
-            Text("↩ apply   ↑↓ choose   ⌘↩ new code with this name   esc close")
+            Text("↩ apply   ↑↓ choose   ⌘↩ new open code with this name   esc close")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -309,6 +360,7 @@ struct QuickCodePalette: View {
                         .frame(width: 16, height: 16)
                         .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.08)))
                 }
+                WorkingBadge(text: model.wid(code.key), color: code.color)
             } else if let name = row.createName {
                 Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
                 Text("New open code “\(name)”").lineLimit(1)

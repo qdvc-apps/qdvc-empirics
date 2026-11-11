@@ -65,7 +65,7 @@ extension AppModel {
             return
         }
         var target: String?
-        let ok = perform("Code as \(code.name)") { p in
+        let ok = perform("Apply Open Code “\(code.name)”") { p in
             let s: String
             if hasTextSelection {
                 s = try selectionFromText(irrelevant: false, in: &p)
@@ -96,7 +96,7 @@ extension AppModel {
         }
         var created: String?
         var target: String?
-        let ok = perform("New Code “\(trimmed)”") { p in
+        let ok = perform("New Open Code “\(trimmed)”") { p in
             let s: String
             if hasTextSelection {
                 s = try selectionFromText(irrelevant: false, in: &p)
@@ -204,7 +204,7 @@ extension AppModel {
     @discardableResult
     func newCode(kind: CodeKind, name: String, parent: String? = nil, child: String? = nil) -> String? {
         if let existing = project.code(named: name, inLayer: activeLayerKey) {
-            showProblem(RuleError("This layer already has a code called “\(existing.name)”."))
+            showProblem(RuleError("This layer already has \(existing.kind == .open ? "an open" : "an axial") code called “\(existing.name)”."))
             return nil
         }
         var made: String?
@@ -251,15 +251,15 @@ extension AppModel {
     func deleteCode(_ key: String) {
         guard let code = project.code(key) else { return }
         let alert = NSAlert()
-        alert.messageText = "Delete “\(code.name)”?"
+        alert.messageText = "Delete the \(code.kind == .open ? "open" : "axial") code “\(code.name)”?"
         alert.informativeText = code.evidence.isEmpty
-            ? "The code will be removed from any axial codes it belongs to."
-            : "Its \(code.evidence.count) evidence link\(code.evidence.count == 1 ? "" : "s") and memos go with it; the selections and codes themselves stay. You can undo this."
+            ? "It will be removed from any axial codes it is evidence for."
+            : "Its \(code.evidence.count) evidence link\(code.evidence.count == 1 ? "" : "s") and memos go with it; the selections, open codes and axial codes themselves stay. You can undo this."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        perform("Delete Code") { p in p.deleteCode(key) }
+        perform(code.kind == .open ? "Delete Open Code" : "Delete Axial Code") { p in p.deleteCode(key) }
         if let i = quickCodes.firstIndex(of: key) { assignQuickCode(nil, slot: i + 1) }
     }
 
@@ -274,7 +274,7 @@ extension AppModel {
         var moved = LayerComponent()
         let ok = perform("Move to \(name)") { p in moved = try p.move(item, toLayer: layer) }
         guard ok else { return }
-        notice = Notice(text: "Moved \(moved.selections.count) selection\(moved.selections.count == 1 ? "" : "s") and \(moved.codes.count) code\(moved.codes.count == 1 ? "" : "s") to \(name).",
+        notice = Notice(text: "Moved \(moved.selections.count) selection\(moved.selections.count == 1 ? "" : "s"), \(codeCounts(Array(moved.codes))) to \(name).",
                         action: NoticeAction(title: "Switch to \(name)") { [weak self] in self?.setActiveLayer(layer) })
         focusedSelection = nil
     }
@@ -289,7 +289,7 @@ extension AppModel {
         guard let layer = project.layer(key) else { return }
         let alert = NSAlert()
         alert.messageText = "Delete the layer “\(layer.name)”?"
-        alert.informativeText = "Its \(layer.selectionCount) selection\(layer.selectionCount == 1 ? "" : "s") and \(layer.codes.count) code\(layer.codes.count == 1 ? "" : "s") are deleted with it. You can undo this while the project is open."
+        alert.informativeText = "Its \(layer.selectionCount) selection\(layer.selectionCount == 1 ? "" : "s"), \(codeCounts(Array(layer.codes.keys))) are deleted with it. You can undo this while the project is open."
         alert.addButton(withTitle: "Delete Layer")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true

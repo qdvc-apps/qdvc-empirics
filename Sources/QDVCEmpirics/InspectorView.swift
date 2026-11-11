@@ -58,6 +58,24 @@ struct InspectorView: View {
             } else {
                 nothing("Select someone to see their card.")
             }
+        case .codingChart:
+            if let key = model.tableSelection, model.project.files[key] != nil {
+                InspectorScroll { FileInspector(fileKey: key) }
+            } else if let key = model.tableSelection, model.project.code(key) != nil {
+                InspectorScroll { codeEditor(key) }
+            } else {
+                nothing("Click a file, open code or axial code in the chart to see it here.")
+            }
+        case .codebookReport:
+            if let key = model.tableSelection, model.project.files[key] != nil {
+                InspectorScroll { FileInspector(fileKey: key) }
+            } else if let key = model.tableSelection, model.project.code(key) != nil {
+                InspectorScroll { codeEditor(key) }
+            } else if let cb = model.shownReportCodebook {
+                InspectorScroll { CodebookSummary(codebookKey: cb) }
+            } else {
+                nothing("Choose a codebook below the report.")
+            }
         default:
             nothing("Nothing to inspect on this page.")
         }
@@ -101,7 +119,8 @@ struct SelectionInspector: View {
                 SectionHeader(title: "Selected Text", trailing: model.activeLayer?.name)
                 QuoteBlock(text: model.textSelectionQuote, lineLimit: 12)
                 HStack {
-                    Button("Code…") { model.paletteVisible = true }.buttonStyle(.borderedProminent)
+                    Button("Open Code…") { model.paletteVisible = true }.buttonStyle(.borderedProminent)
+                        .help("Apply an open code to the selected text")
                     Button("Highlight Only") { model.highlightOnly() }
                     Button("Irrelevant") { model.toggleIrrelevant() }
                 }
@@ -109,7 +128,7 @@ struct SelectionInspector: View {
             }
         } else {
             ContentUnavailableView("No Selection", systemImage: "highlighter",
-                                   description: Text("Click a highlight in the text to see its codes and memos, or select text to code it."))
+                                   description: Text("Click a highlight in the text to see its open codes and memos, or select text to code it."))
                 .padding(.top, 40)
         }
     }
@@ -132,16 +151,16 @@ struct SelectionInspector: View {
             details(s)
 
             if s.irrelevant {
-                Text("Irrelevant text can never be evidence for a code in this layer.")
+                Text("Irrelevant text can never be evidence for an open code in this layer.")
                     .font(.callout).foregroundStyle(.secondary)
                 Button("Mark Relevant Again") {
                     model.focusedSelection = key
                     model.toggleIrrelevant()
                 }
             } else {
-                SectionHeader(title: "Codes", trailing: codes.isEmpty ? nil : "\(codes.count)")
+                SectionHeader(title: "Open Codes", trailing: codes.isEmpty ? nil : "\(codes.count)")
                 if codes.isEmpty {
-                    Text("No code yet.").foregroundStyle(.secondary)
+                    Text("No open code yet.").foregroundStyle(.secondary)
                 }
                 ForEach(codes) { code in
                     EvidenceMemoRow(holder: code, target: key, shown: code)
@@ -151,12 +170,12 @@ struct SelectionInspector: View {
                         if model.openFileKey != s.fileKey { model.showSelection(key) }
                         model.paletteVisible = true
                     } label: {
-                        Label("Add Code…", systemImage: "plus")
+                        Label("Add Open Code…", systemImage: "plus")
                     }
                     Spacer()
                     Button("Mark Irrelevant") { model.toggleIrrelevant() }
                         .disabled(!codes.isEmpty)
-                        .help(codes.isEmpty ? "Mark this text irrelevant" : "Evidence can't be irrelevant: remove its codes first")
+                        .help(codes.isEmpty ? "Mark this text irrelevant" : "Evidence can't be irrelevant: remove its open codes first")
                 }
                 .controlSize(.small)
             }
@@ -228,14 +247,15 @@ struct EvidenceMemoRow: View {
                     .buttonStyle(.plain)
                     .fontWeight(.medium)
                     .lineLimit(1)
-                Spacer()
+                Spacer(minLength: 4)
+                WorkingBadge(text: model.wid(shown.key), color: shown.color)
                 Button {
                     model.removeCode(holder.key, from: target)
                 } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help(holder.key == shown.key ? "Remove this code from the selection" : "Remove from \(holder.name)")
+                .help(holder.key == shown.key ? "Remove this open code from the selection" : "Remove from \(holder.name)")
             }
             TextField("Why is this evidence for “\(holder.name)”?", text: Binding(
                 get: { model.project.code(holder.key)?.memo(for: target) ?? "" },
@@ -262,7 +282,7 @@ struct CodeEditor: View {
         let layerKey = model.index.layerOf[key] ?? ""
         let layer = model.project.layer(layerKey)
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: code.kind.label, trailing: layer?.name)
+            InspectorTitle(model: model, title: code.kind.label, key: key, trailing: layer?.name)
             TextField("Name", text: Binding(get: { model.project.code(key)?.name ?? "" },
                                             set: { v in model.editCode(key) { $0.name = v } }))
                 .textFieldStyle(.roundedBorder)
@@ -325,7 +345,7 @@ struct CodeEditor: View {
                 Button(role: .destructive) {
                     model.deleteCode(key)
                 } label: {
-                    Label("Delete Code…", systemImage: "trash")
+                    Label(code.kind == .open ? "Delete Open Code…" : "Delete Axial Code…", systemImage: "trash")
                 }
             }
             .controlSize(.small)
@@ -358,9 +378,9 @@ struct CodeEditor: View {
                 let candidates = (layer?.codes.values.map { $0 } ?? [])
                     .filter { model.project.evidenceProblem(code: key, target: $0.key) == nil }
                     .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                Menu("Add Code") {
+                Menu("Add Open or Axial Code") {
                     ForEach(candidates) { c in
-                        Button(c.name) { model.addEvidence(code: key, target: c.key) }
+                        Button(model.itemLabel(c.key)) { model.addEvidence(code: key, target: c.key) }
                     }
                     if !candidates.isEmpty { Divider() }
                     Button("New Open Code…") { model.sheet = .newCode(kind: .open, parent: key, child: nil) }
@@ -390,7 +410,7 @@ struct CodeEditor: View {
         }
         Menu("Add to Axial Code") {
             ForEach(axial) { a in
-                Button(a.name) { model.addEvidence(code: a.key, target: key) }
+                Button(model.itemLabel(a.key)) { model.addEvidence(code: a.key, target: key) }
             }
             if !axial.isEmpty { Divider() }
             Button("New Axial Code…") { model.sheet = .newCode(kind: .axial, parent: nil, child: key) }
@@ -449,7 +469,7 @@ struct CodeEditor: View {
 extension AppModel {
     /// A short label for an evidence item: a quote excerpt or a code name.
     func evidenceLabel(_ key: String) -> String {
-        if let c = project.code(key) { return c.name }
+        if project.code(key) != nil { return itemLabel(key) }
         if let s = project.selection(key) {
             let file = project.files[s.fileKey]?.displayTitle ?? ""
             let q = quoteText(s).map { String($0.replacingOccurrences(of: "\n", with: " ").prefix(90)) } ?? "(text not available)"
@@ -469,7 +489,7 @@ struct FlowChips: View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(codes) { c in
                 HStack(spacing: 4) {
-                    CodeChip(code: c, compact: true)
+                    CodeChip(code: c, compact: true, badge: model.wid(c.key))
                         .onTapGesture { model.showCode(c.key) }
                     Button {
                         remove(c)
@@ -532,7 +552,7 @@ struct FileInspector: View {
     @ViewBuilder
     func editor(_ key: String, _ file: EmpiricalFile) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Empirical File", trailing: file.kind.label)
+            InspectorTitle(model: model, title: "Empirical File", key: key, trailing: file.kind.label)
             if model.sidebar == .files {
                 Button("Open File") { model.show(.file(key)) }
                     .controlSize(.small)
@@ -650,7 +670,7 @@ struct FileInspector: View {
         let coded = here.filter { !$0.irrelevant && !(model.index.codesForSelection[$0.key] ?? []).isEmpty }.count
         let irrelevant = here.filter(\.irrelevant).count
         let codes = Set(here.flatMap { model.index.codesForSelection[$0.key] ?? [] }).count
-        Text("In \(model.activeLayer?.name ?? "this layer"): \(coded) coded selection\(coded == 1 ? "" : "s"), \(codes) code\(codes == 1 ? "" : "s"), \(here.count - coded - irrelevant) uncoded, \(irrelevant) irrelevant.")
+        Text("In \(model.activeLayer?.name ?? "this layer"): \(coded) coded selection\(coded == 1 ? "" : "s"), \(codes) open code\(codes == 1 ? "" : "s"), \(here.count - coded - irrelevant) uncoded, \(irrelevant) irrelevant.")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
@@ -696,7 +716,7 @@ struct CodebookAssociations: View {
             }
             Menu("Add Codebook") {
                 ForEach(available) { cb in
-                    Button(cb.title) {
+                    Button(model.itemLabel(cb.key)) {
                         model.perform("Add Codebook") { p in try p.associate(codebook: cb.key, with: target) }
                     }
                 }
@@ -727,6 +747,7 @@ struct CodebookAssociations: View {
                         .help("Mandatory questions unanswered: \(completeness.missingFlagged.map(\.label).joined(separator: ", "))")
                 }
                 Text(cb.title).lineLimit(1)
+                WorkingBadge(text: model.wid(cb.key), color: nil)
                 Spacer()
                 Button(mine == nil ? "Fill In…" : "Edit…") { model.openResponseSheet(codebook: cb.key, target: target) }
                     .controlSize(.small)

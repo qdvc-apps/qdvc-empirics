@@ -1,0 +1,260 @@
+import Foundation
+
+// The data behind the Reporting pages: the Coding Chart (files → open codes
+// → axial codes) and the Codebook Report (every response to a codebook).
+// Worked out here, without any interface, so they can be tested.
+
+// MARK: - Coding Chart
+
+/// Columns of a layer's coding, left to right: empirical files, open codes,
+/// then axial codes by level (an axial code built only from open codes is
+/// level 1; one built from a level-n axial code is at least level n + 1), so
+/// higher-level axial codes sit further right. Edges link files to the open
+/// codes with evidence in them, and codes to the axial codes they are
+/// evidence for (M:N, possibly skipping columns).
+public struct CodingChart: Equatable {
+    public struct Edge: Hashable {
+        /// The left end (a file, or the code that is evidence).
+        public var from: String
+        /// The right end (an open code, or the axial code).
+        public var to: String
+
+        public init(from: String, to: String) {
+            self.from = from
+            self.to = to
+        }
+    }
+
+    /// Item keys per column, top to bottom.
+    public var columns: [[String]]
+    public var edges: [Edge]
+    /// Items left out because nothing links them (when not included).
+    public var unlinked: Int
+
+    public init(columns: [[String]] = [], edges: [Edge] = [], unlinked: Int = 0) {
+        self.columns = columns
+        self.edges = edges
+        self.unlinked = unlinked
+    }
+
+    /// The column of each item.
+    public var columnOf: [String: Int] {
+        var r: [String: Int] = [:]
+        for (i, c) in columns.enumerated() { for k in c { r[k] = i } }
+        return r
+    }
+
+    /// Items linked to `key` through the chart: everything it builds on
+    /// (leftwards) and everything built on it (rightwards), and itself.
+    public func connected(to key: String) -> Set<String> {
+        var left: [String: [String]] = [:], right: [String: [String]] = [:]
+        for e in edges {
+            left[e.to, default: []].append(e.from)
+            right[e.from, default: []].append(e.to)
+        }
+        var seen: Set<String> = [key]
+        for links in [left, right] {
+            var stack = [key]
+            while let k = stack.popLast() {
+                for n in links[k] ?? [] where !seen.contains(n) {
+                    seen.insert(n)
+                    stack.append(n)
+                }
+            }
+        }
+        return seen
+    }
+
+    public static func make(_ p: Project, layer layerKey: String, includeUnlinked: Bool = false) -> CodingChart {
+        guard let layer = p.layer(layerKey) else { return CodingChart() }
+        var fileOf: [String: String] = [:]
+        for (file, list) in layer.selections {
+            for s in list { fileOf[s.key] = file }
+        }
+        let open = layer.codes.values.filter { $0.kind == .open }
+        let axial = layer.codes.values.filter { $0.kind == .axial }
+
+        var edges = Set<Edge>()
+        for c in open {
+            for e in c.evidence {
+                if let f = fileOf[e.target], p.files[f] != nil { edges.insert(Edge(from: f, to: c.key)) }
+            }
+        }
+        for a in axial {
+            for e in a.evidence where layer.codes[e.target] != nil {
+                edges.insert(Edge(from: e.target, to: a.key))
+            }
+        }
+
+        // Levels of axial codes (cycles can't be made, but are guarded).
+        var level: [String: Int] = [:]
+        func levelOf(_ key: String, _ visiting: inout Set<String>) -> Int {
+            if let l = level[key] { return l }
+            guard let c = layer.codes[key], c.kind == .axial, !visiting.contains(key) else { return 0 }
+            visiting.insert(key)
+            var l = 1
+            for e in c.evidence {
+                if let child = layer.codes[e.target], child.kind == .axial {
+                    l = max(l, levelOf(child.key, &visiting) + 1)
+                }
+            }
+            visiting.remove(key)
+            level[key] = l
+            return l
+        }
+        for a in axial {
+            var visiting = Set<String>()
+            _ = levelOf(a.key, &visiting)
+        }
+
+        var linked = Set<String>()
+        for e in edges {
+            linked.insert(e.from)
+            linked.insert(e.to)
+        }
+        let files = p.files.values.filter { includeUnlinked || linked.contains($0.key) }
+        let unlinked = includeUnlinked ? 0
+            : layer.codes.keys.filter { !linked.contains($0) }.count + p.files.keys.filter { !linked.contains($0) }.count
+        func keep(_ key: String) -> Bool { includeUnlinked || linked.contains(key) }
+
+        func byTitle(_ items: [(key: String, title: String)]) -> [String] {
+            items.sorted { a, b in
+                let c = a.title.localizedStandardCompare(b.title)
+                return c == .orderedSame ? a.key < b.key : c == .orderedAscending
+            }.map(\.key)
+        }
+        var columns: [[String]] = [
+            byTitle(files.map { ($0.key, $0.displayTitle) }),
+            byTitle(open.filter { keep($0.key) }.map { ($0.key, $0.name) }),
+        ]
+        let maxLevel = level.values.max() ?? 0
+        if maxLevel > 0 {
+            for l in 1...maxLevel {
+                columns.append(byTitle(axial.filter { level[$0.key] == l && keep($0.key) }.map { ($0.key, $0.name) }))
+            }
+        }
+        while let last = columns.last, last.isEmpty, columns.count > 2 { columns.removeLast() }
+
+        let sortedEdges = edges.sorted { ($0.from, $0.to) < ($1.from, $1.to) }
+        let ordered = reduceCrossings(columns, edges: sortedEdges)
+        return CodingChart(columns: ordered, edges: sortedEdges, unlinked: unlinked)
+    }
+
+    /// Barycentre ordering: each column is sorted by the mean position of
+    /// its items' neighbours, sweeping right then left a few times, so lines
+    /// cross less. Ties keep the alphabetical order.
+    static func reduceCrossings(_ start: [[String]], edges: [Edge]) -> [[String]] {
+        var columns = start
+        var neighbours: [String: [String]] = [:]
+        for e in edges {
+            neighbours[e.from, default: []].append(e.to)
+            neighbours[e.to, default: []].append(e.from)
+        }
+        var columnOf: [String: Int] = [:]
+        for (i, c) in columns.enumerated() { for k in c { columnOf[k] = i } }
+        func positions() -> [String: Double] {
+            var r: [String: Double] = [:]
+            for c in columns {
+                for (i, k) in c.enumerated() { r[k] = (Double(i) + 0.5) / Double(max(1, c.count)) }
+            }
+            return r
+        }
+        func sweep(_ c: Int, towardLeft: Bool) {
+            let pos = positions()
+            let items = columns[c].enumerated().map { i, key -> (key: String, value: Double, i: Int) in
+                let ns = (neighbours[key] ?? []).filter { n in
+                    guard let nc = columnOf[n] else { return false }
+                    return towardLeft ? nc < c : nc > c
+                }
+                let value = ns.isEmpty ? (pos[key] ?? 0) : ns.compactMap { pos[$0] }.reduce(0, +) / Double(ns.count)
+                return (key, value, i)
+            }
+            columns[c] = items.sorted { a, b in a.value == b.value ? a.i < b.i : a.value < b.value }.map(\.key)
+        }
+        guard columns.count > 1 else { return columns }
+        for _ in 0..<4 {
+            for c in 1..<columns.count { sweep(c, towardLeft: true) }
+            for c in stride(from: columns.count - 2, through: 0, by: -1) { sweep(c, towardLeft: false) }
+        }
+        return columns
+    }
+}
+
+// MARK: - Codebook Report
+
+/// Every response to a codebook, one row per response sheet (an item and,
+/// when the project lists researchers, whose answers), plus a row for each
+/// associated item nobody has answered yet.
+public struct CodebookReport: Equatable {
+    public struct Row: Equatable, Identifiable {
+        /// The file or code the answers are about.
+        public var target: String
+        /// Whose answers ("" when the project has no researchers, or for an
+        /// item not answered yet).
+        public var researcher: String
+        public var sheet: ResponseSheet?
+        public var completeness: SheetCompleteness
+
+        public var id: String { target + "--" + researcher }
+
+        public enum Status: String { case notStarted = "Not started", flagged = "Flagged", complete = "Complete" }
+
+        public var status: Status {
+            guard sheet != nil else { return .notStarted }
+            return completeness.isComplete ? .complete : .flagged
+        }
+
+        public func answer(_ question: String) -> Answer? { sheet?.answers[question] }
+    }
+
+    public var codebook: Codebook
+    public var rows: [Row]
+
+    public static func make(_ p: Project, codebook key: String, title: (String) -> String,
+                            person: (String) -> String) -> CodebookReport? {
+        guard let cb = p.codebooks[key] else { return nil }
+        var rows: [Row] = []
+        var answered = Set<String>()
+        for sheet in p.responses.values where sheet.id.codebook == key {
+            answered.insert(sheet.id.target)
+            rows.append(Row(target: sheet.id.target, researcher: sheet.id.researcher, sheet: sheet,
+                            completeness: SheetCompleteness.of(sheet.answers, against: cb)))
+        }
+        var targets = p.files.values.filter { $0.codebooks.contains(key) }.map(\.key)
+        for layer in p.layers {
+            targets += layer.codes.values.filter { $0.codebooks.contains(key) }.map(\.key)
+        }
+        for t in targets where !answered.contains(t) {
+            rows.append(Row(target: t, researcher: "", sheet: nil, completeness: SheetCompleteness.of([:], against: cb)))
+        }
+        // Files, then open codes, then axial codes; each by title, then by
+        // researcher.
+        func group(_ k: String) -> Int {
+            if p.files[k] != nil { return 0 }
+            return p.code(k)?.kind == .axial ? 2 : 1
+        }
+        rows.sort { a, b in
+            let ga = group(a.target), gb = group(b.target)
+            if ga != gb { return ga < gb }
+            let t = title(a.target).localizedStandardCompare(title(b.target))
+            if t != .orderedSame { return t == .orderedAscending }
+            if a.target != b.target { return a.target < b.target }
+            return person(a.researcher).localizedStandardCompare(person(b.researcher)) == .orderedAscending
+        }
+        return CodebookReport(codebook: cb, rows: rows)
+    }
+
+    /// The report as CSV: working identifier, item, kind, researcher,
+    /// status, then one column per question (labelled by its label).
+    public func csv(workingIDs: [String: String], title: (String) -> String, kind: (String) -> String,
+                    person: (String) -> String) -> String {
+        var lines = [CSV.line(["No.", "Item", "Kind", "Researcher", "Status"] + codebook.questions.map(\.label))]
+        for r in rows {
+            var fields = [workingIDs[r.target] ?? "", title(r.target), kind(r.target),
+                          r.researcher.isEmpty ? "" : person(r.researcher), r.status.rawValue]
+            fields += codebook.questions.map { q in r.answer(q.key)?.values.joined(separator: "; ") ?? "" }
+            lines.append(CSV.line(fields))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+}

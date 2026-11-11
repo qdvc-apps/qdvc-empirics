@@ -62,6 +62,12 @@ struct FilesTable: View {
         let coded = model.project.files.values.filter { $0.status == .coded }.count
         VStack(spacing: 0) {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+                // Working identifiers follow alphabetical order of the
+                // titles, so sorting by title sorts by number.
+                TableColumn("No.", value: \EmpiricalFile.displayTitle) { (f: EmpiricalFile) in
+                    WorkingIDCell(model: model, key: f.key)
+                }
+                .width(min: 50, ideal: 62, max: 80)
                 TableColumn("Status", value: \EmpiricalFile.statusOrder) { (f: EmpiricalFile) in
                     Label(f.status.label, systemImage: f.status.symbol)
                         .foregroundStyle(f.status.tint)
@@ -81,6 +87,10 @@ struct FilesTable: View {
                     Text("\(model.index.selectionCount[f.key] ?? 0)").monospacedDigit()
                 }
                 .width(min: 60, ideal: 70, max: 90)
+                TableColumn("Codebooks") { (f: EmpiricalFile) in
+                    Text(model.codebookTitles(f.key)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .width(min: 80, ideal: 160)
                 TableColumn("Location", value: \EmpiricalFile.path) { (f: EmpiricalFile) in
                     Text(f.path).font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
@@ -147,6 +157,10 @@ struct CodesTable: View {
         let rows: [QDACode] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+                TableColumn("No.", value: \QDACode.name) { (c: QDACode) in
+                    WorkingIDCell(model: model, key: c.key)
+                }
+                .width(min: 50, ideal: 62, max: 80)
                 TableColumn("Name", value: \QDACode.name) { (c: QDACode) in
                     HStack(spacing: 6) {
                         CodeDot(color: c.color)
@@ -170,6 +184,10 @@ struct CodesTable: View {
                     Text(c.questions.isEmpty ? "" : "\(c.questions.count)").monospacedDigit()
                 }
                 .width(min: 60, ideal: 70, max: 90)
+                TableColumn("Codebooks") { (c: QDACode) in
+                    Text(model.codebookTitles(c.key)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .width(min: 80, ideal: 160)
                 TableColumn("Quick") { (c: QDACode) in
                     Text(model.quickSlot(of: c.key).map { "\($0)" } ?? "").monospacedDigit()
                 }
@@ -180,7 +198,7 @@ struct CodesTable: View {
             } primaryAction: { keys in
                 if let key = keys.first { model.show(.code(key)) }
             }
-            TableFooter(count: "\(all.count) code\(all.count == 1 ? "" : "s")", filter: $filter) {
+            TableFooter(count: "\(all.count) \(kind == .open ? "open" : "axial") code\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
                     model.sheet = .newCode(kind: kind, parent: nil, child: nil)
                 } label: {
@@ -193,7 +211,10 @@ struct CodesTable: View {
     }
 
     func parentNames(_ c: QDACode) -> String {
-        (model.index.parents[c.key] ?? []).compactMap { model.project.code($0)?.name }.sorted().joined(separator: ", ")
+        (model.index.parents[c.key] ?? []).filter { model.project.code($0) != nil }
+            .sorted { model.itemTitle($0).localizedStandardCompare(model.itemTitle($1)) == .orderedAscending }
+            .map { model.itemLabel($0) }
+            .joined(separator: ", ")
     }
 }
 
@@ -221,7 +242,7 @@ struct CodeTableMenu: View {
                 Button("Move to Layer…") { model.sheet = .moveToLayer(key) }
             }
             Divider()
-            Button("Delete Code…") { model.deleteCode(key) }
+            Button(code.kind == .open ? "Delete Open Code…" : "Delete Axial Code…") { model.deleteCode(key) }
         }
     }
 }
@@ -241,6 +262,10 @@ struct CodebooksTable: View {
         let rows: [Codebook] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+                TableColumn("No.", value: \Codebook.title) { (cb: Codebook) in
+                    WorkingIDCell(model: model, key: cb.key)
+                }
+                .width(min: 50, ideal: 62, max: 80)
                 TableColumn("Title", value: \Codebook.title) { (cb: Codebook) in
                     Label(cb.title, systemImage: "text.book.closed")
                 }
@@ -290,6 +315,11 @@ struct CodebookTableMenu: View {
             Button("Add to Working Area") { model.addToWorkingArea(.codebook(key)) }
                 .disabled(model.workingArea.contains(.codebook(key)))
             Divider()
+            Button("Show Report") {
+                model.reportCodebook = key
+                model.sidebar = .codebookReport
+            }
+            Divider()
             Button("Delete Codebook…") { model.deleteCodebook(key) }
         }
     }
@@ -329,6 +359,10 @@ struct ResearchersTable: View {
         let rows: [Researcher] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+                TableColumn("No.", value: \Researcher.fullName) { (r: Researcher) in
+                    WorkingIDCell(model: model, key: r.key)
+                }
+                .width(min: 44, ideal: 56, max: 70)
                 TableColumn("First Name", value: \Researcher.firstName)
                     .width(min: 90, ideal: 140)
                 TableColumn("Last Name", value: \Researcher.lastName)
@@ -385,6 +419,10 @@ struct IntervieweesTable: View {
         let rows: [Interviewee] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+                TableColumn("No.", value: \Interviewee.fullName) { (i: Interviewee) in
+                    WorkingIDCell(model: model, key: i.key)
+                }
+                .width(min: 44, ideal: 56, max: 70)
                 TableColumn("First Name", value: \Interviewee.firstName)
                     .width(min: 90, ideal: 140)
                 TableColumn("Last Name", value: \Interviewee.lastName)

@@ -78,6 +78,10 @@ changes nothing unless the generator changed.
 | `FullTexts.swift` | read-only `FullTexts`, `TextNormaliser`, `Anchoring` (re-finding selections) |
 | `SHA256.swift` | fingerprints |
 | `RealNames.swift` | `CSV` reader and writer; `RealNames` (mapping files, templates) |
+| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `CodebookReport` (rows, CSV) |
+
+`WorkingIDs` (in `Editing.swift`) numbers items alphabetically per kind;
+`ProjectIndex.workingID` holds them, `AppModel.wid(_:)` reads them.
 
 Core type names avoid SwiftUI, AppKit and Foundation names (QDVC Progress hit
 `GridRow`, Response Letter `Section`): hence `QDACode`, `CodingLayer`,
@@ -89,7 +93,10 @@ Working Area, documents, interlocutors, response sheets, real names;
 `@Observable`, main actor), `AppModel+Coding` (coding operations, files,
 layers), `DeviceStore` (UserDefaults and security-scoped bookmarks),
 `ContentView` (split view, sidebar and Working Area, toolbar, document page),
-`ListPages` (the list pages, SwiftUI Tables), `ItemPages` (code, codebook and person pages),
+`Items` (one-line items: `ItemLine`, `WorkingBadge`, `InspectorTitle`, item
+titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
+`ItemPages` (code, codebook and person pages), `CodingChart` and
+`CodebookReport` (the Reporting pages),
 `TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
 `CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
 by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
@@ -113,9 +120,13 @@ repair it:
   split view with trailing (`.primaryAction`) items only. Items with
   placement `.navigation` went into the sidebar's title bar, beside the
   window buttons; Back and Forward are in the Go menu instead.
-- `DetailView` gives the page a min/max frame and clips it; the notice
-  banner is a `.safeAreaInset(edge: .top)` over the page, not a view
-  stacked above it.
+- `DetailView` puts the page in an overlay of a flexible `Color.clear`
+  with a min/max frame, and clips it: a page can never be wider than the
+  detail column. (A page whose content had a larger minimum width, such as
+  the coding bar with all its quick codes, used to widen the detail column
+  past the window and cut off the sidebar on the left.) The notice banner
+  is a `.safeAreaInset(edge: .top)` over the page, not a view stacked above
+  it.
 - **Every page starts with its scrolling content at the top**: a `Table`,
   a ScrollView, the document. Bars go below (the tables' footers, the
   coding bar). The glitch followed the pages that put a fixed header (a
@@ -160,6 +171,11 @@ the cache), fingerprint checks happen in `prepareDocument`, called from
 `.task` and navigation.
 
 ### 2.3 Layout
+
+Pages adapt to the width they are given rather than asking for one: the
+file page through `ColumnLayout` (TextCodingView.swift), the coding bar
+through `ViewThatFits` with a minimal last variant inside an overlay
+(CodingBar.swift), the reports by scrolling both ways.
 
 The rules of QDVC Response Letter's docs/MAINTENANCE.md §2.3 apply: no text
 view lives in an AppKit scroll view (it is sized by `sizeThatFits` inside a
@@ -215,4 +231,10 @@ Nothing may touch the network:
   conflict markers are reported; quotes are dropped when switched off.
 - Re-anchoring moves selections whose text moved and reports lost ones.
 - The sample builds, saves and loads back unchanged.
+- Working identifiers are alphabetical per kind (natural number order) and
+  renumber when an item is added.
+- The Coding Chart puts axial codes by level, links files to open codes and
+  codes to the axial codes they are evidence for (also across columns),
+  leaves out unlinked items unless asked; the Codebook Report lists sheets
+  and unanswered items, and its CSV quotes fields properly.
 - No networking API in the sources, no dependencies.

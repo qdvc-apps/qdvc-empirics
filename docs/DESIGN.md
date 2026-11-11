@@ -35,11 +35,12 @@ Welcome window at launch, as in Xcode and the other QDVC apps. The main
 window is a standard NavigationSplitView (sidebar, detail) with a standard
 inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 
-- **Sidebar.** Three sections, in the spirit of Mail's mailboxes above its
+- **Sidebar.** Four sections, in the spirit of Mail's mailboxes above its
   smart mailboxes: *Project* (Empirical Files, Researchers, Interviewees,
   Project Settings), *Analysis* (Codebooks, Open Codes, Axial Codes,
-  Layers), and the *Working Area*: the items being worked on, like open
-  documents. Double-clicking a row in any table opens its page and puts it
+  Layers), *Reporting* (Coding Chart, Codebook Report), and the *Working
+  Area*: the items being worked on, like open documents, one line each
+  (neutral icon, title, working-identifier badge; colour only in the badge). Double-clicking a row in any table opens its page and puts it
   there; it is kept on this Mac (reorder from the context menu). Moving to the
   next file (⌥⌘], ⌥⌘N) swaps the file in its place, so a session of coding
   file after file doesn't fill the Working Area. A progress bar of coded
@@ -54,9 +55,23 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 - **Back and Forward** in the Go menu (⌃⌘← / ⌃⌘→), as in Finder and
   Safari, since following a code from a quote and back is a common move.
 - **Document.** Text in a readable column, the Interlocutor layer's speaker
-  names in a left margin (researchers blue, interviewees green), coding
-  stripes in a right margin, and the coding bar below. The code palette
-  floats at the top, like Spotlight.
+  names in a left margin (greyscale: interviewees dark, interviewers lighter),
+  coding stripes in a right margin (dashed grey for irrelevant text), open
+  code names beside them when there is room, and the coding bar below. The
+  code palette floats at the top, like Spotlight. The page shares its width
+  in a fixed order of sacrifice (`ColumnLayout`): outer margins, then a
+  quarter of the text width, then the code names, then the speaker margin,
+  then the text; the coding bar falls back to compact and minimal variants.
+  Nothing on any page may ask for more width than the detail column gives
+  it, so the sidebar is never pushed off the window.
+- **Working identifiers.** `EF`, `CB`, `OC`, `AC`, `R`, `I` and a number,
+  alphabetical per kind (`WorkingIDs` in the core). Deliberately unstable
+  and never stored: they are for talking and thinking ("OC 12 and OC 14
+  overlap"), short enough for badges, and keys remain the real identity.
+  The UI always says "open code" or "axial code", never just "code".
+- **Reporting.** The Coding Chart (`CodingChart` in the core: columns by
+  level, M:N links, barycentre ordering to reduce crossings) and the Codebook
+  Report (`CodebookReport`: rows per response sheet, CSV with pseudonyms).
 - **Inspector.** Follows the page. On a file: Selection (quote, speaker,
   codes with interpretation memos) and File (title, ID, date, status,
   location, fingerprint, codebooks, speakers). On a code: the code (name,

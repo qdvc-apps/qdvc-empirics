@@ -56,10 +56,10 @@ struct ContentView: View {
         case .openCodes: return "Open Codes"
         case .axialCodes: return "Axial Codes"
         case .layers: return "Layers"
-        case .file(let k): return model.project.files[k]?.displayTitle ?? ""
-        case .code(let k): return model.project.code(k)?.name ?? ""
-        case .codebook(let k): return model.project.codebooks[k]?.title ?? ""
-        case .researcher(let k), .interviewee(let k): return model.personName(k) ?? ""
+        case .codingChart: return "Coding Chart"
+        case .codebookReport: return "Codebook Report"
+        case .file(let k), .code(let k), .codebook(let k), .researcher(let k), .interviewee(let k):
+            return model.itemLabel(k)
         case nil: return ""
         }
     }
@@ -93,9 +93,15 @@ struct MainView: View {
 struct DetailView: View {
     @Environment(AppModel.self) private var model
 
+    /// The page is an overlay on a flexible base, so it can never be wider
+    /// (or taller) than the detail column gives it: a page that asked for
+    /// more would push the window's columns and cut off the sidebar on the
+    /// left. Pages adapt to the width they get instead (the file page gives
+    /// up its wide margins first), and anything left over is clipped.
     var body: some View {
-        page
+        Color.clear
             .frame(minWidth: 300, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
+            .overlay { page }
             .clipped()
             .modifier(NoWritingTools())
     }
@@ -111,6 +117,8 @@ struct DetailView: View {
         case .openCodes: CodesTable(kind: .open).id("open")
         case .axialCodes: CodesTable(kind: .axial).id("axial")
         case .layers: LayersPage()
+        case .codingChart: CodingChartPage()
+        case .codebookReport: CodebookReportPage()
         case .file(let k): DocumentPage(fileKey: k)
         case .code(let k): CodePage(codeKey: k)
         case .codebook(let k): CodebookPage(codebookKey: k).id(k)
@@ -291,6 +299,12 @@ struct Sidebar: View {
                 Label("Layers", systemImage: "square.3.layers.3d")
                     .tag(SidebarItem.layers)
             }
+            Section("Reporting") {
+                Label("Coding Chart", systemImage: "point.3.connected.trianglepath.dotted")
+                    .tag(SidebarItem.codingChart)
+                Label("Codebook Report", systemImage: "tablecells")
+                    .tag(SidebarItem.codebookReport)
+            }
             // Every sidebar row is a single line of fixed height. A wrapping
             // hint row here ("Double-click a file…") was measured at the wrong
             // width when the selection changed, grew hundreds of points tall
@@ -344,73 +358,17 @@ struct Sidebar: View {
     }
 }
 
-/// A Working Area row: files as in the Empirical Files list; codes,
-/// codebooks and people with their icon.
+/// A Working Area row: exactly one line, with the icon column, the title
+/// and the working-identifier badge aligned the same way for every kind of
+/// item (see ItemLine). Icons are all one neutral colour; only the badge
+/// carries colour (a code's colour, a file's coding status).
 struct WorkingAreaRow: View {
     let model: AppModel
     var item: SidebarItem
 
     var body: some View {
-        switch item {
-        case .file(let k):
-            if let f = model.project.files[k] {
-                FileRow(file: f, count: model.index.selectionCount[k] ?? 0)
-            }
-        case .code(let k):
-            if let c = model.project.code(k) {
-                HStack(spacing: 6) {
-                    Image(systemName: c.kind.symbol).foregroundStyle(c.color)
-                    Text(c.name).lineLimit(1)
-                    Spacer(minLength: 0)
-                    if model.index.layerOf[k] != model.activeLayerKey {
-                        Text(model.index.layerOf[k].flatMap { model.project.layer($0)?.name } ?? "")
-                            .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
-                    }
-                }
-            }
-        case .codebook(let k):
-            Label(model.project.codebooks[k]?.title ?? "", systemImage: "text.book.closed").lineLimit(1)
-        case .researcher(let k):
-            Label(model.personName(k) ?? "", systemImage: "graduationcap").lineLimit(1)
-        case .interviewee(let k):
-            Label(model.personName(k) ?? "", systemImage: "person.bubble").lineLimit(1)
-        default:
-            EmptyView()
+        if let key = item.key {
+            ItemLine(model: model, key: key)
         }
-    }
-}
-
-struct FileRow: View {
-    var file: EmpiricalFile
-    var count: Int
-
-    var body: some View {
-        // Two lines exactly, neither of which wraps (see Sidebar).
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: file.status.symbol)
-                .foregroundStyle(file.status.tint)
-                .frame(width: 14)
-                .padding(.top, 2)
-                .help(file.status.label)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(file.displayTitle).lineLimit(1).truncationMode(.tail)
-                HStack(spacing: 6) {
-                    if !file.customID.isEmpty {
-                        Text(file.customID).font(.caption.monospaced())
-                    }
-                    if !file.date.isEmpty {
-                        Text(file.date).font(.caption).monospacedDigit()
-                    }
-                    Image(systemName: file.kind.symbol).font(.caption2)
-                    if count > 0 {
-                        Text("\(count)").font(.caption).monospacedDigit()
-                            .help("\(count) selection\(count == 1 ? "" : "s") (all layers)")
-                    }
-                }
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 2)
     }
 }

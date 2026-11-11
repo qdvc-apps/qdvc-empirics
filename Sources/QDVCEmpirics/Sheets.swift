@@ -417,11 +417,11 @@ struct MoveToLayerSheet: View {
         let others = model.project.layers.filter { $0.key != from }
         VStack(alignment: .leading, spacing: 14) {
             Text("Move to Another Layer").font(.title3.weight(.semibold))
-            Text("Selections and codes exist in one layer only, so everything linked to this item moves with it: \(component.selections.count) selection\(component.selections.count == 1 ? "" : "s") and \(component.codes.count) code\(component.codes.count == 1 ? "" : "s").")
+            Text("Selections, open codes and axial codes exist in one layer only, so everything linked to this item moves with it: \(component.selections.count) selection\(component.selections.count == 1 ? "" : "s"), \(model.codeCounts(Array(component.codes))).")
                 .fixedSize(horizontal: false, vertical: true)
             if !component.codes.isEmpty {
-                let names = component.codes.compactMap { model.project.code($0)?.name }.sorted()
-                Text("Codes: " + names.prefix(12).joined(separator: ", ") + (names.count > 12 ? "…" : ""))
+                let names = component.codes.filter { model.project.code($0) != nil }.map { model.itemLabel($0) }.sorted()
+                Text("Open and axial codes: " + names.prefix(12).joined(separator: ", ") + (names.count > 12 ? "…" : ""))
                     .font(.callout).foregroundStyle(.secondary)
             }
             Picker("Move to", selection: $target) {

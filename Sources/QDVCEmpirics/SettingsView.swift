@@ -46,6 +46,8 @@ struct ReadingSettings: View {
                 Slider(value: $model.highlightStrength, in: 0.12...0.5)
             }
             Toggle("Show coding stripes beside the text", isOn: $model.showStripes)
+            Toggle("Show open code names beside the stripes (when the window is wide enough)", isOn: $model.showCodeNames)
+                .disabled(!model.showStripes)
             Toggle("Show other visible layers as underlines", isOn: $model.showOtherLayers)
             Toggle("Show the welcome window at launch", isOn: $model.showWelcomeAtLaunch)
             Text("A long session is easier on the eyes with a serif font, generous line spacing and a column of about 60–80 characters.")

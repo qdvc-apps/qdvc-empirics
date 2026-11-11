@@ -268,11 +268,11 @@ struct PDFCodingRepresentable: NSViewRepresentable {
             guard let model = parent?.model else { return [] }
             var items: [NSMenuItem] = []
             if model.hasTextSelection {
-                items.append(ClosureMenuItem(title: "Code Selection…") { model.paletteVisible = true })
-                items.append(ClosureMenuItem(title: "Highlight Without Code") { model.highlightOnly() })
+                items.append(ClosureMenuItem(title: "Apply Open Code…") { model.paletteVisible = true })
+                items.append(ClosureMenuItem(title: "Highlight Without Open Code") { model.highlightOnly() })
                 items.append(ClosureMenuItem(title: "Mark as Irrelevant") { model.toggleIrrelevant() })
             } else if let key = model.focusedSelection {
-                items.append(ClosureMenuItem(title: "Add Code…") { model.paletteVisible = true })
+                items.append(ClosureMenuItem(title: "Add Open Code…") { model.paletteVisible = true })
                 items.append(ClosureMenuItem(title: "Delete Selection") { model.deleteSelection(key) })
             }
             return items

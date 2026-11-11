@@ -14,7 +14,7 @@ struct LayersPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Layers").font(.title2.weight(.semibold))
-                Text("Each selection and code lives in exactly one layer. Most projects need only one; add layers for different theoretical lenses or researchers. You code in the active layer; other layers can show beside it as underlines.")
+                Text("Each selection, open code and axial code lives in exactly one layer. Most projects need only one; add layers for different theoretical lenses or researchers. You code in the active layer; other layers can show beside it as underlines.")
                     .foregroundStyle(.secondary)
                 ForEach(Array(model.project.layers.enumerated()), id: \.element.key) { i, layer in
                     row(layer, index: i)
@@ -71,7 +71,7 @@ struct LayersPage: View {
                 }))
                 .textFieldStyle(.roundedBorder)
                 .font(.headline)
-                Text("\(layer.selectionCount) selections · \(layer.codes.count) codes")
+                Text("\(layer.selectionCount) selections · \(layer.codes.values.filter { $0.kind == .open }.count) open · \(layer.codes.values.filter { $0.kind == .axial }.count) axial codes")
                     .font(.caption).foregroundStyle(.secondary).fixedSize()
                 Button { model.perform("Move Layer") { p in p.moveLayer(layer.key, to: index - 1) } } label: { Image(systemName: "arrow.up") }
                     .buttonStyle(.borderless).disabled(index == 0)

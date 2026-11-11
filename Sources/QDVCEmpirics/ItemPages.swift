@@ -17,7 +17,7 @@ struct CodePage: View {
         if let code = model.project.code(codeKey) {
             EvidencePane(code: code)
         } else {
-            ContentUnavailableView("Code Deleted", systemImage: "tag.slash")
+            ContentUnavailableView("Open or Axial Code Deleted", systemImage: "tag.slash")
         }
     }
 }
@@ -46,7 +46,7 @@ struct CodebookSummary: View {
     var body: some View {
         if let cb = model.project.codebooks[codebookKey] {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Codebook")
+                InspectorTitle(model: model, title: "Codebook", key: codebookKey)
                 TextField("Title", text: Binding(get: { model.project.codebooks[codebookKey]?.title ?? "" },
                                                  set: { v in model.edit { $0.codebooks[codebookKey]?.title = v } }))
                     .textFieldStyle(.roundedBorder)
@@ -79,7 +79,15 @@ struct CodebookSummary: View {
                         }
                     }
                 }
-                Button("Edit Questions…") { model.show(.codebook(codebookKey)) }
+                HStack {
+                    Button("Edit Questions…") { model.show(.codebook(codebookKey)) }
+                    if model.sidebar != .codebookReport {
+                        Button("Show Report") {
+                            model.reportCodebook = codebookKey
+                            model.sidebar = .codebookReport
+                        }
+                    }
+                }
                 Divider()
                 CodebookUsage(codebookKey: codebookKey)
             }
@@ -99,19 +107,26 @@ struct CodebookUsage: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: "Associated With", trailing: "\(files.count + codes.count)")
             if files.isEmpty && codes.isEmpty {
-                Text("Nothing yet. Add it from a file's or code's inspector.").font(.callout).foregroundStyle(.secondary)
+                Text("Nothing yet. Add it from the inspector of an empirical file, open code or axial code.").font(.callout).foregroundStyle(.secondary)
             }
             ForEach(files) { f in
-                usageRow(target: f.key, title: f.displayTitle, symbol: f.kind.symbol)
+                usageRow(target: f.key)
             }
             ForEach(codes) { c in
-                usageRow(target: c.key, title: c.name, symbol: c.kind.symbol)
+                usageRow(target: c.key)
+            }
+            if model.sidebar == .codebook(codebookKey) {
+                Button("Show Report") {
+                    model.reportCodebook = codebookKey
+                    model.sidebar = .codebookReport
+                }
+                .controlSize(.small)
             }
         }
     }
 
     @ViewBuilder
-    func usageRow(target: String, title: String, symbol: String) -> some View {
+    func usageRow(target: String) -> some View {
         let cb = model.project.codebooks[codebookKey]
         let mine = model.responseID(codebook: codebookKey, target: target).flatMap { model.project.responses[$0] }
         let complete = cb.map { SheetCompleteness.of(mine?.answers ?? [:], against: $0).isComplete } ?? false
@@ -121,10 +136,9 @@ struct CodebookUsage: View {
             Button {
                 model.openKey(target)
             } label: {
-                Label(title, systemImage: symbol).lineLimit(1)
+                ItemLine(model: model, key: target, iconWidth: 16)
             }
-            .buttonStyle(.link)
-            Spacer()
+            .buttonStyle(.plain)
             Button(mine == nil ? "Fill In…" : "Edit…") { model.openResponseSheet(codebook: codebookKey, target: target) }
                 .controlSize(.small)
         }
@@ -237,8 +251,11 @@ struct PersonForm: View {
                 Text(model.personName(key) ?? "Unnamed")
                     .font(compact ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
                     .lineLimit(2)
-                Text(kind == .researcher ? "Researcher" : "Interviewee")
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(kind == .researcher ? "Researcher" : "Interviewee")
+                        .foregroundStyle(.secondary)
+                    WorkingBadge(text: model.wid(key), color: nil)
+                }
                 if model.showRealNames, model.realNames[key] != nil {
                     Text("Pseudonym: " + [first, last].filter { !$0.isEmpty }.joined(separator: " "))
                         .font(.caption).foregroundStyle(.secondary)
@@ -311,9 +328,11 @@ struct Monogram: View {
 
     var body: some View {
         let initials = String(first.prefix(1) + last.prefix(1)).uppercased()
-        let base: Color = kind == .researcher ? .blue : .green
+        // Greyscale, as in Contacts, and like speakers in the text:
+        // interviewees darker, researchers lighter.
+        let base = Color(white: kind == .researcher ? 0.62 : 0.38)
         ZStack {
-            Circle().fill(LinearGradient(colors: [base.opacity(0.55), base.opacity(0.9)], startPoint: .top, endPoint: .bottom))
+            Circle().fill(LinearGradient(colors: [base.opacity(0.75), base], startPoint: .top, endPoint: .bottom))
             if initials.isEmpty {
                 Image(systemName: "person.fill").font(.system(size: size * 0.45)).foregroundStyle(.white)
             } else {

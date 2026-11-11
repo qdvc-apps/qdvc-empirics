@@ -14,10 +14,13 @@ struct CodebookEditor: View {
         let key = codebook.key
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                TextField("Title", text: Binding(get: { model.project.codebooks[key]?.title ?? "" },
-                                                 set: { v in model.edit { $0.codebooks[key]?.title = v } }))
-                    .textFieldStyle(.roundedBorder)
-                    .font(.title2)
+                HStack(spacing: 8) {
+                    TextField("Title", text: Binding(get: { model.project.codebooks[key]?.title ?? "" },
+                                                     set: { v in model.edit { $0.codebooks[key]?.title = v } }))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.title2)
+                    WorkingBadge(text: model.wid(key), color: nil)
+                }
                 TextField("Description (what this codebook is for)", text: Binding(
                     get: { model.project.codebooks[key]?.description ?? "" },
                     set: { v in model.edit { $0.codebooks[key]?.description = v } }

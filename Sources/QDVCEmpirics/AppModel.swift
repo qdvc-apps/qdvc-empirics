@@ -18,6 +18,9 @@ enum SidebarItem: Hashable {
     case openCodes
     case axialCodes
     case layers
+    // Reporting
+    case codingChart
+    case codebookReport
     // Pages of single items (in the Working Area)
     case file(String)
     case code(String)
@@ -44,6 +47,8 @@ enum SidebarItem: Hashable {
         case .openCodes: return "openCodes"
         case .axialCodes: return "axialCodes"
         case .layers: return "layers"
+        case .codingChart: return "codingChart"
+        case .codebookReport: return "codebookReport"
         case .file(let k): return "file:" + k
         case .code(let k): return "code:" + k
         case .codebook(let k): return "codebook:" + k
@@ -63,6 +68,8 @@ enum SidebarItem: Hashable {
         case ("openCodes", _): self = .openCodes
         case ("axialCodes", _): self = .axialCodes
         case ("layers", _): self = .layers
+        case ("codingChart", _): self = .codingChart
+        case ("codebookReport", _): self = .codebookReport
         case ("file", let k) where !k.isEmpty: self = .file(k)
         case ("code", let k) where !k.isEmpty: self = .code(k)
         case ("codebook", let k) where !k.isEmpty: self = .codebook(k)
@@ -206,8 +213,11 @@ final class AppModel {
     var showSpeakers = true
     private(set) var currentResearcher: String?
     var focusedSelection: String?
-    /// The row selected in the table of the current list page.
+    /// The row selected in the table of the current list page (also the
+    /// item selected in the Coding Chart and the Codebook Report).
     var tableSelection: String?
+    /// The codebook shown in the Codebook Report.
+    var reportCodebook: String?
     /// Items being worked on, in the sidebar's Working Area (this Mac).
     private(set) var workingArea: [SidebarItem] = []
     @ObservationIgnored private var backStack: [SidebarItem] = []
@@ -255,6 +265,11 @@ final class AppModel {
     }
     var showStripes: Bool = UserDefaults.standard.object(forKey: "showStripes") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showStripes, forKey: "showStripes") }
+    }
+    /// Show open code names beside the coding stripes, when the window is
+    /// wide enough for them.
+    var showCodeNames: Bool = UserDefaults.standard.object(forKey: "showCodeNames") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showCodeNames, forKey: "showCodeNames") }
     }
     /// Show real names (from the mapping files) instead of pseudonyms. Off
     /// at every launch, so a shared screen never shows them by surprise.
@@ -407,6 +422,7 @@ final class AppModel {
         sidebar = nil
         focusedSelection = nil
         tableSelection = nil
+        reportCodebook = nil
         workingArea = []
         backStack = []
         forwardStack = []
@@ -559,6 +575,7 @@ final class AppModel {
     private func validateState() {
         if let s = focusedSelection, project.selection(s) == nil { focusedSelection = nil }
         if let t = tableSelection, !keyExists(t) { tableSelection = nil }
+        if let c = reportCodebook, project.codebooks[c] == nil { reportCodebook = nil }
         if project.layer(activeLayerKey) == nil { activeLayerKey = project.layers.first?.key ?? "" }
         if let item = sidebar, !exists(item) { sidebar = listPage(for: item) }
         if let r = currentResearcher, project.researcher(r) == nil { currentResearcher = nil }
@@ -715,6 +732,10 @@ final class AppModel {
         default: return true
         }
     }
+
+    /// The working identifier of a file, codebook, code or person ("EF 3",
+    /// "OC 12"…): alphabetical, so it changes as items come and go.
+    func wid(_ key: String) -> String { index.workingID[key] ?? "" }
 
     func keyExists(_ key: String) -> Bool { item(forKey: key).map(exists) ?? false }
 
@@ -1015,10 +1036,12 @@ final class AppModel {
         person(forSpeaker: label, in: file).flatMap { personName($0) } ?? label
     }
 
-    /// Researchers in blue, interviewees in green, unknown speakers grey.
+    /// Greyscale, so speakers never compete with code colours: interviewees
+    /// in the text colour, researchers (interviewers) in a lighter grey that
+    /// is still easy to read, unknown speakers lighter again.
     func speakerColor(_ label: String, in file: String) -> NSColor {
-        guard let p = person(forSpeaker: label, in: file) else { return .secondaryLabelColor }
-        return project.researcher(p) != nil ? .systemBlue : .systemGreen
+        guard let p = person(forSpeaker: label, in: file) else { return .tertiaryLabelColor }
+        return project.researcher(p) != nil ? .secondaryLabelColor : .labelColor
     }
 
     // MARK: - Response sheets

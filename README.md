@@ -44,19 +44,33 @@ At launch a welcome window, as in Xcode and the other QDVC apps, offers to
 create or open a project and lists recent ones.
 
 The main window has a **sidebar**, the page in the middle, and an
-**inspector** on the right (⌥⌘I) that follows the page. The sidebar has three
+**inspector** on the right (⌥⌘I) that follows the page. The sidebar has four
 sections:
 
 - **Project:** Empirical Files, Researchers, Interviewees, Project Settings.
 - **Analysis:** Codebooks, Open Codes, Axial Codes, Layers.
-- **Working Area:** the files, codes, codebooks and people you are working
-  on. Double-click a row in any table to open its page and put it here;
-  right-click to move it up or down, or to remove it (or the others). It is
-  remembered on this Mac.
+- **Reporting:** Coding Chart, Codebook Report.
+- **Working Area:** the files, open codes, axial codes, codebooks and people
+  you are working on, one line each: an icon, the title and the working
+  identifier (coloured like the code, or orange or green for a file in
+  progress or coded). Double-click a row in any table to open its page and
+  put it here; right-click to move it up or down, or to remove it (or the
+  others). It is remembered on this Mac.
+
+**Working identifiers.** Every empirical file, codebook, open code, axial
+code, researcher and interviewee has a short identifier to talk about it
+while working: `EF 31`, `CB 4`, `OC 23`, `AC 12`, `R 5`, `I 17`. They number
+each kind alphabetically (by title or pseudonym), so they are **not stable**:
+adding, renaming or removing an item renumbers the ones after it. They are
+shown in the tables (the No. column), the Working Area, the inspectors, the
+code palette (type `oc 23` to find that open code) and the reports, and are
+never stored.
 
 The list pages are plain tables (click a column heading to sort, filter at
 the bottom): selecting a row shows its details in the inspector,
-double-clicking opens its page. Go › Back and Forward (⌃⌘← / ⌃⌘→)
+double-clicking opens its page. Tables of items that codebooks can be
+associated with (empirical files, open codes, axial codes) have a Codebooks
+column. Go › Back and Forward (⌃⌘← / ⌃⌘→)
 retrace your steps. The pages of single items are:
 
 - an **empirical file**: the document, coded as below, with the inspector's
@@ -73,8 +87,11 @@ retrace your steps. The pages of single items are:
 - Text and Markdown files are shown in a calm reading column (serif by
   default, generous line spacing, adjustable in Settings › Reading), with
   **coding stripes** in the right margin, one per selection, in lanes where
-  they overlap; click a stripe to focus its selection. PDFs are coded on
-  their own pages (PDFKit), with the same keys.
+  they overlap (irrelevant text has a dashed grey one); click a stripe to
+  focus its selection. When the window is wide enough, the open codes'
+  names sit beside the stripes. As the window narrows, the wide outer
+  margins go first, then the code names; the sidebar is never pushed off
+  the window. PDFs are coded on their own pages (PDFKit), with the same keys.
 - Select text, then press **Return** (or ⌘K) to open the **code palette**:
   type a few letters, Return applies the code; a name that isn't a code yet
   creates it (⌘Return always creates). Press **1–9** for **quick codes**: the
@@ -137,10 +154,26 @@ selection or code to another layer moves everything linked to it. The
 **Interlocutor layer** finds conversational turns from speaker header lines,
 forgiving inconsistent capitals, colons, line breaks, timestamps and
 Markdown emphasis, and maps each speaker to a researcher or interviewee
-(File inspector › Speakers…); names then show in the left margin.
+(File inspector › Speakers…); names then show in the left margin, in
+greyscale so they never compete with code colours: interviewees dark,
+interviewers a lighter grey.
 
 **Project Settings** (⌃⌘4): title, description, the two folders, real-name
 mapping files, quote storage and interrelation types.
+
+**Coding Chart** (⌃⌘9): the active layer at a glance. Empirical files on the
+left, linked to the open codes with evidence in them, linked to the axial
+codes they are evidence for; axial codes built on other axial codes sit
+further right. Each item is one line (icon, title, working identifier).
+Click one to light up everything it is linked to and see it in the
+inspector; double-click to open it. Items nothing links to are left out
+unless you ask for them.
+
+**Codebook Report** (⌃⌘0): choose a codebook in the bar below and see every
+response to it in one table: a row per response sheet (and per associated
+item nobody has answered yet), a column per question, with flagged
+mandatory questions marked. Double-click a row for its response sheet; copy
+or save the table as CSV (always with pseudonyms).
 
 ## Requirements
 
@@ -249,7 +282,7 @@ icon template, built like the other QDVC apps' icons. It appears in the
 | ⌥⌘] / ⌥⌘[ | Next / previous file |
 | ⌥⌘N | Next file not yet coded |
 | ⌃⌘C | Mark the file as coded |
-| ⌃⌘1 … ⌃⌘8 | Empirical Files, Researchers, Interviewees, Project Settings, Codebooks, Open Codes, Axial Codes, Layers |
+| ⌃⌘1 … ⌃⌘9, ⌃⌘0 | Empirical Files, Researchers, Interviewees, Project Settings, Codebooks, Open Codes, Axial Codes, Layers, Coding Chart, Codebook Report |
 | ⌃⌘← / ⌃⌘→ | Back / forward |
 | ⇧⌘R | Show real names |
 | ⌃⌘I | Show or hide interlocutors |

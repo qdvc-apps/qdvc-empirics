@@ -27,6 +27,11 @@ struct StripeSpec: Equatable {
     var color: NSColor
     var help: String
     var focused: Bool
+    /// Shown beside the stripe when there is room: the open codes' names,
+    /// or "Irrelevant".
+    var label: String = ""
+    /// Irrelevant text: a dashed grey ribbon.
+    var dashed = false
 }
 
 struct TurnSpec: Equatable {
@@ -44,71 +49,90 @@ struct PlacedMark: Identifiable, Equatable {
     var color: NSColor
     var text: String
     var focused: Bool
+    var label: String = ""
+    var dashed = false
 }
 
-/// A text or Markdown file, for reading and coding: the text in a readable
-/// column, speaker names on the left (Interlocutor layer), coding stripes on
-/// the right, and the coding bar below.
-struct TextCodingView: View {
-    @Environment(AppModel.self) private var model
-    let fileKey: String
-    let text: String
-    @State private var stripes: [PlacedMark] = []
-    @State private var turnMarks: [PlacedMark] = []
+/// How the file page's width is shared: speaker names, the text, coding
+/// stripes and open code names, centred, with whatever is left over as the
+/// outer margins. As the window narrows, the outer margins go first; then
+/// the text narrows a little; then the code names shrink and go; then the
+/// speaker margin narrows; only then does the text narrow further. Nothing
+/// ever asks for more than the width given, so the sidebar is never pushed.
+struct ColumnLayout: Equatable {
+    var speaker: CGFloat
+    var text: CGFloat
+    var stripes: CGFloat
+    var labels: CGFloat
 
-    static let stripeWidth: CGFloat = 56
-    static let speakerWidth: CGFloat = 132
+    var total: CGFloat { speaker + text + stripes + labels }
 
     var body: some View {
         let speakers = model.project.settings.interlocutorLayer && model.showSpeakers
         let deco = decorations(speakers: speakers)
-        let column = model.readingWidth + (speakers ? Self.speakerWidth : 24) + (model.showStripes ? Self.stripeWidth : 24)
         VStack(spacing: 0) {
-            ReadableColumn(maxWidth: column) {
+            GeometryReader { geo in
+                let layout = ColumnLayout.make(width: geo.size.width, reading: model.readingWidth, speakers: speakers,
+                                               stripes: model.showStripes, labels: model.showCodeNames)
+                // The scroll view spans the whole width (so the margins
+                // scroll too); the column is centred inside it.
                 FillingScroll {
                     HStack(alignment: .top, spacing: 0) {
                         if speakers {
-                            SpeakerMargin(marks: turnMarks)
-                                .frame(width: Self.speakerWidth)
+                            SpeakerMargin(marks: turnMarks, width: layout.speaker)
+                                .frame(width: layout.speaker)
                                 .frame(maxHeight: .infinity, alignment: .top)
                         } else {
-                            Color.clear.frame(width: 24)
+                            Color.clear.frame(width: layout.speaker)
                         }
-                        CodingTextView(
-                            model: model,
-                            fileKey: fileKey,
-                            text: text,
-                            markdown: model.project.files[fileKey]?.kind == .markdown,
-                            font: model.readingFont.font(size: model.readingSize),
-                            lineSpacing: model.lineSpacing,
-                            decorations: deco,
-                            reveal: model.reveal?.file == fileKey ? model.reveal : nil,
-                            clearRevision: model.clearTextSelectionRevision,
-                            position: model.positions[fileKey],
-                            onSelection: { spans in model.documentSelectionChanged(file: fileKey, spans: spans) },
-                            onClick: { offset in model.documentClicked(file: fileKey, page: nil, offset: offset) },
-                            onKey: { key, tv in handleKey(key, tv) },
-                            onPlaced: { s, t in
-                                stripes = s
-                                turnMarks = t
-                            },
-                            onPosition: { model.rememberPosition(file: fileKey, $0) }
-                        )
+                        textView(deco)
+                            .frame(width: layout.text)
                         if model.showStripes {
                             StripeMargin(marks: stripes)
-                                .frame(width: Self.stripeWidth)
+                                .frame(width: layout.stripes)
                                 .frame(maxHeight: .infinity, alignment: .top)
                         } else {
-                            Color.clear.frame(width: 24)
+                            Color.clear.frame(width: layout.stripes)
+                        }
+                        if layout.labels > 0 {
+                            CodeNameMargin(marks: stripes, width: layout.labels)
+                                .frame(width: layout.labels)
+                                .frame(maxHeight: .infinity, alignment: .top)
                         }
                     }
+                    .frame(width: layout.total)
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipped()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             CodingBar(fileKey: fileKey)
         }
+    }
+
+    func textView(_ deco: TextDecorations) -> CodingTextView {
+        CodingTextView(
+            model: model,
+            fileKey: fileKey,
+            text: text,
+            markdown: model.project.files[fileKey]?.kind == .markdown,
+            font: model.readingFont.font(size: model.readingSize),
+            lineSpacing: model.lineSpacing,
+            decorations: deco,
+            reveal: model.reveal?.file == fileKey ? model.reveal : nil,
+            clearRevision: model.clearTextSelectionRevision,
+            position: model.positions[fileKey],
+            onSelection: { spans in model.documentSelectionChanged(file: fileKey, spans: spans) },
+            onClick: { offset in model.documentClicked(file: fileKey, page: nil, offset: offset) },
+            onKey: { key, tv in handleKey(key, tv) },
+            onPlaced: { s, t in
+                stripes = s
+                turnMarks = t
+            },
+            onPosition: { model.rememberPosition(file: fileKey, $0) }
+        )
     }
 
     // MARK: Decorations
@@ -151,12 +175,23 @@ struct TextCodingView: View {
                 if focused { alpha = min(0.75, alpha + 0.25) }
                 d.fills.append(.init(range: NSRange(location: a, length: b - a), color: colours[inner].withAlphaComponent(alpha)))
             }
-            for s in relevant {
+            for s in list {
                 guard let first = s.spans.first, ok(first), let last = s.spans.last else { continue }
+                let range = NSRange(location: first.start, length: last.end - first.start)
+                let focused = s.key == model.focusedSelection
+                if s.irrelevant {
+                    d.stripes.append(StripeSpec(key: s.key, range: range, color: .systemGray,
+                                                help: "Irrelevant: can never be evidence in this layer", focused: focused,
+                                                label: "Irrelevant", dashed: true))
+                    continue
+                }
                 let codes = (model.index.codesForSelection[s.key] ?? []).compactMap { layer.codes[$0] }
-                let help = codes.isEmpty ? "Highlighted, no code yet" : codes.map(\.name).sorted().joined(separator: "\n")
-                d.stripes.append(StripeSpec(key: s.key, range: NSRange(location: first.start, length: last.end - first.start),
-                                            color: colour(of: s, in: layer), help: help, focused: s.key == model.focusedSelection))
+                    .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                let help = codes.isEmpty ? "Highlighted, no open code yet"
+                    : codes.map { model.itemLabel($0.key) }.joined(separator: "\n")
+                let label = codes.isEmpty ? "No open code yet" : codes.map(\.name).joined(separator: ", ")
+                d.stripes.append(StripeSpec(key: s.key, range: range, color: colour(of: s, in: layer), help: help,
+                                            focused: focused, label: label))
             }
         }
         if model.showOtherLayers {
@@ -270,7 +305,8 @@ struct TextCodingView: View {
 // MARK: - Margins
 
 /// Coding stripes beside the text, one per selection, in lanes so
-/// overlapping selections sit side by side. Click one to focus it.
+/// overlapping selections sit side by side; irrelevant text has a dashed
+/// grey ribbon. Click one to focus it.
 struct StripeMargin: View {
     @Environment(AppModel.self) private var model
     var marks: [PlacedMark]
@@ -279,13 +315,7 @@ struct StripeMargin: View {
         ZStack(alignment: .topLeading) {
             Color.clear
             ForEach(marks) { m in
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(nsColor: m.color).opacity(m.focused ? 1 : 0.8))
-                    .frame(width: m.focused ? 6 : 4, height: max(6, m.height))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 2)
-                            .strokeBorder(Color.primary.opacity(m.focused ? 0.6 : 0), lineWidth: 1)
-                    )
+                Ribbon(color: Color(nsColor: m.color), focused: m.focused, dashed: m.dashed, height: max(6, m.height))
                     .padding(.horizontal, 3)
                     .contentShape(Rectangle())
                     .onTapGesture { model.focusSelection(m.id) }
@@ -296,9 +326,92 @@ struct StripeMargin: View {
     }
 }
 
-/// Speaker names at the start of each turn, with a bar down the turn.
+/// One coding stripe: solid in the code's colour, or dashed grey for
+/// irrelevant text.
+struct Ribbon: View {
+    var color: Color
+    var focused: Bool
+    var dashed: Bool
+    var height: CGFloat
+
+    var body: some View {
+        let width: CGFloat = focused ? 6 : 4
+        Group {
+            if dashed {
+                Path { p in
+                    p.move(to: CGPoint(x: width / 2, y: 0))
+                    p.addLine(to: CGPoint(x: width / 2, y: height))
+                }
+                .stroke(color.opacity(focused ? 0.9 : 0.6), style: StrokeStyle(lineWidth: width, lineCap: .butt, dash: [5, 3]))
+            } else {
+                RoundedRectangle(cornerRadius: 2).fill(color.opacity(focused ? 1 : 0.8))
+            }
+        }
+        .frame(width: width, height: height)
+        .overlay(
+            RoundedRectangle(cornerRadius: 2)
+                .strokeBorder(Color.primary.opacity(focused ? 0.6 : 0), lineWidth: 1)
+        )
+    }
+}
+
+/// Open code names beside the stripes (only when the window is wide
+/// enough). Each name sits level with the top of its stripe, after a small
+/// mark in the stripe's colour; when names would overlap, the later one
+/// moves down, and is left out if that would take it past its stripe.
+struct CodeNameMargin: View {
+    @Environment(AppModel.self) private var model
+    var marks: [PlacedMark]
+    var width: CGFloat
+
+    static let lineHeight: CGFloat = 15
+
+    struct Placed: Identifiable {
+        var mark: PlacedMark
+        var y: CGFloat
+        var id: String { mark.id }
+    }
+
+    static func arrange(_ marks: [PlacedMark]) -> [Placed] {
+        var result: [Placed] = []
+        var nextFree: CGFloat = -.infinity
+        for m in marks.sorted(by: { ($0.y, $0.lane) < ($1.y, $1.lane) }) where !m.label.isEmpty {
+            let y = max(m.y - 1, nextFree)
+            // A focused selection always gets its name.
+            guard y <= m.y + max(0, m.height - lineHeight) || m.focused else { continue }
+            result.append(Placed(mark: m, y: y))
+            nextFree = y + lineHeight
+        }
+        return result
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            ForEach(Self.arrange(marks)) { p in
+                HStack(spacing: 5) {
+                    Ribbon(color: Color(nsColor: p.mark.color), focused: false, dashed: p.mark.dashed, height: 9)
+                    Text(p.mark.label)
+                        .font(.system(size: 11, weight: p.mark.focused ? .semibold : .regular))
+                        .foregroundStyle(p.mark.focused ? HierarchicalShapeStyle.primary : (p.mark.dashed ? HierarchicalShapeStyle.tertiary : HierarchicalShapeStyle.secondary))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .frame(width: max(0, width - 10), height: Self.lineHeight, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { model.focusSelection(p.mark.id) }
+                .help(p.mark.text)
+                .offset(x: 2, y: p.y)
+            }
+        }
+    }
+}
+
+/// Speaker names at the start of each turn, with a bar down the turn, in
+/// greyscale (see AppModel.speakerColor).
 struct SpeakerMargin: View {
     var marks: [PlacedMark]
+    var width: CGFloat
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -313,10 +426,10 @@ struct SpeakerMargin: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(.top, 2)
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color(nsColor: m.color).opacity(0.35))
+                        .fill(Color(nsColor: m.color).opacity(0.3))
                         .frame(width: 2, height: max(8, m.height))
                 }
-                .frame(width: TextCodingView.speakerWidth - 14, alignment: .trailing)
+                .frame(width: max(0, width - 14), alignment: .trailing)
                 .offset(x: -8, y: m.y)
             }
         }
@@ -607,7 +720,7 @@ struct CodingTextView: NSViewRepresentable {
                 if lane >= 5 { lane = 4 }
                 if lane == laneEnds.count { laneEnds.append(y1) } else { laneEnds[lane] = max(laneEnds[lane], y1) }
                 stripes.append(PlacedMark(id: s.key, y: y0 + 3, height: y1 - y0 - 6, lane: lane, color: s.color,
-                                          text: s.help, focused: s.focused))
+                                          text: s.help, focused: s.focused, label: s.label, dashed: s.dashed))
             }
             var turns: [PlacedMark] = []
             for (i, t) in parent.decorations.turns.enumerated() {
@@ -654,11 +767,11 @@ struct CodingTextView: NSViewRepresentable {
             let model = parent.model
             var items: [NSMenuItem] = []
             if model.hasTextSelection {
-                items.append(ClosureMenuItem(title: "Code Selection…") { model.paletteVisible = true })
-                items.append(ClosureMenuItem(title: "Highlight Without Code") { model.highlightOnly() })
+                items.append(ClosureMenuItem(title: "Apply Open Code…") { model.paletteVisible = true })
+                items.append(ClosureMenuItem(title: "Highlight Without Open Code") { model.highlightOnly() })
                 items.append(ClosureMenuItem(title: "Mark as Irrelevant") { model.toggleIrrelevant() })
             } else if let key = model.focusedSelection {
-                items.append(ClosureMenuItem(title: "Add Code…") { model.paletteVisible = true })
+                items.append(ClosureMenuItem(title: "Add Open Code…") { model.paletteVisible = true })
                 items.append(ClosureMenuItem(title: "Delete Selection") { model.deleteSelection(key) })
             }
             return items

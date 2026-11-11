@@ -74,6 +74,8 @@ struct CodeChip: View {
     var code: QDACode
     var slot: Int?
     var compact = false
+    /// The working identifier, shown after the name.
+    var badge: String = ""
 
     var body: some View {
         HStack(spacing: 5) {
@@ -86,6 +88,9 @@ struct CodeChip: View {
             }
             CodeDot(color: code.color, size: compact ? 7 : 9)
             Text(code.name).lineLimit(1).truncationMode(.tail)
+            if !badge.isEmpty {
+                Text(badge).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+            }
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
