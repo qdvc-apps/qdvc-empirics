@@ -57,7 +57,11 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 - **Document.** Text in a readable column, the Interlocutor layer's speaker
   names in a left margin (greyscale: interviewees dark, interviewers lighter),
   coding stripes in a right margin (dashed grey for irrelevant text), open
-  code names beside them when there is room, and the coding bar below. The
+  code labels beside them when there is room (in the stripe's colour: the
+  working identifiers on the first line, then the names in bold, wrapped so
+  they show whole), and the coding bar below. Irrelevant text is greyed out
+  whole, in the same faint grey, including the speaker header and margin
+  name of a turn whose words are all irrelevant. The
   code palette floats at the top, like Spotlight. The page shares its width
   in a fixed order of sacrifice (`ColumnLayout`): outer margins, then a
   quarter of the text width, then the code names, then the speaker margin,
@@ -134,10 +138,28 @@ nothing could be written back to the file. Links in PDFs are never followed
 
 Each empirical file records a SHA-256 fingerprint. On opening a file whose
 fingerprint differs, every selection in every layer is checked against the
-new text: unchanged, found again by its quote (nearest the old position) and
-moved, or lost (flagged in the inspector and on its quote cards, to resize or
-delete). Without stored quotes, a selection is kept if it still fits, and the
-banner warns that positions may now be off.
+new text: unchanged, found again by its quote (nearest the old position;
+exactly, or else ignoring differences in white space, since a corrected
+transcript is often re-wrapped) and moved, or lost (flagged in the inspector
+and on its quote cards, to resize or delete). Without stored quotes, a
+selection is kept if it still fits, and the banner warns that positions may
+now be off.
+
+**Updating a file in place** (File › Update Empirical File…, or the File
+inspector) is the deliberate version of this: a wizard in three steps.
+Choose the new version (in the full-texts folder, which is still only read;
+the same sort of file, text or PDF; not catalogued as another file). Check:
+every selection, in every layer, is shown as unchanged, moved, unchecked or
+not found, with its text and open codes, and each mapped speaker label as
+found or not in the new version. Selections without a stored quote
+(irrelevant text always) are looked for with their text in the version they
+were made on, while that can still be read (this session's copy, or the
+file, if its fingerprint still matches); otherwise they keep their positions,
+unchecked. Confirm: keep what wasn't found (flagged) or delete it, with a
+reminder to commit the workspace to Git first so the diff can be read and
+the previous version restored. Nothing changes before Confirm; the update is
+one step of Edit › Undo. The file keeps its key, so its codebooks, response
+sheets, speakers, title, ID, date and status all stay.
 
 ## Layers
 
@@ -168,3 +190,10 @@ The Interlocutor layer is not a coding layer: it is derived from the text
   the specification listed double-click for interviewees only.
 - Opening a code from a chip or a quote puts it in the Working Area, like a
   double-click: the page needs a sidebar row to come back to.
+- ⌘N makes an item of the kind the current list page shows (Add Files on
+  Empirical Files); on other pages it does nothing.
+- Updating a file keeps selections it can't find (flagged) unless asked to
+  delete them; a speaker label missing from the new version is only
+  reported, its mapping is kept.
+- Codebooks apply to interviewees but not to researchers (researchers are
+  the ones answering).

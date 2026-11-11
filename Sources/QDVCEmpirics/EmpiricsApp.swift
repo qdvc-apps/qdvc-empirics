@@ -85,6 +85,11 @@ struct EmpiricsCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
+            // ⌘N makes an item of the kind the current list page shows
+            // (a file, researcher, interviewee, codebook, open or axial code).
+            Button(model.newItemTitle ?? "New Item") { model.newItem() }
+                .keyboardShortcut("n")
+                .disabled(model.newItemTitle == nil)
             Button("New Project…") { model.sheet = .newProject(nil) }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             Button("Open Project…") { model.chooseWorkspace() }
@@ -103,6 +108,10 @@ struct EmpiricsCommands: Commands {
                 .disabled(!model.isOpen)
             Button("Add New Files from Full-Texts Folder…") { model.scanForNewFiles() }
                 .disabled(!model.isOpen)
+            Button("Update Empirical File from New Version…") {
+                if let k = model.fileToUpdate { model.updateFile(k) }
+            }
+            .disabled(model.fileToUpdate == nil)
             Button("Choose Full-Texts Folder…") { model.chooseFullTextsFolder() }
                 .disabled(!model.isOpen)
             Divider()

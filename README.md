@@ -68,8 +68,9 @@ never stored.
 
 The list pages are plain tables (click a column heading to sort, filter at
 the bottom): selecting a row shows its details in the inspector,
-double-clicking opens its page. Tables of items that codebooks can be
-associated with (empirical files, open codes, axial codes) have a Codebooks
+double-clicking opens its page, and ⌘N makes a new one (on Empirical Files,
+it adds files). Tables of items that codebooks can be associated with
+(empirical files, interviewees, open codes, axial codes) have a Codebooks
 column. Go › Back and Forward (⌃⌘← / ⌃⌘→)
 retrace your steps. The pages of single items are:
 
@@ -88,17 +89,19 @@ retrace your steps. The pages of single items are:
   default, generous line spacing, adjustable in Settings › Reading), with
   **coding stripes** in the right margin, one per selection, in lanes where
   they overlap (irrelevant text has a dashed grey one); click a stripe to
-  focus its selection. When the window is wide enough, the open codes'
-  names sit beside the stripes. As the window narrows, the wide outer
-  margins go first, then the code names; the sidebar is never pushed off
-  the window. PDFs are coded on their own pages (PDFKit), with the same keys.
+  focus its selection. When the window is wide enough, each stripe has a
+  label beside it in its own colour: the open codes' working identifiers
+  on the first line, then their names in bold, wrapped so the whole label
+  shows. As the window narrows, the wide outer margins go first, then the
+  labels; the sidebar is never pushed off the window. PDFs are coded on their own pages (PDFKit), with the same keys.
 - Select text, then press **Return** (or ⌘K) to open the **code palette**:
   type a few letters, Return applies the code; a name that isn't a code yet
   creates it (⌘Return always creates). Press **1–9** for **quick codes**: the
   first nine codes you use take 1–9 and keep them, so the numbers never shift
   under your fingers (reassign them from any code's context menu or the Code
   inspector).
-- **0** marks the selected text irrelevant (dimmed). Irrelevant text can never
+- **0** marks the selected text irrelevant: it is greyed out in a faint grey,
+  speaker names included. Irrelevant text can never
   be evidence: the app refuses to code over it, and refuses to mark evidence
   irrelevant. **H** makes a selection without a code, to come back to.
 - **T** selects the speaker's turn under the cursor (Interlocutor layer),
@@ -112,6 +115,13 @@ retrace your steps. The pages of single items are:
   Yet Coded (⌥⌘N) and the status menu in the toolbar (Not Started, In
   Progress, Coded) keep long sessions moving; the sidebar shows progress.
 - Each file reopens where you left off.
+- **Updating a file** with a corrected or re-exported version of its
+  full-text (File › Update Empirical File from New Version…, or the File
+  inspector): choose the new version in the full-texts folder, see which
+  selections (in every layer) and speakers can be found in it, then confirm,
+  keeping or deleting what wasn't found. The file keeps its coding,
+  codebooks and response sheets; the old version is left untouched. Commit
+  the workspace to Git first, and the diff shows exactly what moved.
 
 **Open Codes** and **Axial Codes** (⌃⌘6, ⌃⌘7): the codes of the active
 layer. A code's page shows its **evidence**: every quote, grouped by file,
@@ -129,8 +139,8 @@ choose one or choose any from a list. A list can be strictly predefined, or
 open to options added while coding (they join the codebook). Each question is
 *mandatory, blocking* (the response sheet can't be saved without it),
 *mandatory, non-blocking* (flagged until answered) or *optional*. A codebook
-applies to empirical files, open codes and/or axial codes, and is associated
-with any of them from the inspector, where each researcher fills in their own
+applies to empirical files, interviewees, open codes and/or axial codes, and
+is associated with any of them from the inspector, where each researcher fills in their own
 **response sheet**.
 
 **Researchers** and **Interviewees** (⌃⌘2, ⌃⌘3): everyone is known by a
@@ -270,6 +280,7 @@ icon template, built like the other QDVC apps' icons. It appears in the
 
 | Shortcut | Action |
 | --- | --- |
+| ⌘N | New item on the current page (file, researcher, interviewee, codebook, open or axial code) |
 | ⇧⌘N / ⌘O | New / open project |
 | ⇧⌘A | Add files from the full-texts folder |
 | Return, K, ⌘K | Code the selection (code palette) |

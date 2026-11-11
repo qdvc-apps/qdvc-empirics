@@ -344,6 +344,8 @@ struct Sidebar: View {
                 Button("Mark as \(s.label)") { model.setStatus(s, file: k) }
                     .disabled(f.status == s)
             }
+            Divider()
+            Button("Update from New Version…") { model.updateFile(k) }
         }
         Divider()
         Button("Move Up") { model.moveInWorkingArea(item, by: -1) }

@@ -104,13 +104,18 @@ struct CodebookUsage: View {
         let files = model.project.sortedFiles.filter { $0.codebooks.contains(codebookKey) }
         let codes = model.project.layers.flatMap { Array($0.codes.values) }.filter { $0.codebooks.contains(codebookKey) }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        let people = model.project.interviewees.filter { $0.codebooks.contains(codebookKey) }
+            .sorted { model.itemTitle($0.key).localizedStandardCompare(model.itemTitle($1.key)) == .orderedAscending }
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Associated With", trailing: "\(files.count + codes.count)")
-            if files.isEmpty && codes.isEmpty {
-                Text("Nothing yet. Add it from the inspector of an empirical file, open code or axial code.").font(.callout).foregroundStyle(.secondary)
+            SectionHeader(title: "Associated With", trailing: "\(files.count + people.count + codes.count)")
+            if files.isEmpty && people.isEmpty && codes.isEmpty {
+                Text("Nothing yet. Add it from the inspector of an empirical file, interviewee, open code or axial code.").font(.callout).foregroundStyle(.secondary)
             }
             ForEach(files) { f in
                 usageRow(target: f.key)
+            }
+            ForEach(people) { i in
+                usageRow(target: i.key)
             }
             ForEach(codes) { c in
                 usageRow(target: c.key)
@@ -235,6 +240,10 @@ struct PersonForm: View {
                     Divider()
                     PersonRelated(key: key)
                 } else {
+                    if kind == .interviewee {
+                        SectionHeader(title: "Codebooks")
+                        CodebookAssociations(target: key, kind: .interviewees)
+                    }
                     Button("Open") { model.show(kind == .researcher ? SidebarItem.researcher(key) : SidebarItem.interviewee(key)) }
                         .controlSize(.small)
                 }
@@ -352,6 +361,10 @@ struct PersonRelated: View {
     var body: some View {
         let transcripts = model.transcripts(of: key)
         VStack(alignment: .leading, spacing: 8) {
+            if model.project.interviewee(key) != nil {
+                SectionHeader(title: "Codebooks")
+                CodebookAssociations(target: key, kind: .interviewees)
+            }
             SectionHeader(title: "Speaks In", trailing: transcripts.isEmpty ? nil : "\(transcripts.count)")
             if transcripts.isEmpty {
                 Text("No transcripts. Assign speakers in a file's inspector (Interlocutor layer).")

@@ -101,6 +101,7 @@ titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
 `CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
 by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
 response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
+`UpdateFileSheet` (updating a file from a new version of its full-text),
 `SettingsView`, `Style`.
 
 Navigation is `AppModel.sidebar` (a `SidebarItem`: a list page or an item's
@@ -165,7 +166,19 @@ Long closure chains are slow to type-check: split sorts into statements
 `AppModel.pages(_:)` reads a full-text (through `FullTexts`, read-only) into
 `DocumentStore`, which is not observed; `documentsRevision` tells views to
 refresh. `prepareDocument(_:)` also checks the fingerprint and re-anchors
-selections (`Anchoring.reanchor`) once per session per file. Views must never
+selections (`Anchoring.reanchor`) once per session per file. When a change
+points a file at another full-text or another version of it (updating a
+file, and undoing or redoing that), `commit` drops the file's cached text
+(`forgetStaleDocuments`) so it is read and checked again.
+
+Updating a file (`UpdateFileSheet`) checks first and changes nothing until
+confirmed: `Anchoring.check` says what would become of every selection
+(unchanged, moved, unchecked, not found), taking the text to look for from
+the stored quote or, failing that, from the version the selections were made
+on (the cached copy or the file itself, if either still has the catalogued
+fingerprint); `Anchoring.apply` then moves them, in one `perform`. The new
+version must be inside the full-texts folder (nothing is copied there) and of
+the same sort, text or PDF. Views must never
 change the project while being drawn: loading pages is safe (it only fills
 the cache), fingerprint checks happen in `prepareDocument`, called from
 `.task` and navigation.
@@ -229,7 +242,12 @@ Nothing may touch the network:
 - A workspace saves and loads to an identical project; saving again writes
   nothing; deleting a layer removes its folder; hand-written YAML is read;
   conflict markers are reported; quotes are dropped when switched off.
-- Re-anchoring moves selections whose text moved and reports lost ones.
+- Re-anchoring moves selections whose text moved (also when only its white
+  space changed) and reports lost ones; checking a new version finds
+  irrelevant text through the old version, keeps what it can't check, and
+  applying it deletes lost selections only when asked.
+- Codebooks can be associated with interviewees (only when they apply to
+  them); deleting the interviewee deletes the sheets about them.
 - The sample builds, saves and loads back unchanged.
 - Working identifiers are alphabetical per kind (natural number order) and
   renumber when an item is added.

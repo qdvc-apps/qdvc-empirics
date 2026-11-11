@@ -17,6 +17,7 @@ struct SheetHost: View {
             case .interrelation(let code, let key): InterrelationSheet(codeKey: code, key: key)
             case .consent(let interviewee): ConsentViewer(interviewee: interviewee)
             case .moveToLayer(let item): MoveToLayerSheet(item: item)
+            case .updateFile(let file): UpdateFileSheet(fileKey: file)
             case .newCode(let kind, let parent, let child): NewCodeSheet(kind: kind, parent: parent, child: child)
             }
         }

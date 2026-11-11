@@ -222,6 +222,25 @@ final class RuleTests: XCTestCase {
         p.codebooks["cb-00000002"] = Codebook(key: "cb-00000002", title: "Codes only", appliesTo: [.openCodes])
         XCTAssertThrowsError(try p.associate(codebook: "cb-00000002", with: f))
     }
+
+    func testCodebooksForInterviewees() throws {
+        var p = Project.new(title: "People")
+        p.interviewees = [Interviewee(key: "i-00000001", firstName: "John", lastName: "Smith")]
+        p.codebooks["cb-00000001"] = Codebook(key: "cb-00000001", title: "Background", appliesTo: [.interviewees])
+        p.codebooks["cb-00000002"] = Codebook(key: "cb-00000002", title: "Files only", appliesTo: [.files])
+        try p.associate(codebook: "cb-00000001", with: "i-00000001")
+        XCTAssertThrowsError(try p.associate(codebook: "cb-00000002", with: "i-00000001"))
+        XCTAssertEqual(p.codebooks(for: "i-00000001").map(\.key), ["cb-00000001"])
+        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: "i-00000001")))
+        let report = try XCTUnwrap(CodebookReport.make(p, codebook: "cb-00000001", title: { $0 }, person: { $0 }))
+        XCTAssertEqual(report.rows.map(\.target), ["i-00000001"])
+        var dropped = p
+        dropped.deleteCodebook("cb-00000001")
+        XCTAssertEqual(dropped.interviewees[0].codebooks, [])
+        // Deleting the interviewee deletes the sheets about them.
+        p.deleteInterviewee("i-00000001")
+        XCTAssertTrue(p.responses.isEmpty)
+    }
 }
 
 final class WorkspaceTests: XCTestCase {
@@ -280,6 +299,11 @@ final class WorkspaceTests: XCTestCase {
         p.speakerMaps[f] = SpeakerMap(fileKey: f, assignments: [SpeakerAssignment(label: "Alice Bob", person: "r-00000001"),
                                                                   SpeakerAssignment(label: "John Smith", person: "i-00000001")],
                                       ignored: ["okay"])
+        p.codebooks["cb-00000003"] = Codebook(key: "cb-00000003", title: "Interviewee background", appliesTo: [.interviewees],
+                                               questions: [CodebookQuestion(key: "q-00000004", label: "Role", type: .text)])
+        try p.associate(codebook: "cb-00000003", with: "i-00000001")
+        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000003", target: "i-00000001", researcher: "r-00000001"),
+                                      answers: ["q-00000004": .text("Nurse")]))
         return p
     }
 
@@ -387,6 +411,54 @@ final class AnchoringTests: XCTestCase {
         XCTAssertEqual(result.lost, [gone])
         let moved = p.selection(s)!
         XCTAssertEqual(TextNormaliser.quote(moved.spans, pages: [edited]), "quick brown fox")
+    }
+
+    func testCheckNewVersion() throws {
+        var p = Project.new(title: "T")
+        let f = p.addFile(path: "x.txt", kind: .text)
+        let l = p.layers[0].key
+        let old = "Intro line.\nThe quick brown fox jumps.\nA lazy dog sleeps here.\nGoodbye now."
+        let ns = old as NSString
+        func span(_ text: String) -> [TextSpan] {
+            let r = ns.range(of: text)
+            return [TextSpan(start: r.location, length: r.length)]
+        }
+        let same = try p.addSelection(layer: l, file: f, spans: span("Intro line."), quote: "Intro line.")
+        let moved = try p.addSelection(layer: l, file: f, spans: span("quick brown fox"), quote: "quick brown fox")
+        let wrapped = try p.addSelection(layer: l, file: f, spans: span("A lazy dog sleeps"), quote: "A lazy dog sleeps")
+        let gone = try p.addSelection(layer: l, file: f, spans: span("Goodbye now."), quote: "Goodbye now.")
+        let irrelevant = try p.addSelection(layer: l, file: f, spans: span("jumps."), irrelevant: true)
+        let edited = "Intro line.\nA new sentence. The quick brown fox jumps.\nA lazy\ndog  sleeps here.\nFarewell."
+
+        let checks = Anchoring.check(p, file: f, newPages: [edited], oldPages: [old])
+        func fate(_ key: String) -> Anchoring.Fate? { checks.first { $0.selection == key }?.fate }
+        XCTAssertEqual(fate(same), .unchanged)
+        XCTAssertEqual(fate(gone), .lost)
+        guard case .moved(let ms, _)? = fate(moved) else { return XCTFail("not moved") }
+        XCTAssertEqual(TextNormaliser.quote(ms, pages: [edited]), "quick brown fox")
+        // Found again although its line breaks and spaces changed.
+        guard case .moved(let ws, let wq)? = fate(wrapped) else { return XCTFail("not found across white space") }
+        XCTAssertEqual(TextNormaliser.quote(ws, pages: [edited]), "A lazy\ndog  sleeps")
+        XCTAssertEqual(wq, "A lazy\ndog  sleeps")
+        // Irrelevant text has no quote: it is looked for with the old text.
+        guard case .moved(let irs, _)? = fate(irrelevant) else { return XCTFail("irrelevant text not found") }
+        XCTAssertEqual(TextNormaliser.quote(irs, pages: [edited]), "jumps.")
+        // Without the old text it can only be kept where it is.
+        let blind = Anchoring.check(p, file: f, newPages: [edited], oldPages: nil)
+        XCTAssertEqual(blind.first { $0.selection == irrelevant }?.fate, .unverified)
+
+        var kept = p
+        Anchoring.apply(checks, to: &kept, deleteLost: false)
+        XCTAssertNotNil(kept.selection(gone))
+        XCTAssertEqual(kept.selection(wrapped)?.quote, "A lazy\ndog  sleeps")
+        XCTAssertEqual(kept.selection(irrelevant)?.quote, "")
+        XCTAssertEqual(TextNormaliser.quote(kept.selection(moved)!.spans, pages: [edited]), "quick brown fox")
+        let starts = kept.layers[0].selections[f]!.map { $0.first!.start }
+        XCTAssertEqual(starts, starts.sorted())
+        var trimmed = p
+        Anchoring.apply(checks, to: &trimmed, deleteLost: true)
+        XCTAssertNil(trimmed.selection(gone))
+        XCTAssertNotNil(trimmed.selection(same))
     }
 
     func testNormaliser() {

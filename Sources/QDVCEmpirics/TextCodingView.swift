@@ -30,8 +30,16 @@ struct StripeSpec: Equatable {
     /// Shown beside the stripe when there is room: the open codes' names,
     /// or "Irrelevant".
     var label: String = ""
+    /// The open codes' working identifiers, on the label's first line.
+    var badges: [LabelBadge] = []
     /// Irrelevant text: a dashed grey ribbon.
     var dashed = false
+}
+
+/// A working identifier ("OC 12") on a stripe's label, in its code's colour.
+struct LabelBadge: Equatable {
+    var text: String
+    var color: NSColor
 }
 
 struct TurnSpec: Equatable {
@@ -50,6 +58,7 @@ struct PlacedMark: Identifiable, Equatable {
     var text: String
     var focused: Bool
     var label: String = ""
+    var badges: [LabelBadge] = []
     var dashed = false
 }
 
@@ -229,8 +238,9 @@ struct TextCodingView: View {
                 let help = codes.isEmpty ? "Highlighted, no open code yet"
                     : codes.map { model.itemLabel($0.key) }.joined(separator: "\n")
                 let label = codes.isEmpty ? "No open code yet" : codes.map(\.name).joined(separator: ", ")
+                let badges = codes.map { LabelBadge(text: model.wid($0.key), color: $0.nsColor) }.filter { !$0.text.isEmpty }
                 d.stripes.append(StripeSpec(key: s.key, range: range, color: colour(of: s, in: layer), help: help,
-                                            focused: focused, label: label))
+                                            focused: focused, label: label, badges: badges))
             }
         }
         if model.showOtherLayers {
@@ -244,8 +254,13 @@ struct TextCodingView: View {
             }
         }
         if speakers {
+            // A turn whose words are all irrelevant is greyed out like them,
+            // header line and margin name included.
+            let ns = text as NSString
+            let quiet = d.dimmed.sorted { $0.location < $1.location }
             for t in model.turns(fileKey) {
-                let color = model.speakerColor(t.label, in: fileKey)
+                var color = model.speakerColor(t.label, in: fileKey)
+                if !quiet.isEmpty, Self.covered(t.body, by: quiet, in: ns) { color = Self.irrelevantColor }
                 d.headers.append(.init(range: NSRange(location: t.header.start, length: t.header.length), color: color))
                 let end = max(t.header.end, t.body.end)
                 d.turns.append(TurnSpec(range: NSRange(location: t.header.start, length: end - t.header.start),
@@ -253,6 +268,30 @@ struct TextCodingView: View {
             }
         }
         return d
+    }
+
+    /// Irrelevant text, and everything in it (speaker names too).
+    static let irrelevantColor = NSColor.tertiaryLabelColor
+
+    /// True if `span` has words and every one of them lies in `ranges`
+    /// (sorted by location); blank characters between ranges don't count.
+    static func covered(_ span: TextSpan, by ranges: [NSRange], in ns: NSString) -> Bool {
+        let end = min(span.end, ns.length)
+        guard span.start >= 0, end > span.start, !blank(ns, span.start, end) else { return false }
+        var pos = span.start
+        for r in ranges where NSMaxRange(r) > pos {
+            if r.location >= end { break }
+            if r.location > pos, !blank(ns, pos, r.location) { return false }
+            pos = max(pos, NSMaxRange(r))
+            if pos >= end { return true }
+        }
+        return blank(ns, pos, end)
+    }
+
+    static func blank(_ ns: NSString, _ a: Int, _ b: Int) -> Bool {
+        guard b > a else { return true }
+        return ns.substring(with: NSRange(location: a, length: b - a))
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// A selection's colour: its first code's (by name), or grey.
@@ -394,53 +433,124 @@ struct Ribbon: View {
     }
 }
 
-/// Open code names beside the stripes (only when the window is wide
-/// enough). Each name sits level with the top of its stripe, after a small
-/// mark in the stripe's colour; when names would overlap, the later one
-/// moves down, and is left out if that would take it past its stripe.
+/// Open code labels beside the stripes (only when the window is wide
+/// enough). Each label sits level with the top of its stripe, in the
+/// stripe's colour: the open codes' working identifiers on the first line,
+/// then their names in bold, wrapped so the whole label shows. When labels
+/// would overlap, the later one moves down, and is left out if that would
+/// take its first line past its stripe (a focused selection's label always
+/// shows).
 struct CodeNameMargin: View {
     @Environment(AppModel.self) private var model
     var marks: [PlacedMark]
     var width: CGFloat
 
-    static let lineHeight: CGFloat = 15
+    /// The names' font (bold, as drawn below) for measuring.
+    static let nameFont = NSFont.boldSystemFont(ofSize: 11)
+    /// The badges' font (WorkingBadge: caption, medium, monospaced digits).
+    static let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+    static let badgeRowHeight: CGFloat = 17
+    static let badgeSpacing: CGFloat = 4
+    static let rowSpacing: CGFloat = 2
+    /// Space kept free between one label and the next.
+    static let gap: CGFloat = 6
 
     struct Placed: Identifiable {
         var mark: PlacedMark
         var y: CGFloat
+        var badgeRows: [[LabelBadge]]
         var id: String { mark.id }
     }
 
-    static func arrange(_ marks: [PlacedMark]) -> [Placed] {
+    /// The width a label's text and badges wrap to.
+    static func textWidth(_ width: CGFloat) -> CGFloat { max(40, width - 14) }
+
+    /// A badge's width as WorkingBadge draws it (text, padding, border),
+    /// rounded up.
+    static func badgeWidth(_ text: String) -> CGFloat {
+        let w = (text as NSString).size(withAttributes: [.font: badgeFont]).width
+        return ceil(w) + 16
+    }
+
+    /// The badges in rows that fit the width (nearly always one row).
+    static func badgeRows(_ badges: [LabelBadge], width: CGFloat) -> [[LabelBadge]] {
+        var rows: [[LabelBadge]] = []
+        var row: [LabelBadge] = []
+        var used: CGFloat = 0
+        for b in badges {
+            let w = badgeWidth(b.text)
+            if !row.isEmpty, used + badgeSpacing + w > width {
+                rows.append(row)
+                row = []
+                used = 0
+            }
+            used += (row.isEmpty ? 0 : badgeSpacing) + w
+            row.append(b)
+        }
+        if !row.isEmpty { rows.append(row) }
+        return rows
+    }
+
+    /// The height of the names, wrapped to `width`.
+    static func nameHeight(_ text: String, width: CGFloat) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        let r = (text as NSString).boundingRect(with: NSSize(width: width, height: CGFloat.greatestFiniteMagnitude),
+                                                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                                                attributes: [.font: nameFont])
+        return ceil(r.height) + 1
+    }
+
+    static func arrange(_ marks: [PlacedMark], width: CGFloat) -> [Placed] {
+        let w = textWidth(width)
         var result: [Placed] = []
         var nextFree: CGFloat = -.infinity
-        for m in marks.sorted(by: { ($0.y, $0.lane) < ($1.y, $1.lane) }) where !m.label.isEmpty {
+        let sorted = marks.sorted { a, b in a.y != b.y ? a.y < b.y : a.lane < b.lane }
+        for m in sorted where !m.label.isEmpty || !m.badges.isEmpty {
+            let rows = badgeRows(m.badges, width: w)
+            let names = nameHeight(m.label, width: w)
+            let parts = rows.count + (m.label.isEmpty ? 0 : 1)
+            let height = CGFloat(rows.count) * badgeRowHeight + names + rowSpacing * CGFloat(max(0, parts - 1))
+            let firstLine = rows.isEmpty ? min(names, 15) : badgeRowHeight
             let y = max(m.y - 1, nextFree)
-            // A focused selection always gets its name.
-            guard y <= m.y + max(0, m.height - lineHeight) || m.focused else { continue }
-            result.append(Placed(mark: m, y: y))
-            nextFree = y + lineHeight
+            guard y <= m.y + max(0, m.height - firstLine) || m.focused else { continue }
+            result.append(Placed(mark: m, y: y, badgeRows: rows))
+            nextFree = y + height + gap
         }
         return result
     }
 
     var body: some View {
+        let w = Self.textWidth(width)
         ZStack(alignment: .topLeading) {
             Color.clear
-            ForEach(Self.arrange(marks)) { p in
-                HStack(spacing: 5) {
-                    Ribbon(color: Color(nsColor: p.mark.color), focused: false, dashed: p.mark.dashed, height: 9)
-                    Text(p.mark.label)
-                        .font(.system(size: 11, weight: p.mark.focused ? .semibold : .regular))
-                        .foregroundStyle(p.mark.focused ? HierarchicalShapeStyle.primary : (p.mark.dashed ? HierarchicalShapeStyle.tertiary : HierarchicalShapeStyle.secondary))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+            ForEach(Self.arrange(marks, width: width)) { p in
+                let color = Color(nsColor: p.mark.color)
+                VStack(alignment: .leading, spacing: Self.rowSpacing) {
+                    ForEach(Array(p.badgeRows.enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: Self.badgeSpacing) {
+                            ForEach(Array(row.enumerated()), id: \.offset) { _, badge in
+                                WorkingBadge(text: badge.text, color: Color(nsColor: badge.color))
+                            }
+                        }
+                        .frame(height: Self.badgeRowHeight)
+                    }
+                    if !p.mark.label.isEmpty {
+                        Text(p.mark.label)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .frame(width: max(0, width - 10), height: Self.lineHeight, alignment: .leading)
+                .frame(width: w, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color.opacity(p.mark.focused ? 0.12 : 0))
+                        .padding(-3)
+                )
                 .contentShape(Rectangle())
                 .onTapGesture { model.focusSelection(p.mark.id) }
                 .help(p.mark.text)
-                .offset(x: 2, y: p.y)
+                .offset(x: 6, y: p.y)
             }
         }
     }
@@ -643,11 +753,13 @@ struct CodingTextView: NSViewRepresentable {
                 lm.addTemporaryAttribute(.underlineStyle, value: NSUnderlineStyle.thick.rawValue, forCharacterRange: u.range)
                 lm.addTemporaryAttribute(.underlineColor, value: u.color.withAlphaComponent(0.8), forCharacterRange: u.range)
             }
-            for r in decorations.dimmed where fits(r) {
-                lm.addTemporaryAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, forCharacterRange: r)
-            }
             for h in decorations.headers where fits(h.range) {
                 lm.addTemporaryAttribute(.foregroundColor, value: h.color, forCharacterRange: h.range)
+            }
+            // After the speaker headers, so irrelevant text is greyed out
+            // whole, speaker names included.
+            for r in decorations.dimmed where fits(r) {
+                lm.addTemporaryAttribute(.foregroundColor, value: TextCodingView.irrelevantColor, forCharacterRange: r)
             }
             c.applied = decorations
             c.place(in: tv, force: true)
@@ -759,7 +871,8 @@ struct CodingTextView: NSViewRepresentable {
                 if lane >= 5 { lane = 4 }
                 if lane == laneEnds.count { laneEnds.append(y1) } else { laneEnds[lane] = max(laneEnds[lane], y1) }
                 stripes.append(PlacedMark(id: s.key, y: y0 + 3, height: y1 - y0 - 6, lane: lane, color: s.color,
-                                          text: s.help, focused: s.focused, label: s.label, dashed: s.dashed))
+                                          text: s.help, focused: s.focused, label: s.label, badges: s.badges,
+                                          dashed: s.dashed))
             }
             var turns: [PlacedMark] = []
             for (i, t) in parent.decorations.turns.enumerated() {

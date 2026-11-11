@@ -187,7 +187,7 @@ public struct CodingChart: Equatable {
 /// associated item nobody has answered yet.
 public struct CodebookReport: Equatable {
     public struct Row: Equatable, Identifiable {
-        /// The file or code the answers are about.
+        /// The file, code or interviewee the answers are about.
         public var target: String
         /// Whose answers ("" when the project has no researchers, or for an
         /// item not answered yet).
@@ -221,17 +221,19 @@ public struct CodebookReport: Equatable {
                             completeness: SheetCompleteness.of(sheet.answers, against: cb)))
         }
         var targets = p.files.values.filter { $0.codebooks.contains(key) }.map(\.key)
+        targets += p.interviewees.filter { $0.codebooks.contains(key) }.map(\.key)
         for layer in p.layers {
             targets += layer.codes.values.filter { $0.codebooks.contains(key) }.map(\.key)
         }
         for t in targets where !answered.contains(t) {
             rows.append(Row(target: t, researcher: "", sheet: nil, completeness: SheetCompleteness.of([:], against: cb)))
         }
-        // Files, then open codes, then axial codes; each by title, then by
-        // researcher.
+        // Files, then interviewees, then open codes, then axial codes; each
+        // by title, then by researcher.
         func group(_ k: String) -> Int {
             if p.files[k] != nil { return 0 }
-            return p.code(k)?.kind == .axial ? 2 : 1
+            if p.interviewee(k) != nil { return 1 }
+            return p.code(k)?.kind == .axial ? 3 : 2
         }
         rows.sort { a, b in
             let ga = group(a.target), gb = group(b.target)

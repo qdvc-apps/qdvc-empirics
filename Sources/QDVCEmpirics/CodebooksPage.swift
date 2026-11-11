@@ -278,6 +278,7 @@ struct ResponseSheetView: View {
     var targetTitle: String {
         if let f = model.project.files[id.target] { return "File: " + f.displayTitle }
         if let c = model.project.code(id.target) { return "\(c.kind.label): \(c.name)" }
+        if model.project.interviewee(id.target) != nil { return "Interviewee: " + (model.personName(id.target) ?? "") }
         return id.target
     }
 

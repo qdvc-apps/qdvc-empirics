@@ -96,6 +96,8 @@ enum SheetKind: Identifiable {
     case interrelation(code: String, key: String?)
     case consent(String)
     case moveToLayer(String)
+    /// Updating a file from a new version of its full-text.
+    case updateFile(String)
     /// A new code; `parent` gets it as evidence, `child` becomes its evidence.
     case newCode(kind: CodeKind, parent: String?, child: String?)
 
@@ -108,6 +110,7 @@ enum SheetKind: Identifiable {
         case .interrelation(let c, let k): return "interrelation-\(c)-\(k ?? "new")"
         case .consent(let k): return "consent-\(k)"
         case .moveToLayer(let k): return "move-\(k)"
+        case .updateFile(let k): return "update-\(k)"
         case .newCode(let kind, let p, let c): return "newCode-\(kind.rawValue)-\(p ?? "")-\(c ?? "")"
         }
     }
@@ -556,6 +559,7 @@ final class AppModel {
         project = new
         index = ProjectIndex(new)
         markDirty(Workspace.changedParts(from: old, to: new))
+        forgetStaleDocuments(old: old, new: new)
         validateState()
         if let name, let um = undoManager {
             um.registerUndo(withTarget: self) { target in
@@ -622,9 +626,12 @@ final class AppModel {
         do {
             let loaded = try Workspace.load(url)
             let changed = loaded.project != project
+            let old = project
             project = loaded.project
             index = ProjectIndex(project)
             signature = now
+            // A file restored to its previous version through Git, say.
+            forgetStaleDocuments(old: old, new: project)
             if changed {
                 undoManager?.removeAllActions()
                 validateState()
@@ -990,6 +997,30 @@ final class AppModel {
         }
         if result.moved == 0 && result.lost.isEmpty { text += " All selections are still in place." }
         notice = Notice(text: text, isWarning: !result.lost.isEmpty)
+    }
+
+    /// After a change that points a file at another full-text, or at
+    /// another version of it (updating a file, and undoing or redoing
+    /// that), the text read for it no longer belongs to it: it is read again
+    /// and checked against the file's fingerprint.
+    private func forgetStaleDocuments(old: Project, new: Project) {
+        var stale: [String] = []
+        for (k, f) in new.files {
+            guard let o = old.files[k] else { continue }
+            let repointed = o.path != f.path || o.kind != f.kind
+            let otherVersion = o.fingerprint != f.fingerprint && documents.fingerprints[k].map { $0 != f.fingerprint } == true
+            if repointed || otherVersion { stale.append(k) }
+        }
+        guard !stale.isEmpty else { return }
+        for k in stale {
+            documents.forget(k)
+            verified.remove(k)
+        }
+        documentsRevision += 1
+        if let open = openFileKey, stale.contains(open) {
+            // Not during the change itself (it may be an undo).
+            DispatchQueue.main.async { [weak self] in self?.prepareDocument(open) }
+        }
     }
 
     func isLost(_ selection: String) -> Bool { lostSelections.contains(selection) }

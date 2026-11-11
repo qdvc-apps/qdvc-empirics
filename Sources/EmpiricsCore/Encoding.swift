@@ -337,13 +337,14 @@ extension Workspace {
         m.add("first", i.firstName, ifEmpty: true)
         m.add("last", i.lastName, ifEmpty: true)
         m.add("consent_form", i.consentForm)
+        m.add("codebooks", list: i.codebooks)
         return m.node
     }
 
     static func decodeInterviewee(_ n: YAMLNode) -> Interviewee? {
         guard let key = n["key"]?.string else { return nil }
         return Interviewee(key: key, firstName: n["first"]?.string ?? "", lastName: n["last"]?.string ?? "",
-                           consentForm: n["consent_form"]?.string ?? "")
+                           consentForm: n["consent_form"]?.string ?? "", codebooks: n["codebooks"]?.strings ?? [])
     }
 
     // MARK: interlocutors/<file>.yml

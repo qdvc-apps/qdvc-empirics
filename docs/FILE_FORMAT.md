@@ -12,7 +12,8 @@ My project/
   codebooks/cb-1a2b3c4d.yml            one per codebook
   responses/cb-1a2b3c4d/f-1a2b3c4d--r-1a2b3c4d.yml
                                        one response sheet per codebook, item
-                                       (file or code) and researcher
+                                       (file, code or interviewee) and
+                                       researcher
   layers/l-1a2b3c4d/layer.yml          a layer's name and description
   layers/l-1a2b3c4d/selections/f-1a2b3c4d.yml
                                        the layer's selections in one file
@@ -139,7 +140,12 @@ PDFKit extracts it.
 
 **Quotes** are written while `store_quotes` is true (and never for irrelevant
 selections). When a file's fingerprint changes, selections whose quote is no
-longer at their position are looked for by their quote and moved.
+longer at their position are looked for by their quote (exactly, or else
+ignoring differences in white space) and moved; the quote then takes the
+text found. Updating a file from a new version (File › Update Empirical
+File…) changes its `path`, `kind` (text or Markdown) and `fingerprint` and
+moves its selections the same way; its key, and everything that refers to
+it, stay.
 
 **Rules** (enforced by the app): within a layer, irrelevant selections never
 overlap selections that aren't irrelevant, and are never evidence. If a hand
@@ -181,7 +187,7 @@ accepted when written by hand.
 key: cb-c0debee1
 title: Interview context
 description: Answer once per interview.
-applies_to: [files]               # files | open-codes | axial-codes
+applies_to: [files]               # files | interviewees | open-codes | axial-codes
 questions:                        # in order
   - key: q-5e771460
     label: Setting                # at most 16 characters
@@ -194,8 +200,8 @@ questions:                        # in order
 
 ## responses/<cb-key>/<target>[--<r-key>].yml
 
-One response sheet: a codebook's answers about one file or code, by one
-researcher (the `--r-…` part is absent when the project lists no
+One response sheet: a codebook's answers about one file, code or
+interviewee, by one researcher (the `--r-…` part is absent when the project lists no
 researchers).
 
 ```yaml
@@ -234,6 +240,7 @@ interviewees:
     first: John                   # pseudonyms
     last: Smith
     consent_form: consent/john-smith.pdf   # relative to the full-texts folder
+    codebooks: [cb-c0debee3]               # associated codebooks (optional)
 ```
 
 ## interlocutors/<f-key>.yml

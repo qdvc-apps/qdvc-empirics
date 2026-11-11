@@ -71,6 +71,8 @@ struct InspectorView: View {
                 InspectorScroll { FileInspector(fileKey: key) }
             } else if let key = model.tableSelection, model.project.code(key) != nil {
                 InspectorScroll { codeEditor(key) }
+            } else if let key = model.tableSelection, model.project.interviewee(key) != nil {
+                InspectorScroll { PersonForm(key: key, compact: true) }
             } else if let cb = model.shownReportCodebook {
                 InspectorScroll { CodebookSummary(codebookKey: cb) }
             } else {
@@ -599,11 +601,16 @@ struct FileInspector: View {
                 .labelsHidden()
             }
             LabeledField("Location") {
-                Text(file.path)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(file.path)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(3)
+                    Button("Update from New Version…") { model.updateFile(key) }
+                        .controlSize(.small)
+                        .help("Point this file at a corrected or re-exported version of its full-text, keeping its coding")
+                }
             }
             fingerprint(key, file)
             stats(key)

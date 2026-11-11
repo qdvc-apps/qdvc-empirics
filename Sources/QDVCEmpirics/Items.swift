@@ -27,6 +27,13 @@ extension AppModel {
         return ""
     }
 
+    /// The item's title, with people always by pseudonym whatever View ›
+    /// Show Real Names says: for anything that leaves the app (CSV).
+    func pseudonymousTitle(_ key: String) -> String {
+        if let name = project.personName(key) { return name.isEmpty ? "Unnamed" : name }
+        return itemTitle(key)
+    }
+
     /// What kind of item it is, in words ("Open Code", "Empirical File"…).
     func itemKind(_ key: String) -> String {
         if project.files[key] != nil { return "Empirical File" }
@@ -45,8 +52,8 @@ extension AppModel {
         return nil
     }
 
-    /// Titles of the codebooks associated with a file or code, for the
-    /// Codebooks columns.
+    /// Titles of the codebooks associated with a file, code or interviewee,
+    /// for the Codebooks columns.
     func codebookTitles(_ key: String) -> String {
         project.codebooks(for: key).map(\.title)
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }

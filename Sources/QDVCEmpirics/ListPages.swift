@@ -134,6 +134,7 @@ struct FileTableMenu: View {
                     .disabled(f.status == s)
             }
             Divider()
+            Button("Update from New Version…") { model.updateFile(key) }
             Button("Remove from Project…") { model.removeFile(key) }
         }
     }
@@ -437,6 +438,10 @@ struct IntervieweesTable: View {
                     Text("\(model.transcripts(of: i.key).count)").monospacedDigit()
                 }
                 .width(min: 70, ideal: 80, max: 100)
+                TableColumn("Codebooks") { (i: Interviewee) in
+                    Text(model.codebookTitles(i.key)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .width(min: 80, ideal: 160)
             }
             .contextMenu(forSelectionType: String.self) { keys in
                 PersonTableMenu(model: model, keys: keys, researchers: false)
@@ -501,6 +506,35 @@ extension AppModel {
             .filter { m in m.assignments.contains { $0.person == person } }
             .compactMap { project.files[$0.fileKey] }
             .sorted { $0.sortID.localizedStandardCompare($1.sortID) == .orderedAscending }
+    }
+
+    /// What File › New (⌘N) makes on the current page, or nil where it
+    /// makes nothing (it works on the list pages of the items it makes).
+    var newItemTitle: String? {
+        guard isOpen else { return nil }
+        switch sidebar {
+        case .files: return "New Empirical File…"
+        case .researchers: return "New Researcher"
+        case .interviewees: return "New Interviewee"
+        case .codebooks: return "New Codebook"
+        case .openCodes: return "New Open Code…"
+        case .axialCodes: return "New Axial Code…"
+        default: return nil
+        }
+    }
+
+    /// File › New (⌘N): a new item of the kind the current page lists.
+    func newItem() {
+        guard isOpen, sheet == nil else { return }
+        switch sidebar {
+        case .files: addFilesPanel()
+        case .researchers: newPerson(.researchers)
+        case .interviewees: newPerson(.interviewees)
+        case .codebooks: newCodebook()
+        case .openCodes: sheet = .newCode(kind: .open, parent: nil, child: nil)
+        case .axialCodes: sheet = .newCode(kind: .axial, parent: nil, child: nil)
+        default: break
+        }
     }
 
     func newPerson(_ kind: PeopleKind) {

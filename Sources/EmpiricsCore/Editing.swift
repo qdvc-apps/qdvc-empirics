@@ -396,6 +396,7 @@ extension Project {
     public mutating func deleteCodebook(_ key: String) {
         codebooks[key] = nil
         for k in files.keys { files[k]!.codebooks.removeAll { $0 == key } }
+        for i in interviewees.indices { interviewees[i].codebooks.removeAll { $0 == key } }
         for li in layers.indices {
             for ck in layers[li].codes.keys where layers[li].codes[ck]!.codebooks.contains(key) {
                 layers[li].codes[ck]!.codebooks.removeAll { $0 == key }
@@ -404,12 +405,16 @@ extension Project {
         for id in responses.keys where id.codebook == key { responses[id] = nil }
     }
 
-    /// Associates a codebook with a file or code (if the codebook applies).
+    /// Associates a codebook with a file, code or interviewee (if the
+    /// codebook applies to it).
     public mutating func associate(codebook: String, with target: String) throws {
         guard let cb = codebooks[codebook] else { return }
         if files[target] != nil {
             guard cb.appliesTo.contains(.files) else { throw RuleError("\(cb.title) isn't for empirical files.") }
             if !files[target]!.codebooks.contains(codebook) { files[target]!.codebooks.append(codebook) }
+        } else if let i = interviewees.firstIndex(where: { $0.key == target }) {
+            guard cb.appliesTo.contains(.interviewees) else { throw RuleError("\(cb.title) isn't for interviewees.") }
+            if !interviewees[i].codebooks.contains(codebook) { interviewees[i].codebooks.append(codebook) }
         } else if let code = code(target) {
             let needed: CodebookTarget = code.kind == .open ? .openCodes : .axialCodes
             guard cb.appliesTo.contains(needed) else { throw RuleError("\(cb.title) isn't for \(needed.label.lowercased()).") }
@@ -424,6 +429,8 @@ extension Project {
     public mutating func dissociate(codebook: String, from target: String) {
         if files[target] != nil {
             files[target]!.codebooks.removeAll { $0 == codebook }
+        } else if let i = interviewees.firstIndex(where: { $0.key == target }) {
+            interviewees[i].codebooks.removeAll { $0 == codebook }
         } else if var c = code(target) {
             c.codebooks.removeAll { $0 == codebook }
             updateCode(c)
@@ -460,9 +467,9 @@ extension Project {
         for id in responses.keys where id.codebook == codebook { responses[id]!.answers[key] = nil }
     }
 
-    /// Codebooks associated with a file or code that apply to it.
+    /// Codebooks associated with a file, code or interviewee.
     public func codebooks(for target: String) -> [Codebook] {
-        let keys = files[target]?.codebooks ?? code(target)?.codebooks ?? []
+        let keys = files[target]?.codebooks ?? interviewee(target)?.codebooks ?? code(target)?.codebooks ?? []
         return keys.compactMap { codebooks[$0] }
     }
 
@@ -474,9 +481,12 @@ extension Project {
         for k in speakerMaps.keys { speakerMaps[k]!.assignments.removeAll { $0.person == key } }
     }
 
+    /// Deletes an interviewee, their place in speaker maps and the response
+    /// sheets about them.
     public mutating func deleteInterviewee(_ key: String) {
         interviewees.removeAll { $0.key == key }
         for k in speakerMaps.keys { speakerMaps[k]!.assignments.removeAll { $0.person == key } }
+        for id in responses.keys where id.target == key { responses[id] = nil }
     }
 }
 

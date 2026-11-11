@@ -22,7 +22,7 @@ struct CodebookReportPage: View {
             if let report {
                 if report.rows.isEmpty {
                     ContentUnavailableView("No Responses Yet", systemImage: "tablecells",
-                                           description: Text("“\(report.codebook.title)” isn't associated with any empirical file, open code or axial code yet. Add it from their inspectors."))
+                                           description: Text("“\(report.codebook.title)” isn't associated with any empirical file, interviewee, open code or axial code yet. Add it from their inspectors."))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ReportTable(model: model, report: report)
@@ -78,7 +78,7 @@ struct CodebookReportPage: View {
     /// CSV with pseudonyms only, whatever View › Show Real Names says.
     func csv(_ r: CodebookReport) -> String {
         r.csv(workingIDs: model.index.workingID,
-              title: { model.itemTitle($0) },
+              title: { model.pseudonymousTitle($0) },
               kind: { model.itemKind($0) },
               person: { model.project.personName($0) ?? "" })
     }

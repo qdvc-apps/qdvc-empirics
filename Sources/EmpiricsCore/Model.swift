@@ -471,12 +471,14 @@ public struct CodebookQuestion: Identifiable, Equatable {
 /// What a codebook can be associated with.
 public enum CodebookTarget: String, CaseIterable, Codable, Hashable {
     case files
+    case interviewees
     case openCodes = "open-codes"
     case axialCodes = "axial-codes"
 
     public var label: String {
         switch self {
         case .files: return "Empirical Files"
+        case .interviewees: return "Interviewees"
         case .openCodes: return "Open Codes"
         case .axialCodes: return "Axial Codes"
         }
@@ -527,7 +529,7 @@ public enum Answer: Equatable {
 }
 
 /// Identifies a codebook response sheet: a codebook, what it is about (a
-/// file or code key) and, when the project lists researchers, whose answers
+/// file, code or interviewee key) and, when the project lists researchers, whose answers
 /// these are.
 public struct ResponseID: Hashable, Comparable {
     public var codebook: String
@@ -624,14 +626,17 @@ public struct Interviewee: Identifiable, Equatable {
     public var lastName: String
     /// Relative to the full-texts folder, or empty.
     public var consentForm: String
+    /// Codebooks associated with this interviewee.
+    public var codebooks: [String]
 
     public var id: String { key }
 
-    public init(key: String, firstName: String, lastName: String, consentForm: String = "") {
+    public init(key: String, firstName: String, lastName: String, consentForm: String = "", codebooks: [String] = []) {
         self.key = key
         self.firstName = firstName
         self.lastName = lastName
         self.consentForm = consentForm
+        self.codebooks = codebooks
     }
 
     public var fullName: String { [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ") }
