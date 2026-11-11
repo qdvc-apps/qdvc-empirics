@@ -206,9 +206,15 @@ struct QuickCodePalette: View {
                 if c.description.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil { return 3 }
                 return nil
             }
-            result = codes.compactMap { c in rank(c).map { (c, $0) } }
-                .sorted { a, b in a.1 != b.1 ? a.1 < b.1 : a.0.name.localizedStandardCompare(b.0.name) == .orderedAscending }
-                .map { Row(id: $0.0.key, code: $0.0) }
+            var ranked: [(code: QDACode, rank: Int)] = []
+            for c in codes {
+                if let r = rank(c) { ranked.append((code: c, rank: r)) }
+            }
+            ranked.sort { a, b in
+                if a.rank != b.rank { return a.rank < b.rank }
+                return a.code.name.localizedStandardCompare(b.code.name) == .orderedAscending
+            }
+            result = ranked.map { item in Row(id: item.code.key, code: item.code) }
             if !codes.contains(where: { $0.name.compare(q, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) {
                 result.append(Row(id: "create", createName: q))
             }

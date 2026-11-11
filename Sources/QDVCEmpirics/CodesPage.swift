@@ -48,9 +48,12 @@ struct CodesPage: View {
         func node(_ c: QDACode, path: String, depth: Int) -> CodeNode {
             let id = path + "/" + c.key
             guard c.kind == .axial, depth < 12 else { return CodeNode(id: id, code: c, children: nil) }
-            let kids = c.evidence.compactMap { layer.codes[$0.target] }
-                .sorted { a, b in a.kind != b.kind ? a.kind == .axial : a.name.localizedStandardCompare(b.name) == .orderedAscending }
-                .map { node($0, path: id, depth: depth + 1) }
+            var children: [QDACode] = c.evidence.compactMap { e in layer.codes[e.target] }
+            children.sort { a, b in
+                if a.kind != b.kind { return a.kind == .axial }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
+            let kids: [CodeNode] = children.map { child in node(child, path: id, depth: depth + 1) }
             return CodeNode(id: id, code: c, children: kids.isEmpty ? nil : kids)
         }
         return codes.filter { $0.kind == .axial && (model.index.parents[$0.key] ?? []).isEmpty }

@@ -158,7 +158,7 @@ final class AppModel {
     /// Code keys for quick codes 1–9 in the active layer ("" = empty slot).
     private(set) var quickCodes: [String] = Array(repeating: "", count: 9)
     /// Selections that could not be found again after their file changed.
-    private(set) var lostSelections: Set<String> = []
+    var lostSelections: Set<String> = []
     /// Bumped whenever a document is (re)loaded.
     private(set) var documentsRevision = 0
 
