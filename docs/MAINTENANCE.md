@@ -89,7 +89,7 @@ Working Area, documents, interlocutors, response sheets, real names;
 `@Observable`, main actor), `AppModel+Coding` (coding operations, files,
 layers), `DeviceStore` (UserDefaults and security-scoped bookmarks),
 `ContentView` (split view, sidebar and Working Area, toolbar, document page),
-`ListPages` (the list pages), `DataTable` (their table), `ItemPages` (code, codebook and person pages),
+`ListPages` (the list pages, SwiftUI Tables), `ItemPages` (code, codebook and person pages),
 `TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
 `CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
 by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
@@ -102,37 +102,35 @@ Area; `sidebarChanged(from:)` (from the view's `onChange`) records history
 and resets per-page state. Tables bind their selection to
 `AppModel.tableSelection`, which the inspector reads.
 
-**Never read `@Environment(AppModel.self)` in views that SwiftUI hosts
-apart from the window's view tree:** toolbar items, table cells and
-context-menu content. Pass the model in (`MainToolbar(model:)`,
-`LayerMenu(model:)`, `RealNameCell(model:)`, `ConsentStatus(model:)`,
-`WorkingAreaRow(model:)`), or capture it in a local constant in `body`.
-When the toolbar was rebuilt after a sidebar click, a toolbar item with
-`@Environment(AppModel.self)` found no model and the app trapped in
-`EnvironmentValues.subscript.getter`. The toolbar is attached to the
-detail column, not the split view: attached to the split view, items with
-placement `.navigation` (Back, Forward) went into the sidebar's title bar
-beside the window buttons. Each split-view column also gets the model
-injected again with `.environment(model)`.
+**The main window copies QDVC Response Letter's structure exactly**
+(ContentView.swift), because departures from it threw the sidebar's rows up
+under the window buttons whenever certain pages opened, and resizing didn't
+repair it:
 
-**Keep every sidebar row a single line of fixed height.** No wrapping text
-(a hint row such as "Double-click a file… to work on it here"), no
-`lineLimit(2)` titles, no `.badge()`, no drag-to-reorder (`.onMove`), and no
-conditional `safeAreaInset` content. The sidebar is an NSOutlineView that
-measures SwiftUI rows itself; a wrapping row measured at the wrong width
-during a selection change grew very tall and pushed the rows above it up
-under the window buttons, mostly off-screen, and resizing didn't repair it.
-Explanations belong on the pages (each table's header), not in the sidebar.
+- `ContentView` holds the title, subtitle, sheets and alerts around
+  `MainView`; `MainView` is a `NavigationSplitView` with no
+  column-visibility binding, the `.inspector`, and the `.toolbar` on the
+  split view with trailing (`.primaryAction`) items only. Items with
+  placement `.navigation` went into the sidebar's title bar, beside the
+  window buttons; Back and Forward are in the Go menu instead.
+- `DetailView` gives the page a min/max frame and clips it; the notice
+  banner is a `.safeAreaInset(edge: .top)` over the page, not a view
+  stacked above it.
+- **Every page starts with its scrolling content at the top**: a `Table`,
+  a ScrollView, the document. Bars go below (the tables' footers, the
+  coding bar). The glitch followed the pages that put a fixed header (a
+  title and description) above their table; pages starting with a scroll
+  view never did it. SwiftUI `Table` itself is fine, as in Response Letter.
 
-**No SwiftUI `Table` in the main window.** With a `Table` (an AppKit table
-view in its own scroll view) in the detail column, the sidebar's rows were
-thrown out of place, pushed up under the window buttons and not repaired by
-resizing, every time a table page opened; pages built on a SwiftUI
-ScrollView (Layers, Project Settings, documents) never did it. The list
-pages use `DataTable` (DataTable.swift): a header of sortable columns over a
-LazyVStack in a ScrollView, with selection, double-click and Return to open,
-↑ ↓, and a context menu per row. Give its columns explicit row types
-(`DataColumn<EmpiricalFile>(…) { (f: EmpiricalFile) in … }`).
+Toolbar items, table cells and context-menu content take the model
+directly (`MainToolbar(model:)`, `LayerMenu(model:)`, `RealNameCell(model:)`,
+`FileTableMenu(model:keys:)`…) rather than reading
+`@Environment(AppModel.self)`: when the toolbar was rebuilt, an item that
+read it found no model and the app trapped in
+`EnvironmentValues.subscript.getter`.
+
+Sidebar rows are kept to one line each, and the Working Area has no
+drag-to-reorder (Move Up and Move Down are in its context menu).
 
 Long closure chains are slow to type-check: split sorts into statements
 (the compiler gave up on one chain in `CodingBar`).

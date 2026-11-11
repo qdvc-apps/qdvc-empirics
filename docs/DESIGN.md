@@ -46,14 +46,13 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   files sits at the bottom.
 - **List pages** are plain tables (sortable columns, a filter, add buttons
   in a bar at the bottom), as in Finder's list view: selecting a row shows
-  it in the inspector, double-clicking (or Return) opens it. They are drawn
-  by the app's own `DataTable`, not SwiftUI's `Table`, which disturbed the
-  sidebar (docs/MAINTENANCE.md); columns sort but can't be resized.
+  it in the inspector, double-clicking opens it. Each page starts with its
+  table; nothing sits above it (docs/MAINTENANCE.md §Layout).
 - **Item pages.** An empirical file (the document), a code (its evidence), a
   codebook (its questions), a person (a card laid out like Contacts, with a
   monogram, labelled fields and the transcripts they speak in).
-- **Back and Forward** in the toolbar (⌃⌘← / ⌃⌘→), as in Finder and Safari,
-  since following a code from a quote and back is a common move.
+- **Back and Forward** in the Go menu (⌃⌘← / ⌃⌘→), as in Finder and
+  Safari, since following a code from a quote and back is a common move.
 - **Document.** Text in a readable column, the Interlocutor layer's speaker
   names in a left margin (researchers blue, interviewees green), coding
   stripes in a right margin, and the coding bar below. The code palette

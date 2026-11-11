@@ -2,43 +2,31 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// The main window: the project's files and pages in the sidebar, the
-/// document (or page) in the middle, the inspector on the right.
+/// The main window, built the same way as QDVC Response Letter's: a
+/// NavigationSplitView (sidebar and detail) with an inspector and a toolbar
+/// of trailing items on the split view; the title, sheets and alerts on an
+/// outer view. Every page starts with its scrolling content at the top (no
+/// fixed header above it), and the notice banner is a top safe-area inset
+/// over the page (docs/MAINTENANCE.md §Layout).
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.undoManager) private var undoManager
-    @State private var columns: NavigationSplitViewVisibility = .all
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView(columnVisibility: $columns) {
-            Sidebar()
-                .environment(model)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 420)
-        } detail: {
-            VStack(spacing: 0) {
-                if let notice = model.notice {
-                    NoticeBanner(notice: notice) { model.notice = nil }
-                }
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
+        Group {
+            if model.isOpen {
+                MainView()
+            } else {
+                ContentUnavailableView("No Project Open", systemImage: "folder",
+                                       description: Text("Open a project from the File menu or the welcome window (⇧⌘1)."))
             }
-            .environment(model)
-            // The toolbar belongs to the detail column, as Apple recommends for
-            // split views: attached to the split view itself, Back and Forward
-            // (placement .navigation) landed in the sidebar's title bar, beside
-            // the window buttons, and toolbar items lost the environment when
-            // the toolbar was rebuilt.
-            .toolbar { MainToolbar(model: model) }
-        }
-        .inspector(isPresented: $model.showInspector) {
-            InspectorView()
-                .environment(model)
-                .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
         }
         .navigationTitle(model.isOpen ? model.project.settings.title : "QDVC Empirics")
         .navigationSubtitle(subtitle)
+        .onAppear { model.undoManager = undoManager }
+        .onChange(of: undoManager) { _, new in model.undoManager = new }
+        .onChange(of: model.sidebar) { old, _ in model.sidebarChanged(from: old) }
         .sheet(item: $model.sheet) { kind in
             SheetHost(kind: kind).environment(model)
         }
@@ -50,16 +38,12 @@ struct ContentView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
-        .onAppear { model.undoManager = undoManager }
-        .onChange(of: undoManager) { _, new in model.undoManager = new }
-        .onChange(of: model.sidebar) { old, _ in model.sidebarChanged(from: old) }
         .task(id: model.notice?.id) {
             // Information goes away by itself; warnings stay until dismissed.
             guard let notice = model.notice, !notice.isWarning, notice.action == nil else { return }
             try? await Task.sleep(nanoseconds: 7_000_000_000)
             if model.notice?.id == notice.id { model.notice = nil }
         }
-        .modifier(NoWritingTools())
     }
 
     private var subtitle: String {
@@ -79,9 +63,45 @@ struct ContentView: View {
         case nil: return ""
         }
     }
+}
+
+struct MainView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        NavigationSplitView {
+            Sidebar()
+                .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 420)
+        } detail: {
+            DetailView()
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if let notice = model.notice {
+                        NoticeBanner(notice: notice) { model.notice = nil }
+                    }
+                }
+        }
+        .inspector(isPresented: $model.showInspector) {
+            InspectorView()
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
+                .modifier(NoWritingTools())
+        }
+        .toolbar { MainToolbar(model: model) }
+    }
+}
+
+struct DetailView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        page
+            .frame(minWidth: 300, maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
+            .clipped()
+            .modifier(NoWritingTools())
+    }
 
     @ViewBuilder
-    private var detail: some View {
+    private var page: some View {
         switch model.sidebar {
         case .files: FilesTable()
         case .researchers: ResearchersTable()
@@ -102,29 +122,13 @@ struct ContentView: View {
     }
 }
 
-/// The main window's toolbar, on the detail column. It holds the model
-/// directly: toolbar items are hosted apart from the window's views and are
-/// re-evaluated outside ContentView's updates.
+/// The main window's toolbar: trailing items only, on the split view (as
+/// in QDVC Response Letter). It holds the model directly. Back and Forward
+/// are in the Go menu (⌃⌘← / ⌃⌘→).
 struct MainToolbar: ToolbarContent {
     let model: AppModel
 
     var body: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button {
-                model.goBack()
-            } label: {
-                Label("Back", systemImage: "chevron.left")
-            }
-            .disabled(!model.canGoBack)
-            .help("Back (⌃⌘←)")
-            Button {
-                model.goForward()
-            } label: {
-                Label("Forward", systemImage: "chevron.right")
-            }
-            .disabled(!model.canGoForward)
-            .help("Forward (⌃⌘→)")
-        }
         ToolbarItemGroup(placement: .primaryAction) {
             LayerMenu(model: model)
             if model.hasRealNameFiles {

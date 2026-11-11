@@ -56,7 +56,7 @@ sections:
 
 The list pages are plain tables (click a column heading to sort, filter at
 the bottom): selecting a row shows its details in the inspector,
-double-clicking opens its page. Back and Forward (⌃⌘← / ⌃⌘→, or the toolbar)
+double-clicking opens its page. Go › Back and Forward (⌃⌘← / ⌃⌘→)
 retrace your steps. The pages of single items are:
 
 - an **empirical file**: the document, coded as below, with the inspector's
