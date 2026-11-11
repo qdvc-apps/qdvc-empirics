@@ -44,7 +44,7 @@ struct ContentView: View {
         }
         .onAppear { model.undoManager = undoManager }
         .onChange(of: undoManager) { _, new in model.undoManager = new }
-        .onChange(of: model.sidebar) { _, _ in model.sidebarChanged() }
+        .onChange(of: model.sidebar) { old, _ in model.sidebarChanged(from: old) }
         .task(id: model.notice?.id) {
             // Information goes away by itself; warnings stay until dismissed.
             guard let notice = model.notice, !notice.isWarning, notice.action == nil else { return }
@@ -56,12 +56,18 @@ struct ContentView: View {
 
     private var subtitle: String {
         switch model.sidebar {
-        case .file(let k): return model.project.files[k]?.displayTitle ?? ""
-        case .codes: return "Codes"
+        case .files: return "Empirical Files"
+        case .researchers: return "Researchers"
+        case .interviewees: return "Interviewees"
+        case .settings: return "Project Settings"
         case .codebooks: return "Codebooks"
-        case .people: return "People"
+        case .openCodes: return "Open Codes"
+        case .axialCodes: return "Axial Codes"
         case .layers: return "Layers"
-        case .project: return "Project"
+        case .file(let k): return model.project.files[k]?.displayTitle ?? ""
+        case .code(let k): return model.project.code(k)?.name ?? ""
+        case .codebook(let k): return model.project.codebooks[k]?.title ?? ""
+        case .researcher(let k), .interviewee(let k): return model.personName(k) ?? ""
         case nil: return ""
         }
     }
@@ -69,22 +75,51 @@ struct ContentView: View {
     @ViewBuilder
     private var detail: some View {
         switch model.sidebar {
-        case .file(let k): DocumentPage(fileKey: k)
-        case .codes: CodesPage()
-        case .codebooks: CodebooksPage()
-        case .people: PeoplePage()
+        case .files: FilesTable()
+        case .researchers: ResearchersTable()
+        case .interviewees: IntervieweesTable()
+        case .settings: ProjectPage()
+        case .codebooks: CodebooksTable()
+        case .openCodes: CodesTable(kind: .open).id("open")
+        case .axialCodes: CodesTable(kind: .axial).id("axial")
         case .layers: LayersPage()
-        case .project: ProjectPage()
+        case .file(let k): DocumentPage(fileKey: k)
+        case .code(let k): CodePage(codeKey: k)
+        case .codebook(let k): CodebookPage(codebookKey: k).id(k)
+        case .researcher(let k), .interviewee(let k): PersonPage(key: k).id(k)
         case nil:
             ContentUnavailableView("Nothing Selected", systemImage: "sidebar.left",
-                                   description: Text("Choose a file or a page in the sidebar."))
+                                   description: Text("Choose a page in the sidebar."))
         }
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            Button {
+                model.goBack()
+            } label: {
+                Label("Back", systemImage: "chevron.left")
+            }
+            .disabled(!model.canGoBack)
+            .help("Back (⌃⌘←)")
+            Button {
+                model.goForward()
+            } label: {
+                Label("Forward", systemImage: "chevron.right")
+            }
+            .disabled(!model.canGoForward)
+            .help("Forward (⌃⌘→)")
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             LayerMenu()
+            if model.hasRealNameFiles {
+                Toggle(isOn: Binding(get: { model.showRealNames }, set: { model.showRealNames = $0 })) {
+                    Label("Real Names", systemImage: model.showRealNames ? "eye" : "eye.slash")
+                }
+                .help(model.showRealNames ? "Showing real names (from the mapping files). Click to show pseudonyms."
+                                          : "Showing pseudonyms. Click to show real names from the mapping files.")
+            }
             if model.project.settings.interlocutorLayer {
                 Toggle(isOn: Binding(get: { model.showSpeakers }, set: { model.setShowSpeakers($0) })) {
                     Label("Interlocutors", systemImage: "person.wave.2")
@@ -208,78 +243,115 @@ struct Sidebar: View {
 
     var body: some View {
         @Bindable var model = model
-        let files = model.visibleFiles
         let all = model.project.files.count
         let coded = model.project.files.values.filter { $0.status == .coded }.count
         List(selection: $model.sidebar) {
-            Section("Analysis") {
-                Label("Codes", systemImage: "tag").tag(SidebarItem.codes)
-                Label("Codebooks", systemImage: "list.bullet.clipboard").tag(SidebarItem.codebooks)
-                Label("People", systemImage: "person.2").tag(SidebarItem.people)
-                Label("Layers", systemImage: "square.3.layers.3d").tag(SidebarItem.layers)
-                Label("Project", systemImage: "gearshape").tag(SidebarItem.project)
+            Section("Project") {
+                Label("Empirical Files", systemImage: "doc.on.doc")
+                    .badge(all)
+                    .tag(SidebarItem.files)
+                Label("Researchers", systemImage: "graduationcap")
+                    .badge(model.project.researchers.count)
+                    .tag(SidebarItem.researchers)
+                Label("Interviewees", systemImage: "person.bubble")
+                    .badge(model.project.interviewees.count)
+                    .tag(SidebarItem.interviewees)
+                Label("Project Settings", systemImage: "gearshape")
+                    .tag(SidebarItem.settings)
             }
-            Section {
-                ForEach(files) { f in
-                    FileRow(file: f, count: model.index.selectionCount[f.key] ?? 0)
-                        .tag(SidebarItem.file(f.key))
-                        .contextMenu { fileMenu(f) }
+            Section("Analysis") {
+                Label("Codebooks", systemImage: "text.book.closed")
+                    .badge(model.project.codebooks.count)
+                    .tag(SidebarItem.codebooks)
+                Label("Open Codes", systemImage: "tag")
+                    .badge(model.activeLayer?.codes.values.filter { $0.kind == .open }.count ?? 0)
+                    .tag(SidebarItem.openCodes)
+                Label("Axial Codes", systemImage: "tray.full")
+                    .badge(model.activeLayer?.codes.values.filter { $0.kind == .axial }.count ?? 0)
+                    .tag(SidebarItem.axialCodes)
+                Label("Layers", systemImage: "square.3.layers.3d")
+                    .badge(model.project.layers.count)
+                    .tag(SidebarItem.layers)
+            }
+            Section("Working Area") {
+                ForEach(model.workingArea, id: \.self) { item in
+                    WorkingAreaRow(item: item)
+                        .tag(item)
+                        .contextMenu { workingAreaMenu(item) }
                 }
-                if all == 0 {
-                    Text("No files yet. Add files from the full-texts folder with the + below.")
+                .onMove { from, to in model.moveWorkingArea(from: from, to: to) }
+                if model.workingArea.isEmpty {
+                    Text("Double-click a file, code, codebook or person in a table to work on it here.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                } else if files.isEmpty {
-                    Text("No files match “\(model.fileFilter)”.").font(.callout).foregroundStyle(.secondary)
-                }
-            } header: {
-                HStack {
-                    Text("Empirical Files")
-                    Spacer()
-                    if all > 0 { Text("\(coded) of \(all) coded").monospacedDigit() }
                 }
             }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 6) {
-                if all > 0 {
+            if all > 0 {
+                VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: Double(coded), total: Double(max(all, 1)))
                         .progressViewStyle(.linear)
                         .tint(.green)
-                        .help("\(coded) of \(all) files marked Coded")
+                    Text("\(coded) of \(all) files coded").font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
-                HStack(spacing: 6) {
-                    Menu {
-                        Button("Add Files…") { model.addFilesPanel() }
-                        Button("Add New Files from Full-Texts Folder…") { model.scanForNewFiles() }
-                        Divider()
-                        Button("Choose Full-Texts Folder…") { model.chooseFullTextsFolder() }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.borderless)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .help("Add empirical files from the full-texts folder")
-                    TextField("Filter", text: $model.fileFilter)
-                        .textFieldStyle(.roundedBorder)
-                        .controlSize(.small)
-                }
+                .padding(10)
             }
-            .padding(10)
         }
     }
 
     @ViewBuilder
-    func fileMenu(_ f: EmpiricalFile) -> some View {
-        ForEach(CodingStatus.allCases, id: \.self) { s in
-            Button("Mark as \(s.label)") { model.setStatus(s, file: f.key) }
-                .disabled(f.status == s)
+    func workingAreaMenu(_ item: SidebarItem) -> some View {
+        Button("Open") { model.show(item) }
+        if case .file(let k) = item, let f = model.project.files[k] {
+            Divider()
+            ForEach(CodingStatus.allCases, id: \.self) { s in
+                Button("Mark as \(s.label)") { model.setStatus(s, file: k) }
+                    .disabled(f.status == s)
+            }
         }
         Divider()
-        Button("Remove from Project…") { model.removeFile(f.key) }
+        Button("Remove from Working Area") { model.removeFromWorkingArea(item) }
+        Button("Remove Others from Working Area") { model.clearWorkingArea(except: item) }
+            .disabled(model.workingArea.count < 2)
+        Button("Clear Working Area") { model.clearWorkingArea() }
+    }
+}
+
+/// A Working Area row: files as in the Empirical Files list; codes,
+/// codebooks and people with their icon.
+struct WorkingAreaRow: View {
+    @Environment(AppModel.self) private var model
+    var item: SidebarItem
+
+    var body: some View {
+        switch item {
+        case .file(let k):
+            if let f = model.project.files[k] {
+                FileRow(file: f, count: model.index.selectionCount[k] ?? 0)
+            }
+        case .code(let k):
+            if let c = model.project.code(k) {
+                HStack(spacing: 6) {
+                    Image(systemName: c.kind.symbol).foregroundStyle(c.color)
+                    Text(c.name).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if model.index.layerOf[k] != model.activeLayerKey {
+                        Text(model.index.layerOf[k].flatMap { model.project.layer($0)?.name } ?? "")
+                            .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                    }
+                }
+            }
+        case .codebook(let k):
+            Label(model.project.codebooks[k]?.title ?? "", systemImage: "text.book.closed")
+        case .researcher(let k):
+            Label(model.personName(k) ?? "", systemImage: "graduationcap")
+        case .interviewee(let k):
+            Label(model.personName(k) ?? "", systemImage: "person.bubble")
+        default:
+            EmptyView()
+        }
     }
 }
 

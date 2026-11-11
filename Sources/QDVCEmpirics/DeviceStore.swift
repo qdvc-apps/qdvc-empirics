@@ -174,7 +174,7 @@ enum DeviceStore {
     /// folder, researcher, layers, quick codes and positions).
     static func forgetAll(project: String) {
         for name in ["fullTexts", "fullTextsPath", "researcher", "title", "activeLayer", "hiddenLayers", "positions",
-                     "lastFile", "showSpeakers"] {
+                     "lastFile", "lastItem", "workingArea", "showSpeakers"] {
             defaults.removeObject(forKey: key(name, project))
         }
         for k in defaults.dictionaryRepresentation().keys where k.hasPrefix("project.\(project).quick.") {

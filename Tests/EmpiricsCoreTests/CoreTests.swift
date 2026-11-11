@@ -404,6 +404,43 @@ final class AnchoringTests: XCTestCase {
     }
 }
 
+final class RealNamesTests: XCTestCase {
+    let people = [(key: "i-00000001", pseudonym: "John Smith"), (key: "r-00000001", pseudonym: "Alice Bob")]
+
+    func testCSV() {
+        XCTAssertEqual(CSV.parse("a,\"b, c\",\"say \"\"hi\"\"\"\r\nx,,z\n"), [["a", "b, c", "say \"hi\""], ["x", "", "z"]])
+        XCTAssertEqual(CSV.line(["a", "b,c", "d\"e"]), "a,\"b,c\",\"d\"\"e\"")
+    }
+
+    func testReadByKeyAndPseudonym() throws {
+        let text = """
+        key,pseudonym,real_first_name,real_last_name
+        i-00000001,John Smith,Jonathan,Realname
+        ,ALICE BOB,Alicia,Truename
+        r-99999999,Nobody,,
+        """
+        let names = try RealNames.read(text, people: people)
+        XCTAssertEqual(names, ["i-00000001": "Jonathan Realname", "r-00000001": "Alicia Truename"])
+    }
+
+    func testTemplateRoundTrip() throws {
+        let t = RealNames.template(people: people)
+        XCTAssertTrue(t.hasPrefix("key,pseudonym,real_first_name,real_last_name\n"))
+        XCTAssertEqual(try RealNames.read(t, people: people), [:])
+        XCTAssertThrowsError(try RealNames.read("a,b\n1,2\n", people: people))
+    }
+
+    func testSettingsRoundTrip() throws {
+        var p = Project.new(title: "Names")
+        p.settings.researcherNamesFile = "private/researchers.csv"
+        p.settings.intervieweeNamesFile = "private/interviewees.csv"
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("names-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Workspace.create(at: dir, project: p)
+        XCTAssertEqual(try Workspace.load(dir).project, p)
+    }
+}
+
 /// Nothing in the app may touch the network (docs/MAINTENANCE.md
 /// §Network): no networking API appears anywhere in the sources.
 final class NetworkPolicyTests: XCTestCase {

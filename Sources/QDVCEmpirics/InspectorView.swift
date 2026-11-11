@@ -2,33 +2,88 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// The inspector: the focused selection (its codes and interpretation
-/// memos), the focused code (its payload), or the open file (its catalogue
-/// entry, codebooks and speakers).
+/// The inspector follows the page: on a file, its Selection and File tabs;
+/// on a code, the code; on a codebook, where it is used; on a list page,
+/// the row selected in the table.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        VStack(spacing: 0) {
-            Picker("Inspector", selection: $model.inspectorTab) {
-                ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(10)
-            Divider()
-            ScrollView {
-                Group {
-                    switch model.inspectorTab {
-                    case .selection: SelectionInspector()
-                    case .code: CodeInspector()
-                    case .file: FileInspector()
+        switch model.sidebar {
+        case .file(let key):
+            VStack(spacing: 0) {
+                Picker("Inspector", selection: $model.inspectorTab) {
+                    ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(10)
+                Divider()
+                InspectorScroll {
+                    if model.inspectorTab == .selection {
+                        SelectionInspector()
+                    } else {
+                        FileInspector(fileKey: key)
                     }
                 }
+            }
+        case .code(let key):
+            InspectorScroll { codeEditor(key) }
+        case .codebook(let key):
+            InspectorScroll { CodebookUsage(codebookKey: key) }
+        case .researcher(let key), .interviewee(let key):
+            InspectorScroll { PersonRelated(key: key) }
+        case .files:
+            if let key = model.tableSelection, model.project.files[key] != nil {
+                InspectorScroll { FileInspector(fileKey: key) }
+            } else {
+                nothing("Select a file to see its details.")
+            }
+        case .openCodes, .axialCodes:
+            if let key = model.tableSelection, model.project.code(key) != nil {
+                InspectorScroll { codeEditor(key) }
+            } else {
+                nothing("Select a code to see and edit it.")
+            }
+        case .codebooks:
+            if let key = model.tableSelection, model.project.codebooks[key] != nil {
+                InspectorScroll { CodebookSummary(codebookKey: key) }
+            } else {
+                nothing("Select a codebook to see it.")
+            }
+        case .researchers, .interviewees:
+            if let key = model.tableSelection, model.keyExists(key) {
+                InspectorScroll { PersonForm(key: key, compact: true) }
+            } else {
+                nothing("Select someone to see their card.")
+            }
+        default:
+            nothing("Nothing to inspect on this page.")
+        }
+    }
+
+    @ViewBuilder
+    func codeEditor(_ key: String) -> some View {
+        if let code = model.project.code(key) {
+            CodeEditor(code: code)
+        }
+    }
+
+    func nothing(_ text: String) -> some View {
+        ContentUnavailableView("No Selection", systemImage: "sidebar.trailing", description: Text(text))
+    }
+}
+
+/// The inspector's scrolling, padded column.
+struct InspectorScroll<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            content()
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
         }
     }
 }
@@ -147,7 +202,7 @@ struct SelectionInspector: View {
                     .foregroundStyle(Color(nsColor: model.speakerColor(turn.label, in: s.fileKey)))
             }
             if !s.by.isEmpty || !s.created.isEmpty {
-                Text([s.by.isEmpty ? nil : model.project.personName(s.by), s.created.isEmpty ? nil : String(s.created.prefix(10))]
+                Text([s.by.isEmpty ? nil : model.personName(s.by), s.created.isEmpty ? nil : String(s.created.prefix(10))]
                         .compactMap { $0 }.joined(separator: " · "))
                     .foregroundStyle(.tertiary)
             }
@@ -197,20 +252,6 @@ struct EvidenceMemoRow: View {
 }
 
 // MARK: - Code
-
-struct CodeInspector: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        if let key = model.focusedCode, let code = model.project.code(key) {
-            CodeEditor(code: code)
-        } else {
-            ContentUnavailableView("No Code", systemImage: "tag",
-                                   description: Text("Choose a code on the Codes page, or click a code on a selection."))
-                .padding(.top, 40)
-        }
-    }
-}
 
 struct CodeEditor: View {
     @Environment(AppModel.self) private var model
@@ -300,11 +341,10 @@ struct CodeEditor: View {
                 Text("\(code.evidence.count) selection\(code.evidence.count == 1 ? "" : "s") in \(files) file\(files == 1 ? "" : "s")")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Show Evidence") {
-                    model.focusedCode = key
-                    model.sidebar = .codes
+                if model.sidebar != .code(key) {
+                    Button("Show Evidence") { model.showCode(key) }
+                        .controlSize(.small)
                 }
-                .controlSize(.small)
             }
         } else {
             SectionHeader(title: "Built From", trailing: "\(code.evidence.count)")
@@ -328,9 +368,8 @@ struct CodeEditor: View {
                 }
                 .fixedSize()
                 Spacer()
-                Button("Show Evidence") {
-                    model.focusedCode = key
-                    model.sidebar = .codes
+                if model.sidebar != .code(key) {
+                    Button("Show Evidence") { model.showCode(key) }
                 }
             }
             .controlSize(.small)
@@ -478,13 +517,14 @@ struct ColourSwatches: View {
 
 struct FileInspector: View {
     @Environment(AppModel.self) private var model
+    let fileKey: String
 
     var body: some View {
-        if let key = model.openFileKey, let file = model.project.files[key] {
-            editor(key, file)
+        if let file = model.project.files[fileKey] {
+            editor(fileKey, file)
         } else {
-            ContentUnavailableView("No File Open", systemImage: "doc",
-                                   description: Text("Open an empirical file from the sidebar to see its details."))
+            ContentUnavailableView("File Removed", systemImage: "doc",
+                                   description: Text("This file is no longer in the project."))
                 .padding(.top, 40)
         }
     }
@@ -493,6 +533,10 @@ struct FileInspector: View {
     func editor(_ key: String, _ file: EmpiricalFile) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Empirical File", trailing: file.kind.label)
+            if model.sidebar == .files {
+                Button("Open File") { model.show(.file(key)) }
+                    .controlSize(.small)
+            }
             LabeledField("Title") {
                 TextField(file.fileName, text: Binding(get: { model.project.files[key]?.title ?? "" },
                                                        set: { v in model.editFile(key) { $0.title = v } }))
@@ -560,7 +604,7 @@ struct FileInspector: View {
                             Spacer()
                             if map?.ignored.contains(c.speaker) == true {
                                 Text("Not a speaker").foregroundStyle(.tertiary)
-                            } else if let p = model.person(forSpeaker: c.label, in: key), let name = model.project.personName(p) {
+                            } else if let p = model.person(forSpeaker: c.label, in: key), let name = model.personName(p) {
                                 Text(name).foregroundStyle(Color(nsColor: model.speakerColor(c.label, in: key)))
                             } else {
                                 Text("Unassigned").foregroundStyle(.orange)
@@ -703,7 +747,7 @@ struct CodebookAssociations: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             if !others.isEmpty {
-                Text("Also answered by " + others.map { model.project.personName($0.id.researcher) ?? "someone" }.joined(separator: ", "))
+                Text("Also answered by " + others.map { model.personName($0.id.researcher) ?? "someone" }.joined(separator: ", "))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

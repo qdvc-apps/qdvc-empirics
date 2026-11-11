@@ -338,9 +338,10 @@ public enum Workspace {
                 guard let layer = layers[l] else { continue }
                 text = layer.codes[c].map { emit(encodeCode($0)) }
             case .researchers:
-                text = p.researchers.isEmpty ? nil : emit(.mapping([YAMLPair("researchers", .sequence(p.researchers.map(encodeResearcher)))]))
+                text = p.researchers.isEmpty ? nil : "# First and last names are pseudonyms. Real names, if mapped, stay in the full-texts folder.\n"
+                    + emit(.mapping([YAMLPair("researchers", .sequence(p.researchers.map(encodeResearcher)))]))
             case .interviewees:
-                text = p.interviewees.isEmpty ? nil : "# First and last names are pseudonyms. Consent forms stay in the full-texts folder.\n"
+                text = p.interviewees.isEmpty ? nil : "# First and last names are pseudonyms. Real names (if mapped) and consent forms stay in the full-texts folder.\n"
                     + emit(.mapping([YAMLPair("interviewees", .sequence(p.interviewees.map(encodeInterviewee)))]))
             case .speakers(let f):
                 text = p.speakerMaps[f].flatMap { $0.isEmpty ? nil : emit(encodeSpeakers($0)) }

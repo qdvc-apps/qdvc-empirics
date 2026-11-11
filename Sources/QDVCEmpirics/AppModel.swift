@@ -3,20 +3,79 @@ import EmpiricsCore
 import Observation
 import PDFKit
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// What the sidebar shows in the detail area.
+/// What the sidebar shows in the detail area: a list page, or one item's
+/// page (an empirical file, code, codebook or person).
 enum SidebarItem: Hashable {
-    case codes
+    // Project
+    case files
+    case researchers
+    case interviewees
+    case settings
+    // Analysis
     case codebooks
-    case people
+    case openCodes
+    case axialCodes
     case layers
-    case project
+    // Pages of single items (in the Working Area)
     case file(String)
+    case code(String)
+    case codebook(String)
+    case researcher(String)
+    case interviewee(String)
+
+    /// The item's key, for the pages of single items.
+    var key: String? {
+        switch self {
+        case .file(let k), .code(let k), .codebook(let k), .researcher(let k), .interviewee(let k): return k
+        default: return nil
+        }
+    }
+
+    /// As stored on this Mac ("files", "file:f-1a2b3c4d").
+    var encoded: String {
+        switch self {
+        case .files: return "files"
+        case .researchers: return "researchers"
+        case .interviewees: return "interviewees"
+        case .settings: return "settings"
+        case .codebooks: return "codebooks"
+        case .openCodes: return "openCodes"
+        case .axialCodes: return "axialCodes"
+        case .layers: return "layers"
+        case .file(let k): return "file:" + k
+        case .code(let k): return "code:" + k
+        case .codebook(let k): return "codebook:" + k
+        case .researcher(let k): return "researcher:" + k
+        case .interviewee(let k): return "interviewee:" + k
+        }
+    }
+
+    init?(encoded: String) {
+        let parts = encoded.split(separator: ":", maxSplits: 1).map(String.init)
+        switch (parts.first ?? "", parts.count > 1 ? parts[1] : "") {
+        case ("files", _): self = .files
+        case ("researchers", _): self = .researchers
+        case ("interviewees", _): self = .interviewees
+        case ("settings", _): self = .settings
+        case ("codebooks", _): self = .codebooks
+        case ("openCodes", _): self = .openCodes
+        case ("axialCodes", _): self = .axialCodes
+        case ("layers", _): self = .layers
+        case ("file", let k) where !k.isEmpty: self = .file(k)
+        case ("code", let k) where !k.isEmpty: self = .code(k)
+        case ("codebook", let k) where !k.isEmpty: self = .codebook(k)
+        case ("researcher", let k) where !k.isEmpty: self = .researcher(k)
+        case ("interviewee", let k) where !k.isEmpty: self = .interviewee(k)
+        default: return nil
+        }
+    }
 }
 
+/// The inspector's tabs on an empirical file's page.
 enum InspectorTab: String, CaseIterable, Identifiable {
     case selection = "Selection"
-    case code = "Code"
     case file = "File"
 
     var id: String { rawValue }
@@ -147,7 +206,18 @@ final class AppModel {
     var showSpeakers = true
     private(set) var currentResearcher: String?
     var focusedSelection: String?
-    var focusedCode: String?
+    /// The row selected in the table of the current list page.
+    var tableSelection: String?
+    /// Items being worked on, in the sidebar's Working Area (this Mac).
+    private(set) var workingArea: [SidebarItem] = []
+    @ObservationIgnored private var backStack: [SidebarItem] = []
+    @ObservationIgnored private var forwardStack: [SidebarItem] = []
+    @ObservationIgnored private var navigatingHistory = false
+    private(set) var canGoBack = false
+    private(set) var canGoForward = false
+    /// Real names by person key, from the mapping files (never saved).
+    private(set) var realNames: [String: String] = [:]
+    private(set) var realNamesProblem: String?
     /// The text selected in the document but not yet made a selection.
     var textSelection: [TextSpan] = []
     var textSelectionFile: String?
@@ -186,6 +256,9 @@ final class AppModel {
     var showStripes: Bool = UserDefaults.standard.object(forKey: "showStripes") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showStripes, forKey: "showStripes") }
     }
+    /// Show real names (from the mapping files) instead of pseudonyms. Off
+    /// at every launch, so a shared screen never shows them by surprise.
+    var showRealNames = false
 
     // MARK: Internals
 
@@ -286,15 +359,16 @@ final class AppModel {
                                     self?.chooseFullTextsFolder()
                                 } : nil)
             }
-            let last = DeviceStore.string("lastFile", project: project.settings.key)
-            if let last, project.files[last] != nil {
-                sidebar = .file(last)
-            } else if let first = project.sortedFiles.first {
-                sidebar = .file(first.key)
+            let last = DeviceStore.string("lastItem", project: project.settings.key).flatMap(SidebarItem.init(encoded:))
+            if let last, exists(last) {
+                sidebar = last
             } else {
-                sidebar = .project
+                sidebar = .files
             }
-            sidebarChanged()
+            backStack = []
+            forwardStack = []
+            updateHistoryFlags()
+            sidebarChanged(from: nil)
         } catch {
             errorMessage = "Couldn't open “\(url.lastPathComponent)”.\n\n\(error.localizedDescription)"
         }
@@ -315,7 +389,9 @@ final class AppModel {
         hiddenLayers = Set(DeviceStore.strings("hiddenLayers", project: key))
         showSpeakers = DeviceStore.string("showSpeakers", project: key) != "no"
         positions = DeviceStore.positions(project: key)
+        workingArea = DeviceStore.strings("workingArea", project: key).compactMap(SidebarItem.init(encoded:)).filter(exists)
         loadQuickCodes()
+        loadRealNames()
     }
 
     func closeProject() {
@@ -330,7 +406,14 @@ final class AppModel {
         lostSelections = []
         sidebar = nil
         focusedSelection = nil
-        focusedCode = nil
+        tableSelection = nil
+        workingArea = []
+        backStack = []
+        forwardStack = []
+        updateHistoryFlags()
+        realNames = [:]
+        realNamesProblem = nil
+        showRealNames = false
         textSelection = []
         textSelectionFile = nil
         paletteVisible = false
@@ -415,6 +498,7 @@ final class AppModel {
             ? Notice(text: "Full-texts folder set for this Mac.")
             : Notice(text: "Full-texts folder set, but \(missing) catalogued file\(missing == 1 ? " isn't" : "s aren't") in it.", isWarning: true)
         if case .file(let k) = sidebar { prepareDocument(k) }
+        loadRealNames()
     }
 
     func forgetFullTextsFolder() {
@@ -423,6 +507,7 @@ final class AppModel {
         documents.clear()
         verified = []
         documentsRevision += 1
+        loadRealNames()
     }
 
     // MARK: - Changes, undo, saving
@@ -473,10 +558,15 @@ final class AppModel {
     /// Drops focus on things that no longer exist (after undo, delete, move).
     private func validateState() {
         if let s = focusedSelection, project.selection(s) == nil { focusedSelection = nil }
-        if let c = focusedCode, project.code(c) == nil { focusedCode = nil }
+        if let t = tableSelection, !keyExists(t) { tableSelection = nil }
         if project.layer(activeLayerKey) == nil { activeLayerKey = project.layers.first?.key ?? "" }
-        if case .file(let k) = sidebar, project.files[k] == nil { sidebar = .project }
+        if let item = sidebar, !exists(item) { sidebar = listPage(for: item) }
         if let r = currentResearcher, project.researcher(r) == nil { currentResearcher = nil }
+        let kept = workingArea.filter(exists)
+        if kept != workingArea {
+            workingArea = kept
+            saveWorkingArea()
+        }
     }
 
     private func markDirty(_ parts: Set<WorkspacePart>) {
@@ -522,6 +612,7 @@ final class AppModel {
                 undoManager?.removeAllActions()
                 validateState()
                 loadQuickCodes()
+                loadRealNames()
                 notice = Notice(text: "Reloaded the workspace: its files were changed outside the app." +
                                 (loaded.notes.isEmpty ? "" : " " + loaded.notes.joined(separator: " ")),
                                 isWarning: !loaded.notes.isEmpty)
@@ -540,7 +631,6 @@ final class AppModel {
         DeviceStore.setString(key, "activeLayer", project: project.settings.key)
         DeviceStore.setStrings(Array(hiddenLayers), "hiddenLayers", project: project.settings.key)
         focusedSelection = nil
-        focusedCode = nil
         loadQuickCodes()
     }
 
@@ -614,28 +704,138 @@ final class AppModel {
         return nil
     }
 
-    /// Called when the sidebar selection changes.
-    func sidebarChanged() {
+    /// Whether a sidebar item still exists (its file, code… wasn't deleted).
+    func exists(_ item: SidebarItem) -> Bool {
+        switch item {
+        case .file(let k): return project.files[k] != nil
+        case .code(let k): return project.code(k) != nil
+        case .codebook(let k): return project.codebooks[k] != nil
+        case .researcher(let k): return project.researcher(k) != nil
+        case .interviewee(let k): return project.interviewee(k) != nil
+        default: return true
+        }
+    }
+
+    func keyExists(_ key: String) -> Bool { item(forKey: key).map(exists) ?? false }
+
+    /// The page of a file, code, codebook or person, by key.
+    func item(forKey key: String) -> SidebarItem? {
+        if project.files[key] != nil { return .file(key) }
+        if project.code(key) != nil { return .code(key) }
+        if project.codebooks[key] != nil { return .codebook(key) }
+        if project.researcher(key) != nil { return .researcher(key) }
+        if project.interviewee(key) != nil { return .interviewee(key) }
+        return nil
+    }
+
+    /// The list page an item's page belongs to.
+    func listPage(for item: SidebarItem) -> SidebarItem {
+        switch item {
+        case .file: return .files
+        case .code(let k): return project.code(k)?.kind == .axial ? .axialCodes : .openCodes
+        case .codebook: return .codebooks
+        case .researcher: return .researchers
+        case .interviewee: return .interviewees
+        default: return item
+        }
+    }
+
+    /// Opens an item's page, putting it in the Working Area.
+    func show(_ item: SidebarItem) {
+        guard exists(item) else { return }
+        if item.key != nil { addToWorkingArea(item) }
+        sidebar = item
+    }
+
+    /// Opens the page of a file, code, codebook or person by key.
+    func openKey(_ key: String) {
+        if let item = item(forKey: key) { show(item) }
+    }
+
+    func addToWorkingArea(_ item: SidebarItem) {
+        guard item.key != nil, !workingArea.contains(item) else { return }
+        workingArea.append(item)
+        saveWorkingArea()
+    }
+
+    func removeFromWorkingArea(_ item: SidebarItem) {
+        workingArea.removeAll { $0 == item }
+        saveWorkingArea()
+        if sidebar == item { sidebar = listPage(for: item) }
+    }
+
+    func clearWorkingArea(except keep: SidebarItem? = nil) {
+        workingArea = workingArea.filter { $0 == keep }
+        saveWorkingArea()
+        if let s = sidebar, s.key != nil, s != keep { sidebar = listPage(for: s) }
+    }
+
+    func moveWorkingArea(from: IndexSet, to: Int) {
+        workingArea.move(fromOffsets: from, toOffset: to)
+        saveWorkingArea()
+    }
+
+    private func saveWorkingArea() {
+        guard isOpen else { return }
+        DeviceStore.setStrings(workingArea.map(\.encoded), "workingArea", project: project.settings.key)
+    }
+
+    /// Called when the sidebar selection changes (with the previous one).
+    func sidebarChanged(from old: SidebarItem?) {
         textSelection = []
         textSelectionFile = nil
         paletteVisible = false
         savePositions()
+        if let old, old != sidebar, !navigatingHistory {
+            backStack.append(old)
+            if backStack.count > 50 { backStack.removeFirst() }
+            forwardStack = []
+        }
+        navigatingHistory = false
+        updateHistoryFlags()
+        if sidebar.map({ $0.key == nil }) ?? false { tableSelection = nil }
+        if let item = sidebar {
+            DeviceStore.setString(item.encoded, "lastItem", project: project.settings.key)
+        }
         if case .file(let k) = sidebar {
-            DeviceStore.setString(k, "lastFile", project: project.settings.key)
             if let s = focusedSelection, index.fileOf[s] != k { focusedSelection = nil }
             if focusedSelection == nil, inspectorTab == .selection { inspectorTab = .file }
             prepareDocument(k)
         }
     }
 
+    func goBack() {
+        while let item = backStack.popLast() {
+            guard exists(item), item != sidebar else { continue }
+            if let s = sidebar { forwardStack.append(s) }
+            navigatingHistory = true
+            sidebar = item
+            break
+        }
+        updateHistoryFlags()
+    }
+
+    func goForward() {
+        while let item = forwardStack.popLast() {
+            guard exists(item), item != sidebar else { continue }
+            if let s = sidebar { backStack.append(s) }
+            navigatingHistory = true
+            sidebar = item
+            break
+        }
+        updateHistoryFlags()
+    }
+
+    private func updateHistoryFlags() {
+        canGoBack = !backStack.isEmpty
+        canGoForward = !forwardStack.isEmpty
+    }
+
     /// Opens a selection's file, focuses the selection and scrolls to it.
     func showSelection(_ key: String) {
         guard let s = project.selection(key) else { return }
         if let layer = index.layerOf[key], layer != activeLayerKey { setActiveLayer(layer) }
-        if sidebar != .file(s.fileKey) {
-            sidebar = .file(s.fileKey)
-            sidebarChanged()
-        }
+        if sidebar != .file(s.fileKey) { show(.file(s.fileKey)) }
         focusedSelection = key
         inspectorTab = .selection
         revealCounter += 1
@@ -655,22 +855,31 @@ final class AppModel {
         }
     }
 
+    /// Opens a code's page (switching to its layer).
     func showCode(_ key: String) {
         guard project.code(key) != nil else { return }
         if let layer = index.layerOf[key], layer != activeLayerKey { setActiveLayer(layer) }
-        focusedCode = key
-        inspectorTab = .code
-        showInspector = true
+        show(.code(key))
     }
 
-    /// Previous or next file in the sidebar's order.
+    /// Previous or next file, in the Empirical Files order. The file you
+    /// were on gives its place in the Working Area to the next one.
     func stepFile(_ step: Int) {
         let files = visibleFiles
         guard !files.isEmpty else { return }
         let current = openFileKey.flatMap { k in files.firstIndex { $0.key == k } }
         let next = current.map { max(0, min(files.count - 1, $0 + step)) } ?? 0
-        sidebar = .file(files[next].key)
-        sidebarChanged()
+        moveOn(to: files[next].key)
+    }
+
+    /// Opens `file` in place of the open file in the Working Area.
+    func moveOn(to file: String) {
+        let target = SidebarItem.file(file)
+        if let k = openFileKey, k != file, let i = workingArea.firstIndex(of: .file(k)), !workingArea.contains(target) {
+            workingArea[i] = target
+            saveWorkingArea()
+        }
+        show(target)
     }
 
     /// Files in the sidebar, after the filter.
@@ -800,7 +1009,7 @@ final class AppModel {
     }
 
     func speakerName(_ label: String, in file: String) -> String {
-        person(forSpeaker: label, in: file).flatMap { project.personName($0) } ?? label
+        person(forSpeaker: label, in: file).flatMap { personName($0) } ?? label
     }
 
     /// Researchers in blue, interviewees in green, unknown speakers grey.
@@ -821,8 +1030,8 @@ final class AppModel {
 
     func openResponseSheet(codebook: String, target: String) {
         guard let id = responseID(codebook: codebook, target: target) else {
-            notice = Notice(text: "Choose who you are on this Mac first (People › This Mac's Researcher), so your answers are filed under your name.",
-                            isWarning: true, action: NoticeAction(title: "Go to People") { [weak self] in self?.sidebar = .people })
+            notice = Notice(text: "Choose who you are on this Mac first (Researchers › This Mac's Researcher), so your answers are filed under your name.",
+                            isWarning: true, action: NoticeAction(title: "Go to Researchers") { [weak self] in self?.sidebar = .researchers })
             return
         }
         sheet = .response(id)
@@ -831,5 +1040,110 @@ final class AppModel {
     /// Every response sheet for a codebook and target (all researchers).
     func sheets(codebook: String, target: String) -> [ResponseSheet] {
         project.responses.values.filter { $0.id.codebook == codebook && $0.id.target == target }.sorted { $0.id < $1.id }
+    }
+
+    // MARK: - Names
+
+    /// A researcher's or interviewee's name as shown: the pseudonym, or the
+    /// real name while Show Real Names is on (if the mapping files have one).
+    func personName(_ key: String) -> String? {
+        if showRealNames, let real = realNames[key] { return real }
+        guard let name = project.personName(key) else { return nil }
+        return name.isEmpty ? "Unnamed" : name
+    }
+
+    var hasRealNameFiles: Bool {
+        !project.settings.researcherNamesFile.isEmpty || !project.settings.intervieweeNamesFile.isEmpty
+    }
+
+    /// Reads the real-name mapping files from the full-texts folder (only
+    /// ever read; the names stay in memory).
+    func loadRealNames() {
+        realNames = [:]
+        realNamesProblem = nil
+        guard hasRealNameFiles else { return }
+        guard let ft = fullTexts else {
+            realNamesProblem = "The full-texts folder isn't set on this Mac, so real names can't be read."
+            return
+        }
+        let people: [(key: String, pseudonym: String)] = project.researchers.map { ($0.key, $0.fullName) }
+            + project.interviewees.map { ($0.key, $0.fullName) }
+        var problems: [String] = []
+        for path in [project.settings.researcherNamesFile, project.settings.intervieweeNamesFile] where !path.isEmpty {
+            do {
+                let text = TextNormaliser.text(from: try ft.data(path))
+                realNames.merge(try RealNames.read(text, people: people)) { a, _ in a }
+            } catch {
+                problems.append("\(path): \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
+            }
+        }
+        if !problems.isEmpty { realNamesProblem = problems.joined(separator: "\n") }
+    }
+
+    enum PeopleKind { case researchers, interviewees }
+
+    /// Chooses a mapping file (a CSV inside the full-texts folder).
+    func chooseNamesFile(_ kind: PeopleKind) {
+        guard let ft = fullTexts else {
+            chooseFullTextsFolder()
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.directoryURL = ft.root
+        panel.prompt = "Use This File"
+        panel.message = "Choose the CSV that maps \(kind == .researchers ? "researchers'" : "interviewees'") keys to real names. It must be inside the full-texts folder; it is only ever read."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let rel = ft.relativePath(of: url) else {
+            errorMessage = "Mapping files must be inside the full-texts folder, so real names never reach the workspace or Git."
+            return
+        }
+        setNamesFile(kind, rel)
+    }
+
+    func setNamesFile(_ kind: PeopleKind, _ path: String) {
+        perform(path.isEmpty ? "Clear Mapping File" : "Set Mapping File") { p in
+            if kind == .researchers { p.settings.researcherNamesFile = path } else { p.settings.intervieweeNamesFile = path }
+        }
+        loadRealNames()
+    }
+
+    /// Writes a mapping file to fill in (keys and pseudonyms, real-name
+    /// columns empty) where the researcher chooses, by default in the
+    /// full-texts folder. Never overwrites an existing file.
+    func saveNamesTemplate(_ kind: PeopleKind) {
+        let people: [(key: String, pseudonym: String)] = kind == .researchers
+            ? project.researchers.map { ($0.key, $0.fullName) }
+            : project.interviewees.map { ($0.key, $0.fullName) }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = kind == .researchers ? "researchers-real-names.csv" : "interviewees-real-names.csv"
+        if let ft = fullTexts { panel.directoryURL = ft.root }
+        panel.message = "Save a mapping file to fill in with real names (in a spreadsheet). Keep it in the full-texts folder, never in the workspace."
+        panel.prompt = "Save Template"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if FileManager.default.fileExists(atPath: url.path) {
+            errorMessage = "“\(url.lastPathComponent)” already exists. QDVC Empirics never overwrites files there; choose another name."
+            return
+        }
+        if let workspaceURL, url.standardizedFileURL.path.hasPrefix(workspaceURL.standardizedFileURL.path + "/") {
+            errorMessage = "Real names must not go into the workspace (it is tracked in Git). Save the template in the full-texts folder."
+            return
+        }
+        do {
+            try Data(RealNames.template(people: people).utf8).write(to: url, options: .withoutOverwriting)
+        } catch {
+            errorMessage = "Couldn't save the template.\n\n\(error.localizedDescription)"
+            return
+        }
+        if let ft = fullTexts, let rel = ft.relativePath(of: url) {
+            setNamesFile(kind, rel)
+            notice = Notice(text: "Template saved as \(rel). Fill in the real names in a spreadsheet, then choose View › Reload Real Names.")
+        } else {
+            notice = Notice(text: "Template saved. Move it into the full-texts folder, then choose it in Project Settings.", isWarning: true)
+        }
     }
 }

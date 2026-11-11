@@ -43,9 +43,30 @@ in the sources.
 At launch a welcome window, as in Xcode and the other QDVC apps, offers to
 create or open a project and lists recent ones.
 
-The main window has a **sidebar** (Codes, Codebooks, People, Layers, Project,
-and the empirical files with their coding status), the **document** in the
-middle, and an **inspector** (⌥⌘I) with three tabs: Selection, Code, File.
+The main window has a **sidebar**, the page in the middle, and an
+**inspector** on the right (⌥⌘I) that follows the page. The sidebar has three
+sections:
+
+- **Project:** Empirical Files, Researchers, Interviewees, Project Settings.
+- **Analysis:** Codebooks, Open Codes, Axial Codes, Layers.
+- **Working Area:** the files, codes, codebooks and people you are working
+  on. Double-click a row in any table to open its page and put it here;
+  right-click to remove it (or the others), drag to reorder. It is
+  remembered on this Mac.
+
+The list pages are plain tables (click a column heading to sort, filter at
+the bottom): selecting a row shows its details in the inspector,
+double-clicking opens its page. Back and Forward (⌃⌘← / ⌃⌘→, or the toolbar)
+retrace your steps. The pages of single items are:
+
+- an **empirical file**: the document, coded as below, with the inspector's
+  Selection and File tabs;
+- an **open or axial code**: its evidence, with the code itself (name,
+  colour, description, comments, questions, interrelations, codebooks) in
+  the inspector;
+- a **codebook**: its questions;
+- a **researcher** or **interviewee**: a card as in Contacts, with the
+  transcripts they speak in.
 
 **Coding a file** (text, Markdown or PDF):
 
@@ -75,16 +96,17 @@ middle, and an **inspector** (⌥⌘I) with three tabs: Selection, Code, File.
   Progress, Coded) keep long sessions moving; the sidebar shows progress.
 - Each file reopens where you left off.
 
-**Codes** (sidebar › Codes, ⌃⌘1): the codes of the active layer, axial codes
-as an outline of what they are built from, and for the chosen code its
-**evidence**: every quote, grouped by file, with speaker, other codes and
-memo, and Show in File. Open codes have selections as evidence; axial codes
-have open codes and other axial codes (cycles are refused). Each code has a
-name, colour, description, **comments** and **questions** (unresolved
-matters), and **interrelations**: commentary on how two or more pieces of its
-evidence relate, typed Compare, Contrast or your own types.
+**Open Codes** and **Axial Codes** (⌃⌘6, ⌃⌘7): the codes of the active
+layer. A code's page shows its **evidence**: every quote, grouped by file,
+with speaker, other codes and memo, and Show in File; for an axial code, the
+codes it is built from and their quotes. Open codes have selections as
+evidence; axial codes have open codes and other axial codes (cycles are
+refused). Each code has a name, colour, description, **comments** and
+**questions** (unresolved matters), and **interrelations**: commentary on how
+two or more pieces of its evidence relate, typed Compare, Contrast or your
+own types.
 
-**Codebooks** (⌃⌘2): ordered questions, each with a short label (16
+**Codebooks** (⌃⌘5): ordered questions, each with a short label (16
 characters at most), the full question, and an answer type: free text,
 choose one or choose any from a list. A list can be strictly predefined, or
 open to options added while coding (they join the codebook). Each question is
@@ -94,12 +116,21 @@ applies to empirical files, open codes and/or axial codes, and is associated
 with any of them from the inspector, where each researcher fills in their own
 **response sheet**.
 
-**People** (⌃⌘3): researchers (real names) and interviewees (pseudonyms; the
-page says so plainly), each interviewee with a link to their consent form in
-the full-texts folder, viewable read-only inside the app. Choose *This Mac's
-researcher* so selections and answers are attributed to you.
+**Researchers** and **Interviewees** (⌃⌘2, ⌃⌘3): everyone is known by a
+**pseudonym**; the pages say so plainly. Interviewees link to their consent
+form in the full-texts folder, viewable read-only inside the app. On
+Researchers, choose *This Mac's researcher* so selections and answers are
+attributed to you.
 
-**Layers** (⌃⌘4): selections and codes live in exactly one layer (a
+**Real names.** Optionally, keep a mapping file (CSV: key, pseudonym, real
+first and last names) for researchers and one for interviewees in the
+full-texts folder; Project Settings chooses them, and can save a template to
+fill in. The app only reads them and keeps the names in memory. View › Show
+Real Names (⇧⌘R, or the eye in the toolbar) swaps pseudonyms for real names
+everywhere they are shown; it is off at every launch, so a shared screen
+never shows them by surprise.
+
+**Layers** (⌃⌘8): selections and codes live in exactly one layer (a
 theoretical lens, one researcher's reading). Code in the active layer (the
 toolbar's layer menu); other layers can show as underlines. Moving a
 selection or code to another layer moves everything linked to it. The
@@ -108,8 +139,8 @@ forgiving inconsistent capitals, colons, line breaks, timestamps and
 Markdown emphasis, and maps each speaker to a researcher or interviewee
 (File inspector › Speakers…); names then show in the left margin.
 
-**Project** (⌃⌘5): title, description, the two folders, quote storage and
-interrelation types.
+**Project Settings** (⌃⌘4): title, description, the two folders, real-name
+mapping files, quote storage and interrelation types.
 
 ## Requirements
 
@@ -162,7 +193,8 @@ Project…) and, when asked, choose `sample-full-texts/` as its full-texts
 folder. It has two interviews (one with exactly the messy speaker headers the
 Interlocutor layer is built for), field notes in Markdown and a two-page PDF;
 two layers, open and axial codes with memos, comments, questions and
-interrelations, irrelevant text, two codebooks and response sheets.
+interrelations, irrelevant text, two codebooks and response sheets, and
+real-name mapping files (all names in it are invented).
 Regenerate it with `MAKE_SAMPLE=$PWD swift test --filter MakeSampleTests`.
 
 ## Signing without a paid account
@@ -178,12 +210,12 @@ xattr -dr com.apple.quarantine "/Applications/QDVC Empirics.app"
 
 ## App icon
 
-The icon, a frosted-glass page of a transcript with three lines swept in
-highlighter (yellow, blue, green), their coding stripes in the margin and an
-amber magnifying-glass badge, is generated by `tools/make_icon.py` on Apple's
-macOS icon template, in the same style as the other QDVC apps, in the "Sage"
-palette. It appears in the `.app` built by `scripts/build-app.sh`, not with
-`swift run`.
+The icon, a well-worked book (two pages swept with highlighter, margin notes
+and a circled word in pen, a sticky note on the page, more sticky notes and
+paper flags poking out of its edges, two ribbon bookmarks) on a pale
+cantaloupe gradient, is generated by `tools/make_icon.py` on Apple's macOS
+icon template, built like the other QDVC apps' icons. It appears in the
+`.app` built by `scripts/build-app.sh`, not with `swift run`.
 
 ## Where things are stored
 
@@ -195,8 +227,11 @@ palette. It appears in the `.app` built by `scripts/build-app.sh`, not with
   markers is reported (with its name) rather than misread.
 - The full-texts: only in the full-texts folder; never written.
 - On this Mac (the app's sandbox container, not the workspace): recent
-  projects, each project's full-texts folder and researcher, active and
-  hidden layers, quick codes, reading positions and reading preferences.
+  projects, each project's full-texts folder and researcher, the Working
+  Area, active and hidden layers, quick codes, reading positions and reading
+  preferences.
+- Real names: only in the mapping files in the full-texts folder; read into
+  memory, never written anywhere.
 
 ## Keyboard shortcuts
 
@@ -214,7 +249,9 @@ palette. It appears in the `.app` built by `scripts/build-app.sh`, not with
 | ⌥⌘] / ⌥⌘[ | Next / previous file |
 | ⌥⌘N | Next file not yet coded |
 | ⌃⌘C | Mark the file as coded |
-| ⌃⌘1 … ⌃⌘5 | Codes, Codebooks, People, Layers, Project |
+| ⌃⌘1 … ⌃⌘8 | Empirical Files, Researchers, Interviewees, Project Settings, Codebooks, Open Codes, Axial Codes, Layers |
+| ⌃⌘← / ⌃⌘→ | Back / forward |
+| ⇧⌘R | Show real names |
 | ⌃⌘I | Show or hide interlocutors |
 | ⌘+ / ⌘− / ⌘0 | Larger / smaller / default text |
 | ⌥⌘I | Inspector |

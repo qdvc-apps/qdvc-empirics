@@ -66,7 +66,7 @@ struct PrivacySettings: View {
     var body: some View {
         Form {
             Section {
-                Text("Each project's full-texts folder, and who you are in it, are remembered on this Mac only (never in the workspace or Git). Forgetting them doesn't touch any files.")
+                Text("Each project's full-texts folder, who you are in it, and your Working Area are remembered on this Mac only (never in the workspace or Git). Real names from mapping files are never stored anywhere: they are read from the full-texts folder each time. Forgetting doesn't touch any files.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

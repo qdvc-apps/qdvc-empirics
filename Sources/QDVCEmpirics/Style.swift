@@ -55,7 +55,7 @@ extension FileKind {
 }
 
 extension CodeKind {
-    var symbol: String { self == .open ? "tag" : "point.3.connected.trianglepath.dotted" }
+    var symbol: String { self == .open ? "tag" : "tray.full" }
 }
 
 /// A small filled circle in a code's colour.

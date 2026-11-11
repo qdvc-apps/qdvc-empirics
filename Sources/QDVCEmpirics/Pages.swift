@@ -2,132 +2,6 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-// MARK: - People
-
-/// Researchers (real names) and interviewees (pseudonyms, with consent
-/// forms kept in the full-texts folder).
-struct PeoplePage: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                researchers
-                Divider()
-                interviewees
-            }
-            .padding(24)
-            .frame(maxWidth: 820, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    var researchers: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Researchers").font(.title2.weight(.semibold))
-            Text("The people doing the analysis, by their real names. Layers, selections and codebook answers can be attributed to them.")
-                .foregroundStyle(.secondary)
-            HStack {
-                Text("This Mac's researcher:")
-                Picker("This Mac's researcher", selection: Binding(
-                    get: { model.currentResearcher ?? "" },
-                    set: { model.setCurrentResearcher($0.isEmpty ? nil : $0) }
-                )) {
-                    Text("Not chosen").tag("")
-                    ForEach(model.project.researchers) { r in Text(r.fullName.isEmpty ? "Unnamed" : r.fullName).tag(r.key) }
-                }
-                .labelsHidden()
-                .fixedSize()
-                Text("Remembered on this Mac only; your codebook answers are filed under this name.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            ForEach(model.project.researchers) { r in
-                HStack {
-                    TextField("First name", text: Binding(get: { r.firstName }, set: { v in
-                        model.edit { p in if let i = p.researchers.firstIndex(where: { $0.key == r.key }) { p.researchers[i].firstName = v } }
-                    }))
-                    TextField("Last name", text: Binding(get: { r.lastName }, set: { v in
-                        model.edit { p in if let i = p.researchers.firstIndex(where: { $0.key == r.key }) { p.researchers[i].lastName = v } }
-                    }))
-                    if r.key == model.currentResearcher {
-                        Text("This Mac").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Button {
-                        model.perform("Delete Researcher") { p in p.deleteResearcher(r.key) }
-                    } label: { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
-                    .buttonStyle(.plain)
-                    .help("Remove this researcher")
-                }
-                .textFieldStyle(.roundedBorder)
-            }
-            Button {
-                model.perform("Add Researcher") { p in
-                    p.researchers.append(Researcher(key: p.newKey(Keys.researcher), firstName: "", lastName: ""))
-                }
-            } label: { Label("Add Researcher", systemImage: "plus") }
-        }
-    }
-
-    var interviewees: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Interviewees").font(.title2.weight(.semibold))
-            Label {
-                Text("Names here are **pseudonyms**. Never enter an interviewee's real name: this list is saved in the workspace, which is meant to be shared through Git. Signed consent forms stay in the full-texts folder; only their location is recorded.")
-            } icon: {
-                Image(systemName: "theatermasks.fill").foregroundStyle(.purple)
-            }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.purple.opacity(0.08)))
-            ForEach(model.project.interviewees) { i in
-                HStack {
-                    TextField("First name (pseudonym)", text: Binding(get: { i.firstName }, set: { v in
-                        model.edit { p in if let x = p.interviewees.firstIndex(where: { $0.key == i.key }) { p.interviewees[x].firstName = v } }
-                    }))
-                    TextField("Last name (pseudonym)", text: Binding(get: { i.lastName }, set: { v in
-                        model.edit { p in if let x = p.interviewees.firstIndex(where: { $0.key == i.key }) { p.interviewees[x].lastName = v } }
-                    }))
-                    consent(i)
-                    Button {
-                        model.perform("Delete Interviewee") { p in p.deleteInterviewee(i.key) }
-                    } label: { Image(systemName: "minus.circle.fill").foregroundStyle(.secondary) }
-                    .buttonStyle(.plain)
-                    .help("Remove this interviewee (the consent form itself is untouched)")
-                }
-                .textFieldStyle(.roundedBorder)
-            }
-            Button {
-                model.perform("Add Interviewee") { p in
-                    p.interviewees.append(Interviewee(key: p.newKey(Keys.interviewee), firstName: "", lastName: ""))
-                }
-            } label: { Label("Add Interviewee", systemImage: "plus") }
-        }
-    }
-
-    @ViewBuilder
-    func consent(_ i: Interviewee) -> some View {
-        if i.consentForm.isEmpty {
-            Button("Consent Form…") { model.chooseConsentForm(for: i.key) }
-                .controlSize(.small)
-                .help("Choose the signed consent form (a PDF in the full-texts folder)")
-        } else {
-            Menu {
-                Button("View") { model.sheet = .consent(i.key) }
-                Button("Choose Another…") { model.chooseConsentForm(for: i.key) }
-                Button("Remove Link") {
-                    model.perform("Remove Consent Form") { p in
-                        if let x = p.interviewees.firstIndex(where: { $0.key == i.key }) { p.interviewees[x].consentForm = "" }
-                    }
-                }
-            } label: {
-                Label("Consent", systemImage: model.fullTexts?.exists(i.consentForm) == true ? "checkmark.seal.fill" : "exclamationmark.triangle")
-            }
-            .fixedSize()
-            .controlSize(.small)
-            .help(i.consentForm)
-        }
-    }
-}
-
 // MARK: - Layers
 
 /// Layers of interpretation, like the layers of an image editor: code in
@@ -218,7 +92,7 @@ struct LayersPage: View {
                     model.perform("Set Layer Researcher") { p in if let i = p.layerIndex(layer.key) { p.layers[i].researcher = v } }
                 })) {
                     Text("Anyone").tag("")
-                    ForEach(model.project.researchers) { r in Text(r.fullName).tag(r.key) }
+                    ForEach(model.project.researchers) { r in Text(model.personName(r.key) ?? "").tag(r.key) }
                 }
                 .fixedSize()
             }
@@ -250,7 +124,7 @@ struct ProjectPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Project").font(.title2.weight(.semibold))
+                Text("Project Settings").font(.title2.weight(.semibold))
                 LabeledField("Title") {
                     TextField("Title", text: Binding(get: { model.project.settings.title }, set: { v in
                         model.edit { $0.settings.title = v }
@@ -287,6 +161,8 @@ struct ProjectPage: View {
                         }
                     }
                 }
+                Divider()
+                RealNamesSettings()
                 Divider()
                 Text("Data").font(.headline)
                 Toggle(isOn: Binding(get: { model.project.settings.storeQuotes }, set: { v in
@@ -330,5 +206,58 @@ struct ProjectPage: View {
         return Text("\(p.files.count) files · \(p.layers.count) layer\(p.layers.count == 1 ? "" : "s") · \(selections) selections · \(codes) codes · \(p.codebooks.count) codebooks · \(p.responses.count) response sheets")
             .font(.caption)
             .foregroundStyle(.secondary)
+    }
+}
+
+/// Real-name mapping files: CSVs in the full-texts folder that map
+/// researchers' and interviewees' keys to their real names.
+struct RealNamesSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Real Names").font(.headline)
+            Text("Researchers and interviewees are known in the workspace only by pseudonyms. To see real names, keep a mapping file (CSV) for each in the full-texts folder: one row per person with their key, pseudonym and real first and last names. The app only reads it, keeps the names in memory, and shows them only while View › Show Real Names is on (it is off at every launch).")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            row("Researchers", path: model.project.settings.researcherNamesFile, kind: .researchers)
+            row("Interviewees", path: model.project.settings.intervieweeNamesFile, kind: .interviewees)
+            if let problem = model.realNamesProblem {
+                Label(problem, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            } else if model.hasRealNameFiles {
+                HStack {
+                    Text("\(model.realNames.count) real name\(model.realNames.count == 1 ? "" : "s") loaded.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Toggle("Show real names", isOn: Binding(get: { model.showRealNames }, set: { model.showRealNames = $0 }))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Button("Reload") { model.loadRealNames() }
+                        .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    func row(_ title: String, path: String, kind: AppModel.PeopleKind) -> some View {
+        LabeledField(title) {
+            HStack {
+                Text(path.isEmpty ? "No mapping file" : path)
+                    .font(.callout.monospaced())
+                    .foregroundStyle(path.isEmpty ? Color.secondary : Color.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button("Choose…") { model.chooseNamesFile(kind) }
+                Button("Save Template…") { model.saveNamesTemplate(kind) }
+                    .help("Save a CSV listing everyone's key and pseudonym, to fill in with real names")
+                if !path.isEmpty {
+                    Button("Clear") { model.setNamesFile(kind, "") }
+                }
+            }
+            .controlSize(.small)
+        }
     }
 }

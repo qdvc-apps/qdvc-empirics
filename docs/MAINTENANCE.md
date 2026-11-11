@@ -77,20 +77,35 @@ changes nothing unless the generator changed.
 | `Interlocutors.swift` | `TurnDetector`: speaker candidates, turns, name suggestions |
 | `FullTexts.swift` | read-only `FullTexts`, `TextNormaliser`, `Anchoring` (re-finding selections) |
 | `SHA256.swift` | fingerprints |
+| `RealNames.swift` | `CSV` reader and writer; `RealNames` (mapping files, templates) |
 
 Core type names avoid SwiftUI, AppKit and Foundation names (QDVC Progress hit
 `GridRow`, Response Letter `Section`): hence `QDACode`, `CodingLayer`,
 `CodeSelection`, `TextSpan`. Check new public names.
 
 The app (`QDVCEmpirics`): `EmpiricsApp` (scenes, delegate, menus),
-`Welcome`, `AppModel` (state, opening, saving, undo, documents,
-interlocutors, response sheets; `@Observable`, main actor), `AppModel+Coding`
-(coding operations, files, layers), `DeviceStore` (UserDefaults and
-security-scoped bookmarks), `ContentView` (split view, sidebar, toolbar,
-document page), `TextCodingView` (text view, decorations, margins, keys),
-`PDFCodingView`, `CodingBar` (coding bar, quick codes, code palette),
-`InspectorView`, `CodesPage`, `CodebooksPage` (and the response sheet),
-`Pages` (People, Layers, Project), `Sheets`, `SettingsView`, `Style`.
+`Welcome`, `AppModel` (state, opening, saving, undo, navigation and the
+Working Area, documents, interlocutors, response sheets, real names;
+`@Observable`, main actor), `AppModel+Coding` (coding operations, files,
+layers), `DeviceStore` (UserDefaults and security-scoped bookmarks),
+`ContentView` (split view, sidebar and Working Area, toolbar, document page),
+`ListPages` (the tables), `ItemPages` (code, codebook and person pages),
+`TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
+`CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
+by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
+response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
+`SettingsView`, `Style`.
+
+Navigation is `AppModel.sidebar` (a `SidebarItem`: a list page or an item's
+page). Open item pages with `show(_:)`, which adds them to the Working
+Area; `sidebarChanged(from:)` (from the view's `onChange`) records history
+and resets per-page state. Tables bind their selection to
+`AppModel.tableSelection`, which the inspector reads.
+
+SwiftUI Tables and long closure chains are slow to type-check: give table
+columns explicit row types (`{ (f: EmpiricalFile) in … }`), keep cells
+simple, and split sorts into statements (the compiler gave up on one chain
+in `CodingBar`).
 
 ### 2.1 Changes, undo and saving
 
@@ -149,6 +164,9 @@ Nothing may touch the network:
   `.securityScopeAllowOnlyReadAccess`.
 - Consent forms are shown in-app (`ConsentViewer`), never opened in another
   app.
+- Real-name mapping files are read with `FullTexts`; the names stay in
+  `AppModel.realNames` (memory only). Never write real names to the
+  workspace, UserDefaults or logs.
 - New projects refuse nested workspace and full-texts folders.
 
 ## 5. Behaviour to preserve (tests)

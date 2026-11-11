@@ -2,88 +2,9 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// Codebooks: ordered questions, each with a short label, the full
-/// question, the kind of answer, and whether it is mandatory.
-struct CodebooksPage: View {
-    @Environment(AppModel.self) private var model
-    @State private var selected: String?
-
-    var body: some View {
-        let books = model.project.sortedCodebooks
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                List(selection: $selected) {
-                    ForEach(books) { cb in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(cb.title).lineLimit(1)
-                            Text("\(cb.questions.count) question\(cb.questions.count == 1 ? "" : "s") · " +
-                                 CodebookTarget.allCases.filter { cb.appliesTo.contains($0) }.map(\.label).joined(separator: ", "))
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        .tag(cb.key)
-                        .contextMenu {
-                            Button("Delete Codebook…") { delete(cb) }
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-                Divider()
-                HStack {
-                    Button {
-                        let key = model.project.newKey(Keys.codebook)
-                        model.perform("New Codebook") { p in
-                            p.codebooks[key] = Codebook(key: key, title: "New Codebook", appliesTo: [.files])
-                        }
-                        selected = key
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("New codebook")
-                    Spacer()
-                }
-                .padding(8)
-            }
-            .frame(width: 260)
-            Divider()
-            if let key = selected ?? books.first?.key, let cb = model.project.codebooks[key] {
-                CodebookEditor(codebook: cb, delete: { delete(cb) })
-                    .id(key)
-            } else {
-                ContentUnavailableView {
-                    Label("No Codebooks", systemImage: "list.bullet.clipboard")
-                } description: {
-                    Text("A codebook is a set of questions you answer about each empirical file, open code or axial code it is associated with.")
-                } actions: {
-                    Button("New Codebook") {
-                        let key = model.project.newKey(Keys.codebook)
-                        model.perform("New Codebook") { p in
-                            p.codebooks[key] = Codebook(key: key, title: "New Codebook", appliesTo: [.files])
-                        }
-                        selected = key
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-
-    func delete(_ cb: Codebook) {
-        let sheets = model.project.responses.keys.filter { $0.codebook == cb.key }.count
-        let alert = NSAlert()
-        alert.messageText = "Delete the codebook “\(cb.title)”?"
-        alert.informativeText = sheets == 0
-            ? "It is removed from every file and code it is associated with."
-            : "Its \(sheets) response sheet\(sheets == 1 ? "" : "s") are deleted too. You can undo this while the project is open."
-        alert.addButton(withTitle: "Delete")
-        alert.addButton(withTitle: "Cancel")
-        alert.buttons.first?.hasDestructiveAction = true
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        model.perform("Delete Codebook") { p in p.deleteCodebook(cb.key) }
-        if selected == cb.key { selected = nil }
-    }
-}
-
+/// A codebook's own page: its title, what it applies to, and its
+/// questions, each with a short label, the full question, the kind of
+/// answer, and whether it is mandatory.
 struct CodebookEditor: View {
     @Environment(AppModel.self) private var model
     var codebook: Codebook
@@ -288,7 +209,7 @@ struct ResponseSheetView: View {
                     Text(codebook.title).font(.title2.weight(.semibold))
                     Text(targetTitle).foregroundStyle(.secondary)
                     if !id.researcher.isEmpty {
-                        Text("Answers by \(model.project.personName(id.researcher) ?? "unknown researcher")")
+                        Text("Answers by \(model.personName(id.researcher) ?? "unknown researcher")")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if !codebook.description.isEmpty {

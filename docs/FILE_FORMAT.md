@@ -65,6 +65,9 @@ description: Optional, may be multi-line
 store_quotes: true                # write selection text into the workspace
 interlocutor_layer: true
 interrelation_types: [Compare, Contrast]
+real_names:                       # optional: mapping files, relative to the full-texts folder
+  researchers: private/researchers-real-names.csv
+  interviewees: private/interviewees-real-names.csv
 layers: [l-0a1b2c3d, l-4e5f6a7b]  # display order; folders not listed are added
 ```
 
@@ -212,14 +215,15 @@ A sheet can't be saved while a mandatory, blocking question is unanswered.
 ## people/researchers.yml, people/interviewees.yml
 
 ```yaml
+# First and last names are pseudonyms. Real names, if mapped, stay in the full-texts folder.
 researchers:
   - key: r-a11ce000
-    first: Alice                  # real names
+    first: Alice                  # pseudonyms
     last: Bob
 ```
 
 ```yaml
-# First and last names are pseudonyms. Consent forms stay in the full-texts folder.
+# First and last names are pseudonyms. Real names (if mapped) and consent forms stay in the full-texts folder.
 interviewees:
   - key: i-05a17400
     first: John                   # pseudonyms
@@ -243,9 +247,26 @@ Labels compare without case, extra spaces, colons or emphasis marks, so
 `ALICE BOB:` and `Alice Bob` are one speaker. Turns themselves are not
 stored: they are found from the text each time.
 
+## Real-name mapping files (in the full-texts folder)
+
+Not part of the workspace: CSV files kept in the full-texts folder, one for
+researchers and one for interviewees, chosen in Project Settings. The app
+only reads them. Columns are found by their headings:
+
+```
+key,pseudonym,real_first_name,real_last_name
+i-05a17400,John Smith,Jonathan,Example-Participant
+```
+
+Rows are matched by `key`, or by `pseudonym` when the key is blank. A single
+`real_name` column may replace the first and last name columns. Project
+Settings › Save Template writes a file listing everyone's key and pseudonym,
+to fill in (it never overwrites an existing file).
+
 ## Not in the workspace
 
 Kept on each Mac (the app's UserDefaults), never in Git: recent projects;
 per project, the full-texts folder (a read-only security-scoped bookmark),
-this Mac's researcher, the active and hidden layers, quick codes per layer,
-reading positions and the last file open. Settings › Privacy forgets them.
+this Mac's researcher, the Working Area, the page last open, the active and
+hidden layers, quick codes per layer and reading positions. Settings ›
+Privacy forgets them.

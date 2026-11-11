@@ -182,7 +182,7 @@ struct SpeakersSheet: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if model.project.researchers.isEmpty && model.project.interviewees.isEmpty {
-                Label("Add researchers and interviewees on the People page first.", systemImage: "person.badge.plus")
+                Label("Add researchers and interviewees first (sidebar › Researchers, Interviewees).", systemImage: "person.badge.plus")
                     .foregroundStyle(.orange)
             }
             List {
@@ -199,12 +199,12 @@ struct SpeakersSheet: View {
                             Text("Unassigned").tag(Self.unassigned)
                             if !model.project.researchers.isEmpty {
                                 Section("Researchers") {
-                                    ForEach(model.project.researchers) { r in Text(r.fullName).tag(r.key) }
+                                    ForEach(model.project.researchers) { r in Text(model.personName(r.key) ?? "").tag(r.key) }
                                 }
                             }
                             if !model.project.interviewees.isEmpty {
                                 Section("Interviewees") {
-                                    ForEach(model.project.interviewees) { i in Text(i.fullName).tag(i.key) }
+                                    ForEach(model.project.interviewees) { i in Text(model.personName(i.key) ?? "").tag(i.key) }
                                 }
                             }
                             Divider()
@@ -505,7 +505,7 @@ struct ConsentViewer: View {
         let person = model.project.interviewee(interviewee)
         VStack(spacing: 0) {
             HStack {
-                Text("Consent form: \(person?.fullName ?? "")").font(.headline)
+                Text("Consent form: \(model.personName(interviewee) ?? "")").font(.headline)
                 Spacer()
                 Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
             }

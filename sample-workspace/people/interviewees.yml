@@ -1,4 +1,4 @@
-# First and last names are pseudonyms. Consent forms stay in the full-texts folder.
+# First and last names are pseudonyms. Real names (if mapped) and consent forms stay in the full-texts folder.
 interviewees:
   - key: i-05a17400
     first: John

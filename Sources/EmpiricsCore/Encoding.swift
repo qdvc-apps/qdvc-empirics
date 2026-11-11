@@ -42,6 +42,12 @@ extension Workspace {
         m.add("store_quotes", flag(s.storeQuotes))
         m.add("interlocutor_layer", flag(s.interlocutorLayer))
         m.add("interrelation_types", list(s.interrelationTypes))
+        if !s.researcherNamesFile.isEmpty || !s.intervieweeNamesFile.isEmpty {
+            var names = Pairs()
+            names.add("researchers", s.researcherNamesFile)
+            names.add("interviewees", s.intervieweeNamesFile)
+            m.add("real_names", names.node)
+        }
         m.add("layers", list(p.layers.map(\.key)))
         return m.node
     }
@@ -53,7 +59,9 @@ extension Workspace {
             description: n["description"]?.string ?? "",
             storeQuotes: n["store_quotes"]?.bool ?? true,
             interlocutorLayer: n["interlocutor_layer"]?.bool ?? false,
-            interrelationTypes: n["interrelation_types"].map { $0.strings } ?? ProjectSettings.defaultInterrelationTypes
+            interrelationTypes: n["interrelation_types"].map { $0.strings } ?? ProjectSettings.defaultInterrelationTypes,
+            researcherNamesFile: n["real_names"]?["researchers"]?.string ?? "",
+            intervieweeNamesFile: n["real_names"]?["interviewees"]?.string ?? ""
         )
     }
 

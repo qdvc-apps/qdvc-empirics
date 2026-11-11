@@ -36,6 +36,9 @@ final class MakeSampleTests: XCTestCase {
         let loaded = try Workspace.load(workspace)
         XCTAssertEqual(loaded.notes, [])
         XCTAssertEqual(loaded.project, project)
+        let people = project.interviewees.map { (key: $0.key, pseudonym: $0.fullName) }
+        let names = try RealNames.read(try FullTexts(root: fullTexts).text(project.settings.intervieweeNamesFile), people: people)
+        XCTAssertEqual(names["i-05a17400"], "Jonathan Example-Participant")
         if ProcessInfo.processInfo.environment["MAKE_SAMPLE"] == nil {
             try? FileManager.default.removeItem(at: root)
         }
@@ -135,12 +138,24 @@ final class MakeSampleTests: XCTestCase {
             .write(to: root.appendingPathComponent("consent/john-smith.pdf"))
         try Self.pdf(pages: [["SAMPLE CONSENT FORM", "", "Participant pseudonym: Priya Natarajan", "Signed: (sample only)"]])
             .write(to: root.appendingPathComponent("consent/priya-natarajan.pdf"))
+        // Real-name mapping files (the "real" names here are invented too).
+        try fm.createDirectory(at: root.appendingPathComponent("private"), withIntermediateDirectories: true)
+        try """
+        key,pseudonym,real_first_name,real_last_name
+        r-a11ce000,Alice Bob,Alexandra,Example-Researcher
+        """.write(to: root.appendingPathComponent("private/researchers-real-names.csv"), atomically: true, encoding: .utf8)
+        try """
+        key,pseudonym,real_first_name,real_last_name
+        i-05a17400,John Smith,Jonathan,Example-Participant
+        i-0c0ffee0,Priya Natarajan,Padma,Example-Participant
+        """.write(to: root.appendingPathComponent("private/interviewees-real-names.csv"), atomically: true, encoding: .utf8)
         try """
         Full-texts for the QDVC Empirics sample project.
 
-        In a real project this folder holds interview transcripts, articles and
-        signed consent forms. It is never put in the workspace or in Git; the app
-        only ever reads it.
+        In a real project this folder holds interview transcripts, articles,
+        signed consent forms and the real-name mapping files (private/). It is
+        never put in the workspace or in Git; the app only ever reads it. The
+        names in this sample, pseudonyms and "real" names alike, are invented.
         """.write(to: root.appendingPathComponent("README.txt"), atomically: true, encoding: .utf8)
     }
 
@@ -188,7 +203,9 @@ final class MakeSampleTests: XCTestCase {
     func buildProject(_ ft: FullTexts) throws -> Project {
         var p = Project(settings: ProjectSettings(key: "p-5a3f1c20", title: "Using QDA software (sample)",
                                                   description: "A small sample project: two interviews about qualitative data analysis software, field notes and a short PDF.",
-                                                  interlocutorLayer: true))
+                                                  interlocutorLayer: true,
+                                                  researcherNamesFile: "private/researchers-real-names.csv",
+                                                  intervieweeNamesFile: "private/interviewees-real-names.csv"))
         p.layers = [CodingLayer(key: "l-0a1b2c3d", name: "Main", description: "First reading", researcher: "r-a11ce000"),
                     CodingLayer(key: "l-4e5f6a7b", name: "Affordances lens", description: "Rereading with an affordances lens",
                                 researcher: "r-a11ce000")]

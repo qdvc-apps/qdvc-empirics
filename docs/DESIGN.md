@@ -35,18 +35,34 @@ Welcome window at launch, as in Xcode and the other QDVC apps. The main
 window is a standard NavigationSplitView (sidebar, detail) with a standard
 inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 
-- **Sidebar.** Analysis pages (Codes, Codebooks, People, Layers, Project)
-  above the empirical files. Files show their status (Not Started, In
-  Progress, Coded), ID, date, kind and selection count; a progress bar and a
-  filter field sit at the bottom.
+- **Sidebar.** Three sections, in the spirit of Mail's mailboxes above its
+  smart mailboxes: *Project* (Empirical Files, Researchers, Interviewees,
+  Project Settings), *Analysis* (Codebooks, Open Codes, Axial Codes,
+  Layers), and the *Working Area*: the items being worked on, like open
+  documents. Double-clicking a row in any table opens its page and puts it
+  there; it is kept on this Mac, in the order you drag it to. Moving to the
+  next file (⌥⌘], ⌥⌘N) swaps the file in its place, so a session of coding
+  file after file doesn't fill the Working Area. A progress bar of coded
+  files sits at the bottom.
+- **List pages** are plain Tables (sortable columns, a filter, add buttons
+  in a bar at the bottom), as in Finder's list view: selecting a row shows
+  it in the inspector, double-clicking opens it.
+- **Item pages.** An empirical file (the document), a code (its evidence), a
+  codebook (its questions), a person (a card laid out like Contacts, with a
+  monogram, labelled fields and the transcripts they speak in).
+- **Back and Forward** in the toolbar (⌃⌘← / ⌃⌘→), as in Finder and Safari,
+  since following a code from a quote and back is a common move.
 - **Document.** Text in a readable column, the Interlocutor layer's speaker
   names in a left margin (researchers blue, interviewees green), coding
   stripes in a right margin, and the coding bar below. The code palette
   floats at the top, like Spotlight.
-- **Inspector.** Selection (quote, speaker, codes with interpretation memos),
-  Code (name, kind, colour, quick-code slot, description, evidence,
-  "evidence for", comments, questions, interrelations, codebooks) and File
-  (title, ID, date, status, location, fingerprint, codebooks, speakers).
+- **Inspector.** Follows the page. On a file: Selection (quote, speaker,
+  codes with interpretation memos) and File (title, ID, date, status,
+  location, fingerprint, codebooks, speakers). On a code: the code (name,
+  kind, colour, quick-code slot, description, "evidence for", comments,
+  questions, interrelations, codebooks). On a codebook: where it is used and
+  how complete your sheets are. On a person: what they are linked to. On a
+  list page: the selected row.
 
 ## Text documents
 
@@ -87,8 +103,13 @@ nothing could be written back to the file. Links in PDFs are never followed
 - Where the full-texts are, and who the researcher is, are remembered per
   project per Mac (UserDefaults in the sandbox container), never in the
   workspace; Settings › Privacy shows and forgets them.
-- Interviewee names are pseudonyms; People says so, and the YAML file says so
-  in a comment.
+- Researchers' and interviewees' names are pseudonyms; the pages say so, and
+  the YAML files say so in a comment. Real names live only in mapping files
+  in the full-texts folder, are read into memory, and are shown only while
+  View › Show Real Names is on, which resets at every launch (screen sharing
+  is common in supervision meetings). The only file the app ever writes
+  outside the workspace is a mapping template, and only when asked, through a
+  save panel, never over an existing file, and never into the workspace.
 - No network: no network entitlement, no dependencies, no networking API
   (checked by a unit test), no link following, outside-service menu items
   removed, Writing Tools disabled.
@@ -127,3 +148,7 @@ The Interlocutor layer is not a coding layer: it is derived from the text
   otherwise there is one sheet per codebook and item.
 - Removing a file from the project removes its selections in every layer;
   the full-text is untouched.
+- Researchers' pages are reachable by double-click like the others, though
+  the specification listed double-click for interviewees only.
+- Opening a code from a chip or a quote puts it in the Working Area, like a
+  double-click: the page needs a sidebar row to come back to.

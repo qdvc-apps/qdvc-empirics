@@ -2,168 +2,6 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// A code in the outline: axial codes contain what they are built from.
-/// A code built into several axial codes appears under each.
-struct CodeNode: Identifiable {
-    var id: String
-    var code: QDACode
-    var children: [CodeNode]?
-}
-
-/// The codes of the active layer, and the evidence for the one chosen:
-/// every quote, grouped by file, with its interpretation memo.
-struct CodesPage: View {
-    @Environment(AppModel.self) private var model
-    @State private var filter = ""
-
-    var body: some View {
-        HStack(spacing: 0) {
-            codeList
-                .frame(width: 300)
-            Divider()
-            Group {
-                if let key = model.focusedCode, let code = model.project.code(key), model.index.layerOf[key] == model.activeLayerKey {
-                    EvidencePane(code: code)
-                } else {
-                    ContentUnavailableView("Choose a Code", systemImage: "tag",
-                                           description: Text("Its evidence (every quote, with your memos) appears here."))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .onChange(of: model.focusedCode) { _, new in
-            if new != nil {
-                model.inspectorTab = .code
-            }
-        }
-    }
-
-    var codes: [QDACode] {
-        (model.activeLayer.map { Array($0.codes.values) } ?? [])
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
-    func tree() -> [CodeNode] {
-        guard let layer = model.activeLayer else { return [] }
-        func node(_ c: QDACode, path: String, depth: Int) -> CodeNode {
-            let id = path + "/" + c.key
-            guard c.kind == .axial, depth < 12 else { return CodeNode(id: id, code: c, children: nil) }
-            var children: [QDACode] = c.evidence.compactMap { e in layer.codes[e.target] }
-            children.sort { a, b in
-                if a.kind != b.kind { return a.kind == .axial }
-                return a.name.localizedStandardCompare(b.name) == .orderedAscending
-            }
-            let kids: [CodeNode] = children.map { child in node(child, path: id, depth: depth + 1) }
-            return CodeNode(id: id, code: c, children: kids.isEmpty ? nil : kids)
-        }
-        return codes.filter { $0.kind == .axial && (model.index.parents[$0.key] ?? []).isEmpty }
-            .map { node($0, path: "", depth: 0) }
-    }
-
-    var codeList: some View {
-        @Bindable var model = model
-        let q = filter.trimmingCharacters(in: .whitespaces)
-        let all = codes
-        let open = all.filter { $0.kind == .open }
-        return VStack(spacing: 0) {
-            List(selection: $model.focusedCode) {
-                if !q.isEmpty {
-                    Section("Matching “\(q)”") {
-                        ForEach(all.filter { $0.name.localizedCaseInsensitiveContains(q) || $0.description.localizedCaseInsensitiveContains(q) }) { c in
-                            CodeRow(code: c).tag(c.key)
-                        }
-                    }
-                } else {
-                    let roots = tree()
-                    if !roots.isEmpty {
-                        Section("Axial Codes") {
-                            OutlineGroup(roots, children: \.children) { node in
-                                CodeRow(code: node.code).tag(node.code.key)
-                            }
-                        }
-                    }
-                    Section("Open Codes") {
-                        if open.isEmpty {
-                            Text("None yet. Select text in a file and press Return to code it.")
-                                .font(.callout).foregroundStyle(.secondary)
-                        }
-                        ForEach(open) { c in
-                            CodeRow(code: c).tag(c.key)
-                        }
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            Divider()
-            HStack(spacing: 6) {
-                Menu {
-                    Button("New Open Code…") { model.sheet = .newCode(kind: .open, parent: nil, child: nil) }
-                    Button("New Axial Code…") { model.sheet = .newCode(kind: .axial, parent: nil, child: nil) }
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .menuStyle(.button)
-                .buttonStyle(.borderless)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                TextField("Filter codes", text: $filter)
-                    .textFieldStyle(.roundedBorder)
-                    .controlSize(.small)
-                Text("\(all.count)").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-            }
-            .padding(8)
-        }
-    }
-}
-
-struct CodeRow: View {
-    @Environment(AppModel.self) private var model
-    var code: QDACode
-
-    var body: some View {
-        HStack(spacing: 7) {
-            CodeDot(color: code.color)
-            Image(systemName: code.kind.symbol).font(.caption).foregroundStyle(.secondary)
-            Text(code.name).lineLimit(1)
-            Spacer(minLength: 4)
-            if !code.questions.isEmpty {
-                Image(systemName: "questionmark.circle").font(.caption).foregroundStyle(.orange)
-                    .help("\(code.questions.count) open question\(code.questions.count == 1 ? "" : "s")")
-            }
-            if let slot = model.quickSlot(of: code.key) {
-                Text("\(slot)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-                    .frame(width: 14, height: 14)
-                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.08)))
-            }
-            Text("\(code.evidence.count)").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-        }
-        .contextMenu {
-            if code.kind == .open {
-                Menu("Quick Code") {
-                    ForEach(1...9, id: \.self) { n in
-                        Button {
-                            model.assignQuickCode(code.key, slot: n)
-                        } label: {
-                            let current = model.quickCodes[n - 1]
-                            let name = model.project.code(current)?.name
-                            Text("\(n)" + (name.map { "  (now \($0))" } ?? ""))
-                        }
-                    }
-                    Divider()
-                    Button("None") {
-                        if let s = model.quickSlot(of: code.key) { model.assignQuickCode(nil, slot: s) }
-                    }
-                }
-            }
-            if model.project.layers.count > 1 {
-                Button("Move to Layer…") { model.sheet = .moveToLayer(code.key) }
-            }
-            Divider()
-            Button("Delete Code…") { model.deleteCode(code.key) }
-        }
-    }
-}
-
 /// Everything that evidences a code. For an open code, its quotes by file;
 /// for an axial code, the codes it is built from and their quotes.
 struct EvidencePane: View {
@@ -248,7 +86,7 @@ struct EvidencePane: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     CodeChip(code: child)
-                        .onTapGesture { model.focusedCode = child.key }
+                        .onTapGesture { model.showCode(child.key) }
                     Spacer()
                 }
                 let memo = code.memo(for: child.key)
@@ -309,7 +147,7 @@ struct QuoteCard: View {
                 }
                 let others = (model.index.codesForSelection[s.key] ?? []).filter { $0 != code.key }.compactMap { model.project.code($0) }
                 ForEach(others.prefix(4)) { o in
-                    CodeChip(code: o, compact: true).onTapGesture { model.focusedCode = o.key }
+                    CodeChip(code: o, compact: true).onTapGesture { model.showCode(o.key) }
                 }
                 Spacer()
                 if model.isLost(s.key) {

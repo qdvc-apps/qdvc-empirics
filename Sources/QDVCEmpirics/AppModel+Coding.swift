@@ -214,7 +214,16 @@ extension AppModel {
             if let child { try p.addEvidence(code: c, target: child) }
             made = c
         }
-        if let made { showCode(made) }
+        if let made {
+            if sidebar == .openCodes || sidebar == .axialCodes {
+                sidebar = kind == .open ? .openCodes : .axialCodes
+                tableSelection = made
+            } else if case .code = sidebar {
+                notice = Notice(text: "Created “\(name)”.", action: NoticeAction(title: "Open") { [weak self] in self?.openKey(made) })
+            } else {
+                show(.code(made))
+            }
+        }
         return made
     }
 
@@ -268,7 +277,6 @@ extension AppModel {
         notice = Notice(text: "Moved \(moved.selections.count) selection\(moved.selections.count == 1 ? "" : "s") and \(moved.codes.count) code\(moved.codes.count == 1 ? "" : "s") to \(name).",
                         action: NoticeAction(title: "Switch to \(name)") { [weak self] in self?.setActiveLayer(layer) })
         focusedSelection = nil
-        focusedCode = nil
     }
 
     func addLayer(named name: String) {
@@ -352,8 +360,8 @@ extension AppModel {
             }
         }
         if let first = added.first {
-            sidebar = .file(first)
-            sidebarChanged()
+            if sidebar != .files { sidebar = .files }
+            tableSelection = first
         }
     }
 
@@ -381,8 +389,7 @@ extension AppModel {
         let start = openFileKey.flatMap { k in files.firstIndex { $0.key == k } } ?? -1
         let rotated = Array(files.dropFirst(start + 1)) + Array(files.prefix(start + 1))
         if let next = rotated.first(where: { $0.status != .coded && $0.key != openFileKey }) {
-            sidebar = .file(next.key)
-            sidebarChanged()
+            moveOn(to: next.key)
         } else {
             notice = Notice(text: "Every file is marked Coded.")
         }

@@ -6,4 +6,7 @@ description: "A small sample project: two interviews about qualitative data anal
 store_quotes: true
 interlocutor_layer: true
 interrelation_types: [Compare, Contrast]
+real_names:
+  researchers: private/researchers-real-names.csv
+  interviewees: private/interviewees-real-names.csv
 layers: [l-0a1b2c3d, l-4e5f6a7b]

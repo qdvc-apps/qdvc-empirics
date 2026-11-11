@@ -133,6 +133,12 @@ struct EmpiricsCommands: Commands {
                     .keyboardShortcut("i", modifiers: [.command, .control])
             }
             Divider()
+            Toggle("Show Real Names", isOn: Binding(get: { model.showRealNames }, set: { model.showRealNames = $0 }))
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(!model.hasRealNameFiles)
+            Button("Reload Real Names") { model.loadRealNames() }
+                .disabled(!model.hasRealNameFiles)
+            Divider()
             Button("Reload from Disk") { model.checkForOutsideChanges(force: true) }
                 .keyboardShortcut("r")
                 .disabled(!model.isOpen)
@@ -192,8 +198,17 @@ struct EmpiricsCommands: Commands {
                 .keyboardShortcut("c", modifiers: [.command, .control])
                 .disabled(!inFile)
             Divider()
-            let pages: [(String, SidebarItem)] = [("Codes", .codes), ("Codebooks", .codebooks), ("People", .people),
-                                                  ("Layers", .layers), ("Project", .project)]
+            Button("Back") { model.goBack() }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .control])
+                .disabled(!model.canGoBack)
+            Button("Forward") { model.goForward() }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .control])
+                .disabled(!model.canGoForward)
+            Divider()
+            let pages: [(String, SidebarItem)] = [("Empirical Files", .files), ("Researchers", .researchers),
+                                                  ("Interviewees", .interviewees), ("Project Settings", .settings),
+                                                  ("Codebooks", .codebooks), ("Open Codes", .openCodes),
+                                                  ("Axial Codes", .axialCodes), ("Layers", .layers)]
             ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
                 Button(page.0) { model.sidebar = page.1 }
                     .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .control])

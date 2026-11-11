@@ -2,14 +2,12 @@
 """Generate the app icon: Resources/AppIcon.svg (vector master) and
 Resources/AppIcon.icns (every macOS size, rendered natively from the vector).
 
-The design is a frosted-glass page of a transcript being coded: lines of
-text, three of them swept with highlighter in code colours (yellow, blue,
-green), the matching coding stripes in the margin, and a speaker's name in
-bold at the start of each turn; sealed with an amber badge carrying a white
-magnifying glass: empirical inquiry. It is drawn in the macOS 26 Liquid
-Glass style, in the "Sage" palette (pale mint to deep teal), and follows the
-icons of QDVC Response Letter, Progress, Meetings, Nice Mail, Bibliotheca
-and GTD EML for macOS, so the apps look like a family.
+The design is a well-worked book: open on two pages of text swept with
+highlighter, margin notes and a circled word in pen, a sticky note on the
+right-hand page, more sticky notes and paper flags poking out of its edges,
+and two ribbon bookmarks hanging from the spine, all on a pale cantaloupe
+gradient. It keeps the family's construction (QDVC Response Letter,
+Progress, Meetings…): Apple's tile, a soft glow and sheen, tinted shadows.
 
 Geometry follows Apple's macOS icon template: a 1024x1024 canvas holding an
 824x824 tile (100 px transparent margin) with a 185.4 px continuous-curvature
@@ -38,20 +36,19 @@ ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = ROOT / "Resources"
 
 # ---------------------------------------------------------------------------
-# Palette ("Sage"). The deep tone also tints the card's shadows, so the
-# white glass stays distinct from the pale background.
+# Palette: pale cantaloupe, with a deep teal cover for contrast.
 
-BG_TOP = "#EEF7F3"
-BG_DEEP = "#2F7A6B"
+BG_TOP = "#FFF1E0"
+BG_DEEP = "#F7B07A"
+SHADOW_TINT = "#B9612A"
 
-# The app's own code colours (EmpiricsCore CodePalette).
-CODES = ["#F2C14E", "#5BC0EB", "#9BC53D"]
-INK = "#8E99A8"
-SPEAKER_INK = "#3A4656"
-
-# The seal: an amber sphere with a white magnifying glass.
-FACE_LIGHT, FACE_MID, FACE_DARK = "#FFD58A", "#F0962A", "#9C4E0B"
-FEATURES = "#FFFFFF"
+COVER, COVER_DARK = "#2E6E72", "#1E4C50"
+PAPER, PAPER_SHADE = "#FFFDF8", "#EFE6D8"
+INK = "#A9A39A"
+HIGHLIGHTS = ["#FFD84D", "#FF9EC0", "#9EE37D", "#7FD0FF"]
+PEN_RED, PEN_BLUE = "#D9433B", "#2F5AA8"
+NOTES = ["#FFE066", "#FF9EC0", "#8FD3FF", "#A8E6A1", "#FFB86B"]
+RIBBONS = ["#C7372F", "#E3A72F"]
 
 # ---------------------------------------------------------------------------
 # Apple's template geometry.
@@ -96,133 +93,143 @@ def continuous_rounded_rect(x, y, w, h, r):
 
 TILE = continuous_rounded_rect(TILE_ORIGIN, TILE_ORIGIN, TILE_SIZE, TILE_SIZE, CORNER_RADIUS)
 
-# The card (x, y, width, height) and the seal's radius. The seal sits on the
-# card's lower right corner.
-CARD = (196, 236, 592, 520)
-SEAL_RADIUS = 118
+
+def _note(x, y, w, h, angle, colour, lines=0):
+    """A sticky note: a square with a darker fold at the bottom edge and,
+    optionally, scribbled lines."""
+    cx, cy = x + w / 2, y + h / 2
+    parts = [f'<g transform="rotate({angle} {cx:.1f} {cy:.1f})" filter="url(#note)">',
+             f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="5" fill="{colour}"/>',
+             f'<rect x="{x}" y="{y + h - 12}" width="{w}" height="12" rx="5" fill="#000000" fill-opacity="0.07"/>']
+    for i in range(lines):
+        ly = y + 26 + i * 18
+        lw = w * (0.72 if i % 2 == 0 else 0.5)
+        parts.append(f'<path d="M{x + 14} {ly} q{lw / 4:.1f} -6 {lw / 2:.1f} 0 t{lw / 2:.1f} 0" fill="none" '
+                     f'stroke="{PEN_BLUE}" stroke-opacity="0.75" stroke-width="5" stroke-linecap="round"/>')
+    parts.append('</g>')
+    return parts
 
 
-def _hex2rgb(h):
-    h = h.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-
-
-def _mix(a, b, t):
-    ra, rb = _hex2rgb(a), _hex2rgb(b)
-    return "#%02X%02X%02X" % tuple(round(x + (y - x) * t) for x, y in zip(ra, rb))
-
-
-# Turns: (speaker name width, [(line width, highlight index or None)]).
-TURNS = [
-    (0.32, [(1.0, None), (0.92, 0), (0.55, 0)]),
-    (0.26, [(0.97, None), (1.0, 1), (0.62, None)]),
-    (0.32, [(0.88, 2), (0.70, None)]),
-]
-
-
-def _card():
-    """The frosted-glass page. Returns (elements, seal centre)."""
-    x, y, w, h = CARD
-    pad = 50
-    stripe_w = 64
-    text_x = x + pad
-    text_w = w - 2 * pad - stripe_w
-    stripe_x = text_x + text_w + 28
-    parts = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="56" fill="url(#glass)"/>']
-    line_h, gap = 16, 18
-    yy = y + 56
-    stripes = {}
-    for name_w, lines in TURNS:
-        # The speaker's name, bold and dark.
-        parts.append(f'<rect x="{text_x}" y="{yy}" width="{text_w * name_w:.1f}" height="{line_h + 4}" rx="10" '
-                     f'fill="{SPEAKER_INK}"/>')
-        yy += line_h + 4 + gap
-        for frac, hl in lines:
-            lw = text_w * frac
+def _book():
+    """The open book, with its notes, flags, ribbons and markings."""
+    left, right, spine = 196, 828, 512
+    top, bottom = 352, 760
+    parts = []
+    # Sticky notes and flags tucked between the pages (drawn first, so the
+    # pages cover their lower parts).
+    parts += _note(258, 262, 92, 120, -9, NOTES[2])
+    parts += _note(566, 248, 96, 130, 7, NOTES[0])
+    parts += _note(682, 272, 86, 112, -4, NOTES[1])
+    for i, (y, colour) in enumerate([(430, NOTES[3]), (500, NOTES[4]), (570, NOTES[1])]):
+        parts.append(f'<rect x="{right - 40}" y="{y}" width="{118 - i * 12}" height="34" rx="6" fill="{colour}" '
+                     'filter="url(#note)"/>')
+    # Ribbons from the spine.
+    for i, (dx, length, colour) in enumerate([(-22, 150, RIBBONS[0]), (8, 118, RIBBONS[1])]):
+        x0 = spine + dx
+        y1 = bottom + length
+        parts.append(f'<path d="M{x0} {bottom - 30} L{x0 + 20} {bottom - 30} L{x0 + 20} {y1} L{x0 + 10} {y1 - 14} '
+                     f'L{x0} {y1} Z" fill="{colour}"/>')
+    # The cover, under the pages.
+    parts.append(f'<path d="M{left - 22} {top + 8} Q{(left + spine) / 2} {top - 8} {spine} {top + 26} '
+                 f'Q{(spine + right) / 2} {top - 8} {right + 22} {top + 8} L{right + 22} {bottom + 34} '
+                 f'Q{(spine + right) / 2} {bottom + 14} {spine} {bottom + 44} Q{(left + spine) / 2} {bottom + 14} '
+                 f'{left - 22} {bottom + 34} Z" fill="url(#cover)"/>')
+    # Page edges (the block of paper), then the two pages.
+    for k in (3, 2, 1):
+        o = k * 6
+        parts.append(f'<path d="M{left - o / 2} {top + o} Q{(left + spine) / 2} {top - 14 + o} {spine} {top + 16 + o} '
+                     f'L{spine} {bottom + 14 + o} Q{(left + spine) / 2} {bottom - 14 + o} {left - o / 2} {bottom + o} Z" '
+                     f'fill="{PAPER_SHADE}"/>')
+        parts.append(f'<path d="M{right + o / 2} {top + o} Q{(spine + right) / 2} {top - 14 + o} {spine} {top + 16 + o} '
+                     f'L{spine} {bottom + 14 + o} Q{(spine + right) / 2} {bottom - 14 + o} {right + o / 2} {bottom + o} Z" '
+                     f'fill="{PAPER_SHADE}"/>')
+    parts.append(f'<path d="M{left} {top} Q{(left + spine) / 2} {top - 22} {spine} {top + 14} L{spine} {bottom + 14} '
+                 f'Q{(left + spine) / 2} {bottom - 22} {left} {bottom} Z" fill="url(#pageL)"/>')
+    parts.append(f'<path d="M{right} {top} Q{(spine + right) / 2} {top - 22} {spine} {top + 14} L{spine} {bottom + 14} '
+                 f'Q{(spine + right) / 2} {bottom - 22} {right} {bottom} Z" fill="url(#pageR)"/>')
+    # Text, with highlights behind some lines.
+    line_h, gap = 13, 25
+    left_lines = [(1.0, None), (0.94, 0), (0.98, 0), (0.6, None), (1.0, None), (0.9, 2), (0.97, None), (0.7, None),
+                  (1.0, 1), (0.55, None)]
+    right_lines = [(0.95, None), (1.0, 3), (0.8, None), (1.0, None), (0.6, None), (0.92, 1), (1.0, None), (0.85, 2),
+                   (0.5, None)]
+    def text_block(x0, width, lines):
+        out = []
+        for i, (frac, hl) in enumerate(lines):
+            y = top + 58 + i * (line_h + gap)
+            w = width * frac
             if hl is not None:
-                parts.append(f'<rect x="{text_x - 10}" y="{yy - 9}" width="{lw + 20:.1f}" height="{line_h + 18}" rx="9" '
-                             f'fill="{CODES[hl]}" fill-opacity="0.85"/>')
-                top, bottom = stripes.get(hl, (yy - 9, yy + line_h + 9))
-                stripes[hl] = (min(top, yy - 9), max(bottom, yy + line_h + 9))
-            parts.append(f'<rect x="{text_x}" y="{yy}" width="{lw:.1f}" height="{line_h}" rx="8" fill="{INK}"/>')
-            yy += line_h + gap
-        yy += 14
-    # Coding stripes in the margin, level with their highlights.
-    for i, (top, bottom) in sorted(stripes.items()):
-        parts.append(f'<rect x="{stripe_x + i * 4}" y="{top}" width="16" height="{bottom - top}" rx="8" fill="{CODES[i]}"/>')
-    # glass rim
-    parts.append(f'<rect x="{x + 2}" y="{y + 2}" width="{w - 4}" height="{h - 4}" rx="54" fill="none" '
-                 'stroke="url(#rim)" stroke-width="4"/>')
-    return parts, (x + w - 46, y + h - 40)
-
-
-def _seal(cx, cy, r):
-    """A glossy amber seal with a white magnifying glass, in a white ring."""
-    s = r * 0.5
-    lens_cx, lens_cy, lens_r = cx - s * 0.22, cy - s * 0.22, s * 0.62
-    hx0, hy0 = lens_cx + lens_r * 0.72, lens_cy + lens_r * 0.72
-    hx1, hy1 = cx + s * 0.92, cy + s * 0.92
-    return [
-        f'<circle cx="{cx}" cy="{cy}" r="{r + 10}" fill="#FFFFFF" opacity="0.9"/>',
-        f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="url(#face)"/>',
-        f'<circle cx="{lens_cx:.1f}" cy="{lens_cy:.1f}" r="{lens_r:.1f}" fill="none" stroke="{FEATURES}" '
-        f'stroke-width="{r * 0.13:.1f}"/>',
-        f'<line x1="{hx0:.1f}" y1="{hy0:.1f}" x2="{hx1:.1f}" y2="{hy1:.1f}" stroke="{FEATURES}" '
-        f'stroke-width="{r * 0.17:.1f}" stroke-linecap="round"/>',
-        # specular highlight
-        f'<ellipse cx="{cx - r * 0.30:.1f}" cy="{cy - r * 0.55:.1f}" rx="{r * 0.38:.1f}" '
-        f'ry="{r * 0.18:.1f}" fill="#FFFFFF" opacity="0.40"/>',
-    ]
+                out.append(f'<rect x="{x0 - 8}" y="{y - 9}" width="{w + 16:.1f}" height="{line_h + 18}" rx="7" '
+                           f'fill="{HIGHLIGHTS[hl]}" fill-opacity="0.75"/>')
+            out.append(f'<rect x="{x0}" y="{y}" width="{w:.1f}" height="{line_h}" rx="6.5" fill="{INK}"/>')
+        return out
+    parts += text_block(left + 62, spine - left - 104, left_lines)
+    parts += text_block(spine + 42, right - spine - 104, right_lines)
+    # Pen: a margin bracket and squiggle on the left page, an underline, a
+    # circled word and a star on the right.
+    parts.append(f'<path d="M{left + 34} {top + 96} q-12 0 -12 14 v52 q0 8 -8 10 q8 2 8 10 v52 q0 14 12 14" '
+                 f'fill="none" stroke="{PEN_RED}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>')
+    parts.append(f'<path d="M{left + 62} {top + 345} q20 -12 40 0 t40 0 t40 0 t40 0" fill="none" stroke="{PEN_RED}" '
+                 'stroke-width="6" stroke-linecap="round"/>')
+    parts.append(f'<ellipse cx="{spine + 150}" cy="{top + 141}" rx="70" ry="26" fill="none" stroke="{PEN_BLUE}" '
+                 'stroke-width="6" transform="rotate(-4 662 493)"/>')
+    sx, sy = right - 32, top + 236
+    star = " ".join(f"{sx + r * __import__('math').cos(__import__('math').radians(a)):.1f},"
+                    f"{sy + r * __import__('math').sin(__import__('math').radians(a)):.1f}"
+                    for a, r in zip(range(-90, 270, 36), [20, 8] * 5))
+    parts.append(f'<polygon points="{star}" fill="none" stroke="{PEN_RED}" stroke-width="5" stroke-linejoin="round"/>')
+    # A sticky note stuck on the right-hand page, with writing on it.
+    parts += _note(spine + 166, top + 268, 112, 104, 5, NOTES[0], lines=3)
+    # The shadow in the gutter.
+    parts.append(f'<rect x="{spine - 26}" y="{top}" width="52" height="{bottom - top + 16}" fill="url(#gutter)"/>')
+    return parts
 
 
 def icon_svg():
     sigma = SHADOW_BLUR_RADIUS / 2
     defs = [
-        f'<linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">'
+        f'<linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">'
         f'<stop offset="0" stop-color="{BG_TOP}"/><stop offset="1" stop-color="{BG_DEEP}"/></linearGradient>',
         '<radialGradient id="glow" cx="0.30" cy="0.18" r="0.75">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.34"/>'
+        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>'
         '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>',
         '<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>'
+        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>'
         '<stop offset="0.40" stop-color="#FFFFFF" stop-opacity="0.03"/>'
         '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>',
-        '<linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>'
-        '<stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.3"/>'
-        '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0.6"/></linearGradient>',
         '<linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.75"/>'
-        '<stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.12"/>'
+        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.8"/>'
+        '<stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.15"/>'
         '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0.35"/></linearGradient>',
-        '<linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.78"/>'
-        f'<stop offset="1" stop-color="{_mix("#FFFFFF", BG_DEEP, 0.25)}" stop-opacity="0.55"/></linearGradient>',
-        '<linearGradient id="glassflap" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>'
-        '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0.62"/></linearGradient>',
-        '<radialGradient id="face" cx="0.38" cy="0.30" r="0.8">'
-        f'<stop offset="0" stop-color="{FACE_LIGHT}"/><stop offset="0.55" stop-color="{FACE_MID}"/>'
-        f'<stop offset="1" stop-color="{FACE_DARK}"/></radialGradient>',
+        f'<linearGradient id="cover" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{COVER}"/>'
+        f'<stop offset="1" stop-color="{COVER_DARK}"/></linearGradient>',
+        f'<linearGradient id="pageL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="{PAPER}"/>'
+        f'<stop offset="0.85" stop-color="{PAPER}"/><stop offset="1" stop-color="{PAPER_SHADE}"/></linearGradient>',
+        f'<linearGradient id="pageR" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="{PAPER}"/>'
+        f'<stop offset="0.85" stop-color="{PAPER}"/><stop offset="1" stop-color="{PAPER_SHADE}"/></linearGradient>',
+        '<linearGradient id="gutter" x1="0" y1="0" x2="1" y2="0">'
+        '<stop offset="0" stop-color="#000000" stop-opacity="0"/>'
+        '<stop offset="0.5" stop-color="#000000" stop-opacity="0.16"/>'
+        '<stop offset="1" stop-color="#000000" stop-opacity="0"/></linearGradient>',
         f'<clipPath id="clip"><path d="{TILE}"/></clipPath>',
-        # Apple template shadow: black, 28 px blur radius, 12 px down, 50 %.
         '<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">'
         f'<feGaussianBlur in="SourceAlpha" stdDeviation="{sigma}"/><feOffset dy="{SHADOW_OFFSET_Y}"/>'
         f'<feComponentTransfer><feFuncA type="linear" slope="{SHADOW_OPACITY}"/></feComponentTransfer>'
         '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
-        # Tinted shadow under the card and seal.
         '<filter id="objshadow" x="-30%" y="-30%" width="160%" height="160%">'
-        '<feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dx="0" dy="16"/>'
-        f'<feFlood flood-color="{BG_DEEP}" flood-opacity="0.55"/><feComposite operator="in" in2="SourceAlpha"/>'
+        '<feGaussianBlur in="SourceAlpha" stdDeviation="16"/><feOffset dx="0" dy="18"/>'
+        f'<feFlood flood-color="{SHADOW_TINT}" flood-opacity="0.45"/><feComposite operator="in" in2="SourceAlpha"/>'
+        '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
+        '<filter id="note" x="-30%" y="-30%" width="160%" height="160%">'
+        '<feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dx="0" dy="4"/>'
+        '<feComponentTransfer><feFuncA type="linear" slope="0.25"/></feComponentTransfer>'
         '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>',
     ]
-    card, (cx, cy) = _card()
-    objects = card + _seal(cx, cy, SEAL_RADIUS)
     parts = [
         f'<g filter="url(#shadow)"><path d="{TILE}" fill="url(#bg)"/></g>',
         '<g clip-path="url(#clip)">',
         '<rect x="100" y="100" width="824" height="824" fill="url(#glow)"/>',
-        '<g filter="url(#objshadow)">', *objects, '</g>',
+        '<g filter="url(#objshadow)">', *_book(), '</g>',
         '<rect x="100" y="100" width="824" height="824" fill="url(#sheen)"/>',
         '</g>',
         f'<path d="{TILE}" fill="none" stroke="url(#edge)" stroke-width="6"/>',

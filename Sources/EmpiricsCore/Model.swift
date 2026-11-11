@@ -597,6 +597,8 @@ public struct SheetCompleteness: Equatable {
 
 // MARK: - People
 
+/// A researcher. Names are pseudonyms (a real-name mapping file in the
+/// full-texts folder can map keys to real names).
 public struct Researcher: Identifiable, Equatable {
     public var key: String
     public var firstName: String
@@ -613,8 +615,9 @@ public struct Researcher: Identifiable, Equatable {
     public var fullName: String { [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ") }
 }
 
-/// An interviewee. Names are pseudonyms; the consent form is a PDF in the
-/// full-texts folder (never in the workspace).
+/// An interviewee. Names are pseudonyms (a real-name mapping file in the
+/// full-texts folder can map keys to real names); the consent form is a PDF
+/// in the full-texts folder (never in the workspace).
 public struct Interviewee: Identifiable, Equatable {
     public var key: String
     public var firstName: String
@@ -680,17 +683,25 @@ public struct ProjectSettings: Equatable {
     public var storeQuotes: Bool
     public var interlocutorLayer: Bool
     public var interrelationTypes: [String]
+    /// Real-name mapping files (CSV) for researchers and interviewees,
+    /// relative to the full-texts folder; empty if not set up. The workspace
+    /// holds only pseudonyms; real names never leave the full-texts folder.
+    public var researcherNamesFile: String
+    public var intervieweeNamesFile: String
 
     public static let defaultInterrelationTypes = ["Compare", "Contrast"]
 
     public init(key: String, title: String, description: String = "", storeQuotes: Bool = true,
-                interlocutorLayer: Bool = false, interrelationTypes: [String] = ProjectSettings.defaultInterrelationTypes) {
+                interlocutorLayer: Bool = false, interrelationTypes: [String] = ProjectSettings.defaultInterrelationTypes,
+                researcherNamesFile: String = "", intervieweeNamesFile: String = "") {
         self.key = key
         self.title = title
         self.description = description
         self.storeQuotes = storeQuotes
         self.interlocutorLayer = interlocutorLayer
         self.interrelationTypes = interrelationTypes
+        self.researcherNamesFile = researcherNamesFile
+        self.intervieweeNamesFile = intervieweeNamesFile
     }
 }
 
