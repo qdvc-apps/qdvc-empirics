@@ -1,0 +1,19 @@
+key: c-08a85906
+kind: open
+name: Comparison with other tools
+colour: "#5BC0EB"
+description: Participants measuring the tool against tools they know.
+evidence:
+  - selection: s-1d9c13bd
+    memo: A blunt judgement of existing tools.
+  - selection: s-78027a8e
+  - selection: s-2f54b733
+    memo: Commercial packages as the yardstick; lock-in as the difference.
+questions: ["Are participants comparing features, or ways of working?"]
+interrelations:
+  - key: x-3105deb9
+    type: Contrast
+    members: [s-1d9c13bd, s-2f54b733]
+    description: One dismisses existing software; the other credits it and objects only to lock-in.
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

@@ -1,0 +1,20 @@
+key: c-1ecfff45
+kind: open
+name: Fatigue in long sessions
+colour: "#E55934"
+description: Tiredness, eyes, pace over hours of coding.
+evidence:
+  - selection: s-28604a5f
+    memo: Reading comfort matters over hours.
+  - selection: s-0f925d3d
+    memo: "From observation, not self-report: compare with John's own account."
+comments:
+  - Self-report (John) and observation (field notes) point the same way.
+questions: ["Is this fatigue, or a shift from coding to interpreting?"]
+interrelations:
+  - key: x-4beecc24
+    type: Compare
+    members: [s-28604a5f, s-0f925d3d]
+    description: Interview and observation agree that long sessions are tiring, but the field notes suggest the work changes rather than stops.
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

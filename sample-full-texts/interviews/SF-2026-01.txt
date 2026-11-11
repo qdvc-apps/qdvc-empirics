@@ -1,0 +1,39 @@
+Interview SF-2026-01 (pseudonymised transcript)
+Recorded by video call. Transcribed by the research team.
+
+Alice Bob
+Can you hear me okay? Sorry, my microphone was muted.
+
+John Smith:
+Yes, loud and clear.
+
+Alice Bob
+I now like to ask you a little bit about the user interface for QDVC Empirics. Do you think it's user friendly?
+
+John Smith:
+Well, it's certainly an improvement over alternatives. The existing crop of QDA software is very limited. But I'm still getting used to the user interface of QDVC Empirics, to be honest.
+
+ALICE BOB:
+Which part of the user interface is taking the longest to get used to?
+
+John Smith
+
+Oh, that's a hard one. I can't remember off the top of my head. Is it okay if I pull it up on my laptop here?
+
+Alice Bob:
+Of course, take your time.
+
+John Smith:
+Right. I think it's the layers. In other tools everything sits in one big tree of nodes, so I keep looking for the tree. Here I code in a layer and the codes only make sense inside it. Once it clicked, I liked it, because my supervisor and I can each have our own reading of the same transcript.
+
+Alice Bob
+And how do you find working with it over a long session?
+
+John Smith:
+Much better than I expected. After three or four hours of coding my eyes usually give up, but the serif text and the wide margins help. The numbers for quick codes save a lot of clicking. I barely touch the mouse now.
+
+Alice Bob:
+Is there anything that worries you about it?
+
+John Smith:
+Only that I need to show my reviewers where each claim comes from. If I can point them to the Git history of the YAML files, that would answer the usual "you made this up" question.

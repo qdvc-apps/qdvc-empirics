@@ -1,0 +1,14 @@
+codebook: cb-c0debee1
+target: f-1e7e0001
+researcher: r-a11ce000
+updated: 2026-11-01T09:30:00Z
+answers:
+  - question: q-5e771460
+    label: Setting
+    answer: Video call
+  - question: q-d0a7104e
+    label: Duration
+    text: About 40 minutes
+  - question: q-70b1c500
+    label: Topics
+    answers: [Interface, Fatigue, Transparency]

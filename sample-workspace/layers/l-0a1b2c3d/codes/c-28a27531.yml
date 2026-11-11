@@ -1,0 +1,13 @@
+key: c-28a27531
+kind: open
+name: Learning curve
+colour: "#F2C14E"
+description: Getting used to the tool; what takes time to learn.
+evidence:
+  - selection: s-48bd870c
+    memo: He names the interface itself as the thing still being learnt.
+  - selection: s-78027a8e
+    memo: The old mental model (a tree of nodes) gets in the way.
+  - selection: s-391fbe80
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

@@ -1,0 +1,10 @@
+key: f-1e7e0001
+path: interviews/SF-2026-01.txt
+kind: text
+title: Interview with John Smith
+date: 2026-03-14
+id: SF-2026-01
+status: coded
+fingerprint: sha256:fb3a27904df63a830a19f850c659294a0dd01969b49397428597066b8e404030
+codebooks: [cb-c0debee1]
+added: 2026-11-01

@@ -1,0 +1,11 @@
+key: c-7f717007
+kind: axial
+name: Rigour made visible
+colour: "#7E9CD8"
+description: Practices that let others check the analysis.
+evidence:
+  - code: c-724b66b0
+  - code: c-686a51d0
+    memo: Memos make the interpretation inspectable.
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

@@ -1,0 +1,50 @@
+file: f-1e7e0001
+selections:
+  - key: s-455ecf3d
+    irrelevant: true
+    start: 117
+    length: 53
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-76a6baa0
+    irrelevant: true
+    start: 184
+    length: 20
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-1d9c13bd
+    start: 396
+    length: 50
+    quote: The existing crop of QDA software is very limited.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-48bd870c
+    start: 447
+    length: 80
+    quote: But I'm still getting used to the user interface of QDVC Empirics, to be honest.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-78027a8e
+    start: 818
+    length: 88
+    quote: In other tools everything sits in one big tree of nodes, so I keep looking for the tree.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-391fbe80
+    start: 971
+    length: 27
+    quote: Once it clicked, I liked it
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-28604a5f
+    start: 1192
+    length: 106
+    quote: After three or four hours of coding my eyes usually give up, but the serif text and the wide margins help.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-70a3f53e
+    start: 1518
+    length: 114
+    quote: If I can point them to the Git history of the YAML files, that would answer the usual "you made this up" question.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z

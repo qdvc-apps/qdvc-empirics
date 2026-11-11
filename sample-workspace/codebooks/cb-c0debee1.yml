@@ -1,0 +1,29 @@
+key: cb-c0debee1
+title: Interview context
+description: Answer once per interview.
+applies_to: [files]
+questions:
+  - key: q-5e771460
+    label: Setting
+    text: How was the interview conducted?
+    type: choose-one
+    options: [In person, Video call, Phone]
+    strict: true
+    requirement: mandatory-blocking
+  - key: q-d0a7104e
+    label: Duration
+    text: About how long did it last?
+    type: text
+    requirement: mandatory-non-blocking
+  - key: q-70b1c500
+    label: Topics
+    text: Which topics came up?
+    type: choose-many
+    options: [Interface, Ethics, Fatigue, Collaboration, Transparency]
+    strict: false
+    requirement: optional
+  - key: q-a07e5000
+    label: Notes
+    text: Anything that might colour the interview (interruptions, mood)?
+    type: text
+    requirement: optional

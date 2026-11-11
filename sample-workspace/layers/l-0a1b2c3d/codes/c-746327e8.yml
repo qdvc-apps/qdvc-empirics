@@ -1,0 +1,13 @@
+key: c-746327e8
+kind: axial
+name: Adoption barriers
+colour: "#FA7921"
+description: What stands between researchers and a new QDA tool.
+evidence:
+  - code: c-28a27531
+    memo: Learning cost is the first barrier.
+  - code: c-08a85906
+    memo: Comparisons frame what counts as better.
+codebooks: [cb-c0debee2]
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

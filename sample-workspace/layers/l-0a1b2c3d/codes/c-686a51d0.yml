@@ -1,0 +1,11 @@
+key: c-686a51d0
+kind: open
+name: Memo as reasoning
+colour: "#B07CC6"
+description: Writing why a quote is evidence.
+evidence:
+  - selection: s-2156575a
+    memo: The missing reasons are exactly what memos supply.
+  - selection: s-079de17b
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

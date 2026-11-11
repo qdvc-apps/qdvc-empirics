@@ -1,0 +1,11 @@
+key: c-724b66b0
+kind: open
+name: Transparency to reviewers
+colour: "#9BC53D"
+description: Showing others where findings come from.
+evidence:
+  - selection: s-70a3f53e
+    memo: Git history imagined as an answer to reviewers' doubts.
+  - selection: s-2156575a
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

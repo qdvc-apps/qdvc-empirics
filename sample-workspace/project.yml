@@ -1,0 +1,9 @@
+format: 1
+app: QDVC Empirics
+key: p-5a3f1c20
+title: Using QDA software (sample)
+description: "A small sample project: two interviews about qualitative data analysis software, field notes and a short PDF."
+store_quotes: true
+interlocutor_layer: true
+interrelation_types: [Compare, Contrast]
+layers: [l-0a1b2c3d, l-4e5f6a7b]
