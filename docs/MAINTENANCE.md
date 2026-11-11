@@ -115,6 +115,13 @@ placement `.navigation` (Back, Forward) went into the sidebar's title bar
 beside the window buttons. Each split-view column also gets the model
 injected again with `.environment(model)`.
 
+**No `.badge()` on sidebar rows.** With count badges on the sidebar's
+rows, clicking a badged row left the list's rows laid out wrongly: pushed up
+under the window buttons, mostly off-screen, and not repaired by resizing.
+Rows without badges (Project Settings, Working Area files) were unaffected.
+Counts live in each table's footer instead. Likewise keep the sidebar's
+`safeAreaInset` content unconditional.
+
 SwiftUI Tables and long closure chains are slow to type-check: give table
 columns explicit row types (`{ (f: EmpiricalFile) in … }`), keep cells
 simple, and split sorts into statements (the compiler gave up on one chain

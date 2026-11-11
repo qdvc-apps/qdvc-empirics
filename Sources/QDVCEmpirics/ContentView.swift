@@ -262,32 +262,29 @@ struct Sidebar: View {
         @Bindable var model = model
         let all = model.project.files.count
         let coded = model.project.files.values.filter { $0.status == .coded }.count
+        // No .badge() on these rows: with badges, clicking a row left the
+        // sidebar's rows laid out wrongly (pushed up under the window
+        // buttons, not repaired by resizing). Counts are in each table's
+        // footer instead.
         List(selection: $model.sidebar) {
             Section("Project") {
                 Label("Empirical Files", systemImage: "doc.on.doc")
-                    .badge(all)
                     .tag(SidebarItem.files)
                 Label("Researchers", systemImage: "graduationcap")
-                    .badge(model.project.researchers.count)
                     .tag(SidebarItem.researchers)
                 Label("Interviewees", systemImage: "person.bubble")
-                    .badge(model.project.interviewees.count)
                     .tag(SidebarItem.interviewees)
                 Label("Project Settings", systemImage: "gearshape")
                     .tag(SidebarItem.settings)
             }
             Section("Analysis") {
                 Label("Codebooks", systemImage: "text.book.closed")
-                    .badge(model.project.codebooks.count)
                     .tag(SidebarItem.codebooks)
                 Label("Open Codes", systemImage: "tag")
-                    .badge(model.activeLayer?.codes.values.filter { $0.kind == .open }.count ?? 0)
                     .tag(SidebarItem.openCodes)
                 Label("Axial Codes", systemImage: "tray.full")
-                    .badge(model.activeLayer?.codes.values.filter { $0.kind == .axial }.count ?? 0)
                     .tag(SidebarItem.axialCodes)
                 Label("Layers", systemImage: "square.3.layers.3d")
-                    .badge(model.project.layers.count)
                     .tag(SidebarItem.layers)
             }
             Section("Working Area") {
@@ -305,16 +302,17 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        // Always present (never conditional), so the list's insets don't
+        // change under it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if all > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressView(value: Double(coded), total: Double(max(all, 1)))
-                        .progressViewStyle(.linear)
-                        .tint(.green)
-                    Text("\(coded) of \(all) files coded").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                }
-                .padding(10)
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: Double(coded), total: Double(max(all, 1)))
+                    .progressViewStyle(.linear)
+                    .tint(.green)
+                Text(all == 0 ? "No files yet" : "\(coded) of \(all) files coded")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
+            .padding(10)
         }
     }
 
