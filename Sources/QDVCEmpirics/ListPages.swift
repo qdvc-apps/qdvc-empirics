@@ -55,13 +55,19 @@ struct TableFooter<Leading: View>: View {
 struct FilesTable: View {
     @Environment(AppModel.self) private var model
     @State private var sortOrder = [KeyPathComparator(\EmpiricalFile.sortID)]
+    @State private var customization = TableColumnCustomization<EmpiricalFile>()
+    @State private var answerTexts = AnswerTexts()
 
     var body: some View {
         @Bindable var model = model
-        let rows: [EmpiricalFile] = model.visibleFiles.sorted(using: sortOrder)
+        let questions = model.questionColumns(for: .files)
+        let visible = model.visibleFiles
+        let _ = answerTexts.update(model, columns: model.shownQuestionColumns(for: .files), targets: visible.map(\.key))
+        let rows: [EmpiricalFile] = visible.sorted(using: sortOrder)
         let coded = model.project.files.values.filter { $0.status == .coded }.count
         VStack(spacing: 0) {
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder,
+                  columnCustomization: model.questionColumnCustomization($customization, columns: questions, target: .files)) {
                 // Working identifiers follow alphabetical order of the
                 // titles, so sorting by title sorts by number.
                 TableColumn("No.", value: \EmpiricalFile.displayTitle) { (f: EmpiricalFile) in
@@ -95,6 +101,7 @@ struct FilesTable: View {
                     Text(f.path).font(.caption.monospaced()).foregroundStyle(.secondary)
                 }
                 .width(min: 100, ideal: 200)
+                questionTableColumns(questions)
             }
             .contextMenu(forSelectionType: String.self) { keys in
                 FileTableMenu(model: model, keys: keys)
@@ -112,8 +119,24 @@ struct FilesTable: View {
                 }
                 .fixedSize()
                 Button("Next File Not Yet Coded") { model.nextUncodedFile() }
-                Text("Double-click a file to code it.").font(.caption).foregroundStyle(.secondary)
+                Text(questions.isEmpty ? "Double-click a file to code it."
+                     : "Double-click a file to code it. Right-click a column heading to show codebook questions.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// Codebook questions, hidden until chosen from the headings' menu.
+    @TableColumnBuilder<EmpiricalFile, KeyPathComparator<EmpiricalFile>>
+    func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<EmpiricalFile, KeyPathComparator<EmpiricalFile>> {
+        TableColumnForEach(columns) { c in
+            TableColumn(c.title, sortUsing: KeyPathComparator(\EmpiricalFile.key,
+                                                              comparator: AnswerOrder(question: c.question, texts: answerTexts))) { (f: EmpiricalFile) in
+                AnswerCell(model: model, column: c, target: f.key)
+            }
+            .width(min: 60, ideal: 140)
+            .customizationID(c.id)
+            .defaultVisibility(.hidden)
         }
     }
 }
@@ -147,6 +170,10 @@ struct CodesTable: View {
     let kind: CodeKind
     @State private var sortOrder = [KeyPathComparator(\QDACode.name)]
     @State private var filter = ""
+    @State private var customization = TableColumnCustomization<QDACode>()
+    @State private var answerTexts = AnswerTexts()
+
+    var target: CodebookTarget { kind == .open ? .openCodes : .axialCodes }
 
     var body: some View {
         @Bindable var model = model
@@ -155,9 +182,12 @@ struct CodesTable: View {
         let shown: [QDACode] = q.isEmpty ? all : all.filter { c in
             c.name.localizedCaseInsensitiveContains(q) || c.description.localizedCaseInsensitiveContains(q)
         }
+        let questions = model.questionColumns(for: target)
+        let _ = answerTexts.update(model, columns: model.shownQuestionColumns(for: target), targets: shown.map(\.key))
         let rows: [QDACode] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder,
+                  columnCustomization: model.questionColumnCustomization($customization, columns: questions, target: target)) {
                 TableColumn("No.", value: \QDACode.name) { (c: QDACode) in
                     WorkingIDCell(model: model, key: c.key)
                 }
@@ -193,6 +223,7 @@ struct CodesTable: View {
                     Text(model.quickSlot(of: c.key).map { "\($0)" } ?? "").monospacedDigit()
                 }
                 .width(min: 40, ideal: 44, max: 60)
+                questionTableColumns(questions)
             }
             .contextMenu(forSelectionType: String.self) { keys in
                 CodeTableMenu(model: model, keys: keys)
@@ -207,7 +238,24 @@ struct CodesTable: View {
                 }
                 LayerMenu(model: model)
                     .fixedSize()
+                if !questions.isEmpty {
+                    Text("Right-click a column heading to show codebook questions.").font(.caption).foregroundStyle(.secondary)
+                }
             }
+        }
+    }
+
+    /// Codebook questions, hidden until chosen from the headings' menu.
+    @TableColumnBuilder<QDACode, KeyPathComparator<QDACode>>
+    func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<QDACode, KeyPathComparator<QDACode>> {
+        TableColumnForEach(columns) { c in
+            TableColumn(c.title, sortUsing: KeyPathComparator(\QDACode.key,
+                                                              comparator: AnswerOrder(question: c.question, texts: answerTexts))) { (code: QDACode) in
+                AnswerCell(model: model, column: c, target: code.key)
+            }
+            .width(min: 60, ideal: 140)
+            .customizationID(c.id)
+            .defaultVisibility(.hidden)
         }
     }
 
@@ -411,15 +459,20 @@ struct IntervieweesTable: View {
     @Environment(AppModel.self) private var model
     @State private var sortOrder = [KeyPathComparator(\Interviewee.lastName)]
     @State private var filter = ""
+    @State private var customization = TableColumnCustomization<Interviewee>()
+    @State private var answerTexts = AnswerTexts()
 
     var body: some View {
         @Bindable var model = model
         let q = filter.trimmingCharacters(in: .whitespaces)
         let all = model.project.interviewees
         let shown: [Interviewee] = q.isEmpty ? all : all.filter { $0.fullName.localizedCaseInsensitiveContains(q) }
+        let questions = model.questionColumns(for: .interviewees)
+        let _ = answerTexts.update(model, columns: model.shownQuestionColumns(for: .interviewees), targets: shown.map(\.key))
         let rows: [Interviewee] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
-            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
+            Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder,
+                  columnCustomization: model.questionColumnCustomization($customization, columns: questions, target: .interviewees)) {
                 TableColumn("No.", value: \Interviewee.fullName) { (i: Interviewee) in
                     WorkingIDCell(model: model, key: i.key)
                 }
@@ -442,6 +495,7 @@ struct IntervieweesTable: View {
                     Text(model.codebookTitles(i.key)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .width(min: 80, ideal: 160)
+                questionTableColumns(questions)
             }
             .contextMenu(forSelectionType: String.self) { keys in
                 PersonTableMenu(model: model, keys: keys, researchers: false)
@@ -454,8 +508,24 @@ struct IntervieweesTable: View {
                 } label: {
                     Label("New Interviewee", systemImage: "plus")
                 }
-                Text("Names are pseudonyms.").font(.caption).foregroundStyle(.secondary)
+                Text(questions.isEmpty ? "Names are pseudonyms."
+                     : "Names are pseudonyms. Right-click a column heading to show codebook questions.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// Codebook questions, hidden until chosen from the headings' menu.
+    @TableColumnBuilder<Interviewee, KeyPathComparator<Interviewee>>
+    func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<Interviewee, KeyPathComparator<Interviewee>> {
+        TableColumnForEach(columns) { c in
+            TableColumn(c.title, sortUsing: KeyPathComparator(\Interviewee.key,
+                                                              comparator: AnswerOrder(question: c.question, texts: answerTexts))) { (i: Interviewee) in
+                AnswerCell(model: model, column: c, target: i.key)
+            }
+            .width(min: 60, ideal: 140)
+            .customizationID(c.id)
+            .defaultVisibility(.hidden)
         }
     }
 }

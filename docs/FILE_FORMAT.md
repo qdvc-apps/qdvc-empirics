@@ -74,6 +74,9 @@ interrelation_types: [Compare, Contrast]
 real_names:                       # optional: mapping files, relative to the full-texts folder
   researchers: private/researchers-real-names.csv
   interviewees: private/interviewees-real-names.csv
+table_columns:                    # optional: codebook questions shown as table columns
+  files: [q-0a1b2c3d, q-4e5f6a7b] # per table: files | interviewees | open-codes | axial-codes
+  interviewees: [q-9c8d7e6f]
 layers: [l-0a1b2c3d, l-4e5f6a7b]  # display order; folders not listed are added
 ```
 

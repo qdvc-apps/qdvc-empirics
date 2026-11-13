@@ -6,7 +6,7 @@ from those, write down why each piece of evidence counts, answer codebooks
 about files and codes, and keep it all in a folder of plain YAML files that
 diffs cleanly in Git.
 
-A native SwiftUI and AppKit app for macOS 14 (Sonoma) and later, loosely
+A native SwiftUI and AppKit app for macOS 14.4 (Sonoma) and later, loosely
 based on the YAML workflow for qualitative data analysis in Wang (2022),
 *Programming for Qualitative Data Analysis: Towards a YAML Workflow*, ACIS
 2022 (https://aisel.aisnet.org/acis2022/17/). See
@@ -71,7 +71,12 @@ the bottom): selecting a row shows its details in the inspector,
 double-clicking opens its page, and ⌘N makes a new one (on Empirical Files,
 it adds files). Tables of items that codebooks can be associated with
 (empirical files, interviewees, open codes, axial codes) have a Codebooks
-column. Go › Back and Forward (⌃⌘← / ⌃⌘→)
+column, and can show any question of the codebooks that apply to them as a
+column of its own: right-click a column heading and tick the questions.
+Where researchers' answers differ, the cell shows each answer with their
+initials, in orange ("Yes (AB) · No (CD)"); hover for everyone's answer.
+Sort by a question column like any other. The choice is saved in the
+workspace, so everyone sharing it sees the same columns. Go › Back and Forward (⌃⌘← / ⌃⌘→)
 retrace your steps. The pages of single items are:
 
 - an **empirical file**: the document, coded as below, with the inspector's
@@ -187,7 +192,7 @@ or save the table as CSV (always with pseudonyms).
 
 ## Requirements
 
-- macOS 14 Sonoma or later.
+- macOS 14.4 Sonoma or later.
 - Xcode 16 or later (free from the Mac App Store); Xcode 26 or later for the
   Liquid Glass look. Full Xcode is needed, not just the Command Line Tools:
   from Xcode 27, SwiftUI's `@State` is a macro whose compiler plugin

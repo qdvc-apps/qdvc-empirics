@@ -693,12 +693,16 @@ public struct ProjectSettings: Equatable {
     /// holds only pseudonyms; real names never leave the full-texts folder.
     public var researcherNamesFile: String
     public var intervieweeNamesFile: String
+    /// Codebook questions shown as columns in the tables of empirical files,
+    /// interviewees, open codes and axial codes: question keys, per table.
+    public var tableColumns: [CodebookTarget: [String]]
 
     public static let defaultInterrelationTypes = ["Compare", "Contrast"]
 
     public init(key: String, title: String, description: String = "", storeQuotes: Bool = true,
                 interlocutorLayer: Bool = false, interrelationTypes: [String] = ProjectSettings.defaultInterrelationTypes,
-                researcherNamesFile: String = "", intervieweeNamesFile: String = "") {
+                researcherNamesFile: String = "", intervieweeNamesFile: String = "",
+                tableColumns: [CodebookTarget: [String]] = [:]) {
         self.key = key
         self.title = title
         self.description = description
@@ -707,6 +711,7 @@ public struct ProjectSettings: Equatable {
         self.interrelationTypes = interrelationTypes
         self.researcherNamesFile = researcherNamesFile
         self.intervieweeNamesFile = intervieweeNamesFile
+        self.tableColumns = tableColumns
     }
 }
 

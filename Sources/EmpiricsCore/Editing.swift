@@ -394,6 +394,8 @@ extension Project {
 
     /// Deletes a codebook, its associations and its response sheets.
     public mutating func deleteCodebook(_ key: String) {
+        let questions = Set(codebooks[key]?.questions.map(\.key) ?? [])
+        dropTableColumns(questions)
         codebooks[key] = nil
         for k in files.keys { files[k]!.codebooks.removeAll { $0 == key } }
         for i in interviewees.indices { interviewees[i].codebooks.removeAll { $0 == key } }
@@ -464,7 +466,36 @@ extension Project {
     /// Deletes a question from a codebook, and its answers.
     public mutating func deleteQuestion(_ key: String, from codebook: String) {
         codebooks[codebook]?.questions.removeAll { $0.key == key }
+        dropTableColumns([key])
         for id in responses.keys where id.codebook == codebook { responses[id]!.answers[key] = nil }
+    }
+
+    /// Stops showing questions as table columns.
+    mutating func dropTableColumns(_ questions: Set<String>) {
+        guard !questions.isEmpty else { return }
+        for t in settings.tableColumns.keys {
+            settings.tableColumns[t]!.removeAll { questions.contains($0) }
+            if settings.tableColumns[t]!.isEmpty { settings.tableColumns[t] = nil }
+        }
+    }
+
+    /// Each researcher's answer to a codebook question about an item (empty
+    /// answers left out), in the order of the researchers list; the
+    /// researcher is "" for a sheet filled in while the project listed none.
+    public func answers(codebook: String, question: String, target: String) -> [(researcher: String, answer: Answer)] {
+        let order = Dictionary(researchers.enumerated().map { pair in (pair.element.key, pair.offset) },
+                               uniquingKeysWith: { first, _ in first })
+        return responses.values
+            .filter { $0.id.codebook == codebook && $0.id.target == target }
+            .compactMap { sheet -> (researcher: String, answer: Answer)? in
+                guard let a = sheet.answers[question], !a.isEmpty else { return nil }
+                return (sheet.id.researcher, a)
+            }
+            .sorted { a, b in
+                let ia = a.researcher.isEmpty ? -1 : (order[a.researcher] ?? Int.max)
+                let ib = b.researcher.isEmpty ? -1 : (order[b.researcher] ?? Int.max)
+                return ia != ib ? ia < ib : a.researcher < b.researcher
+            }
     }
 
     /// Codebooks associated with a file, code or interviewee.

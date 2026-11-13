@@ -39,7 +39,7 @@ targets.insert(.executableTarget(name: "QDVCEmpirics", dependencies: ["EmpiricsC
 
 let package = Package(
     name: "QDVCEmpirics",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("14.4")],
     products: products,
     targets: targets
 )

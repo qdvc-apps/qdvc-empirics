@@ -102,6 +102,9 @@ titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
 by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
 response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
 `UpdateFileSheet` (updating a file from a new version of its full-text),
+`QuestionColumns` (codebook questions as table columns: the cells, the
+sort comparator and the column-customization binding that saves the
+choice in the workspace),
 `SettingsView`, `Style`.
 
 Navigation is `AppModel.sidebar` (a `SidebarItem`: a list page or an item's
@@ -246,6 +249,9 @@ Nothing may touch the network:
   space changed) and reports lost ones; checking a new version finds
   irrelevant text through the old version, keeps what it can't check, and
   applying it deletes lost selections only when asked.
+- Answers to a question come back in researcher order; deleting a question
+  or codebook stops showing it as a table column; `table_columns` survives
+  the round trip.
 - Codebooks can be associated with interviewees (only when they apply to
   them); deleting the interviewee deletes the sheets about them.
 - The sample builds, saves and loads back unchanged.

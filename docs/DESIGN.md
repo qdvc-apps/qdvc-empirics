@@ -48,7 +48,17 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 - **List pages** are plain tables (sortable columns, a filter, add buttons
   in a bar at the bottom), as in Finder's list view: selecting a row shows
   it in the inspector, double-clicking opens it. Each page starts with its
-  table; nothing sits above it (docs/MAINTENANCE.md §Layout).
+  table; nothing sits above it (docs/MAINTENANCE.md §Layout). The tables of
+  items codebooks apply to (files, interviewees, open and axial codes) can
+  show codebook questions as columns, chosen by right-clicking a column
+  heading (SwiftUI column customization, in which only the question columns
+  take part, so the menu lists just them; the columns come from
+  `TableColumnForEach`, which is why the app needs macOS 14.4). The choice is saved in the
+  workspace (`table_columns` in project.yml), so a team sees the same
+  columns, and is on Edit › Undo; widths and column order last the session.
+  A cell shows the answer when all who answered agree, otherwise each
+  answer with its researchers' initials, in orange, and everyone's answer in
+  the tooltip: disagreement between coders is the thing to notice.
 - **Item pages.** An empirical file (the document), a code (its evidence), a
   codebook (its questions), a person (a card laid out like Contacts, with a
   monogram, labelled fields and the transcripts they speak in).

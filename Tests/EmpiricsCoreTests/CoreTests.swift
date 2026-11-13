@@ -241,6 +241,31 @@ final class RuleTests: XCTestCase {
         p.deleteInterviewee("i-00000001")
         XCTAssertTrue(p.responses.isEmpty)
     }
+
+    func testAnswersAndTableColumns() throws {
+        var p = Project.new(title: "Columns")
+        let f = p.addFile(path: "a.txt", kind: .text)
+        p.researchers = [Researcher(key: "r-00000002", firstName: "Zoe", lastName: "Ash"),
+                         Researcher(key: "r-00000001", firstName: "Al", lastName: "Bo")]
+        p.codebooks["cb-00000001"] = Codebook(key: "cb-00000001", title: "Sheet", appliesTo: [.files], questions: [
+            CodebookQuestion(key: "q-00000001", label: "Setting", type: .text),
+            CodebookQuestion(key: "q-00000002", label: "Mood", type: .text)])
+        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: f, researcher: "r-00000001"),
+                                      answers: ["q-00000001": .text("Home")]))
+        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: f, researcher: "r-00000002"),
+                                      answers: ["q-00000001": .text("Work"), "q-00000002": .text("Calm")]))
+        // In the order of the researchers list; unanswered left out.
+        let setting = p.answers(codebook: "cb-00000001", question: "q-00000001", target: f)
+        XCTAssertEqual(setting.map { $0.researcher }, ["r-00000002", "r-00000001"])
+        XCTAssertEqual(setting.map { $0.answer }, [.text("Work"), .text("Home")])
+        XCTAssertEqual(p.answers(codebook: "cb-00000001", question: "q-00000002", target: f).map { $0.researcher }, ["r-00000002"])
+
+        p.settings.tableColumns = [.files: ["q-00000001", "q-00000002"]]
+        p.deleteQuestion("q-00000002", from: "cb-00000001")
+        XCTAssertEqual(p.settings.tableColumns[.files], ["q-00000001"])
+        p.deleteCodebook("cb-00000001")
+        XCTAssertNil(p.settings.tableColumns[.files])
+    }
 }
 
 final class WorkspaceTests: XCTestCase {
@@ -304,6 +329,7 @@ final class WorkspaceTests: XCTestCase {
         try p.associate(codebook: "cb-00000003", with: "i-00000001")
         try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000003", target: "i-00000001", researcher: "r-00000001"),
                                       answers: ["q-00000004": .text("Nurse")]))
+        p.settings.tableColumns = [.files: ["q-00000001", "q-00000003"], .interviewees: ["q-00000004"]]
         return p
     }
 

@@ -48,12 +48,24 @@ extension Workspace {
             names.add("interviewees", s.intervieweeNamesFile)
             m.add("real_names", names.node)
         }
+        let tables = CodebookTarget.allCases.filter { !(s.tableColumns[$0] ?? []).isEmpty }
+        if !tables.isEmpty {
+            var columns = Pairs()
+            for t in tables { columns.add(t.rawValue, list: s.tableColumns[t] ?? []) }
+            m.add("table_columns", columns.node)
+        }
         m.add("layers", list(p.layers.map(\.key)))
         return m.node
     }
 
     static func decodeSettings(_ n: YAMLNode) -> ProjectSettings {
-        ProjectSettings(
+        var columns: [CodebookTarget: [String]] = [:]
+        for pair in n["table_columns"]?.pairs ?? [] {
+            guard let target = CodebookTarget(rawValue: pair.key) else { continue }
+            let keys = pair.value.strings
+            if !keys.isEmpty { columns[target] = keys }
+        }
+        return ProjectSettings(
             key: n["key"]?.string ?? Keys.make(Keys.project),
             title: n["title"]?.string ?? "Untitled Project",
             description: n["description"]?.string ?? "",
@@ -61,7 +73,8 @@ extension Workspace {
             interlocutorLayer: n["interlocutor_layer"]?.bool ?? false,
             interrelationTypes: n["interrelation_types"].map { $0.strings } ?? ProjectSettings.defaultInterrelationTypes,
             researcherNamesFile: n["real_names"]?["researchers"]?.string ?? "",
-            intervieweeNamesFile: n["real_names"]?["interviewees"]?.string ?? ""
+            intervieweeNamesFile: n["real_names"]?["interviewees"]?.string ?? "",
+            tableColumns: columns
         )
     }
 
