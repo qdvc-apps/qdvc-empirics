@@ -280,8 +280,8 @@ final class MakeSampleTests: XCTestCase {
         let fatigue = try code(main, .open, "Fatigue in long sessions", "Tiredness, eyes, pace over hours of coding.", "#E55934")
         let reasons = try code(main, .open, "Memo as reasoning", "Writing why a quote is evidence.", "#B07CC6")
         let ethics = try code(main, .open, "Data protection", "Keeping participants' data safe.", "#4ECDC4")
-        let adoption = try code(main, .axial, "Adoption barriers", "What stands between researchers and a new QDA tool.", "#FA7921")
-        let rigour = try code(main, .axial, "Rigour made visible", "Practices that let others check the analysis.", "#7E9CD8")
+        let adoption = try code(main, .theorising, "Adoption barriers", "What stands between researchers and a new QDA tool.", "#FA7921")
+        let rigour = try code(main, .theorising, "Rigour made visible", "Practices that let others check the analysis.", "#7E9CD8")
 
         try p.addEvidence(code: learning, target: s2, memo: "He names the interface itself as the thing still being learnt.")
         try p.addEvidence(code: learning, target: s3, memo: "The old mental model (a tree of nodes) gets in the way.")
@@ -386,6 +386,15 @@ final class MakeSampleTests: XCTestCase {
         try p.setFrameworkSummary("Memos make her think; the argument is ready when she writes up.",
                                   layer: deductive, row: "i-0c0ffee0", column: "apc-7a0e0002")
 
+        // Protocol summaries (the bubbles under protocol labels; the
+        // Protocol Report), one item left without one.
+        try p.setFrameworkSummary("An improvement on other QDA tools, but still learning the interface.",
+                                  layer: deductive, row: "f-1e7e0001", column: "pi-0a000001")
+        try p.setFrameworkSummary("Easier than expected: reading comfort and quick-code numbers.",
+                                  layer: deductive, row: "f-1e7e0001", column: "pi-0a000002")
+        try p.setFrameworkSummary("Highlighters, a printout and a spreadsheet; lost the reasons behind quotes.",
+                                  layer: deductive, row: "f-1e7e0002", column: "pi-0a000004")
+
         // An attribute sheet for files, answered for the first interview.
         p.attributeSheets["ast-c0debee1"] = AttributeSheet(key: "ast-c0debee1", title: "Interview context",
                                                description: "Answer once per interview.", appliesTo: [.files], questions: [
@@ -398,8 +407,8 @@ final class MakeSampleTests: XCTestCase {
             AttributeSheetQuestion(key: "q-a07e5000", label: "Notes", text: "Anything that might colour the interview (interruptions, mood)?",
                              type: .text, requirement: .optional),
         ])
-        p.attributeSheets["ast-c0debee2"] = AttributeSheet(key: "ast-c0debee2", title: "Code quality", description: "A check on each axial code.",
-                                               appliesTo: [.axialCodes], questions: [
+        p.attributeSheets["ast-c0debee2"] = AttributeSheet(key: "ast-c0debee2", title: "Code quality", description: "A check on each theorising code.",
+                                               appliesTo: [.theorisingCodes], questions: [
             AttributeSheetQuestion(key: "q-9a110001", label: "Saturated", text: "Do new quotes still change this code's meaning?",
                              type: .chooseOne, options: ["Yes", "No", "Unsure"], strict: true, requirement: .flagged),
             AttributeSheetQuestion(key: "q-9a110002", label: "Counter-evidence", text: "What evidence speaks against it?", type: .text),

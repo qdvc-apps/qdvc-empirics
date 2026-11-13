@@ -1,22 +1,22 @@
 import Foundation
 
-// The data behind the Reporting pages: the Coding Chart (files → open codes
-// → axial codes) and the Attribute Sheet Report (every response to an attribute sheet).
+// The data behind the Reports pages: the Coding Chart (files → open codes
+// → theorising codes) and the Attribute Sheet Report (every response to an attribute sheet).
 // Worked out here, without any interface, so they can be tested.
 
 // MARK: - Coding Chart
 
 /// Columns of a layer's coding, left to right: empirical files, open codes,
-/// then axial codes by level (an axial code built only from open codes is
-/// level 1; one built from a level-n axial code is at least level n + 1), so
-/// higher-level axial codes sit further right. Edges link files to the open
-/// codes with evidence in them, and codes to the axial codes they are
+/// then theorising codes by level (a theorising code built only from open codes is
+/// level 1; one built from a level-n theorising code is at least level n + 1), so
+/// higher-level theorising codes sit further right. Edges link files to the open
+/// codes with evidence in them, and codes to the theorising codes they are
 /// evidence for (M:N, possibly skipping columns).
 public struct CodingChart: Equatable {
     public struct Edge: Hashable {
         /// The left end (a file, or the code that is evidence).
         public var from: String
-        /// The right end (an open code, or the axial code).
+        /// The right end (an open code, or the theorising code).
         public var to: String
 
         public init(from: String, to: String) {
@@ -72,7 +72,7 @@ public struct CodingChart: Equatable {
             for s in list { fileOf[s.key] = file }
         }
         let open = layer.codes.values.filter { $0.kind == .open }
-        let axial = layer.codes.values.filter { $0.kind == .axial }
+        let theorising = layer.codes.values.filter { $0.kind == .theorising }
 
         var edges = Set<Edge>()
         for c in open {
@@ -80,21 +80,21 @@ public struct CodingChart: Equatable {
                 if let f = fileOf[e.target], p.files[f] != nil { edges.insert(Edge(from: f, to: c.key)) }
             }
         }
-        for a in axial {
+        for a in theorising {
             for e in a.evidence where layer.codes[e.target] != nil {
                 edges.insert(Edge(from: e.target, to: a.key))
             }
         }
 
-        // Levels of axial codes (cycles can't be made, but are guarded).
+        // Levels of theorising codes (cycles can't be made, but are guarded).
         var level: [String: Int] = [:]
         func levelOf(_ key: String, _ visiting: inout Set<String>) -> Int {
             if let l = level[key] { return l }
-            guard let c = layer.codes[key], c.kind == .axial, !visiting.contains(key) else { return 0 }
+            guard let c = layer.codes[key], c.kind == .theorising, !visiting.contains(key) else { return 0 }
             visiting.insert(key)
             var l = 1
             for e in c.evidence {
-                if let child = layer.codes[e.target], child.kind == .axial {
+                if let child = layer.codes[e.target], child.kind == .theorising {
                     l = max(l, levelOf(child.key, &visiting) + 1)
                 }
             }
@@ -102,7 +102,7 @@ public struct CodingChart: Equatable {
             level[key] = l
             return l
         }
-        for a in axial {
+        for a in theorising {
             var visiting = Set<String>()
             _ = levelOf(a.key, &visiting)
         }
@@ -130,7 +130,7 @@ public struct CodingChart: Equatable {
         let maxLevel = level.values.max() ?? 0
         if maxLevel > 0 {
             for l in 1...maxLevel {
-                columns.append(byTitle(axial.filter { level[$0.key] == l && keep($0.key) }.map { ($0.key, $0.name) }))
+                columns.append(byTitle(theorising.filter { level[$0.key] == l && keep($0.key) }.map { ($0.key, $0.name) }))
             }
         }
         while let last = columns.last, last.isEmpty, columns.count > 2 { columns.removeLast() }
@@ -228,12 +228,12 @@ public struct AttributeSheetReport: Equatable {
         for t in targets where !answered.contains(t) {
             rows.append(Row(target: t, researcher: "", sheet: nil, completeness: SheetCompleteness.of([:], against: cb)))
         }
-        // Files, then interviewees, then open codes, then axial codes; each
+        // Files, then interviewees, then open codes, then theorising codes; each
         // by title, then by researcher.
         func group(_ k: String) -> Int {
             if p.files[k] != nil { return 0 }
             if p.interviewee(k) != nil { return 1 }
-            return p.code(k)?.kind == .axial ? 3 : 2
+            return p.code(k)?.kind == .theorising ? 3 : 2
         }
         rows.sort { a, b in
             let ga = group(a.target), gb = group(b.target)
@@ -256,6 +256,80 @@ public struct AttributeSheetReport: Equatable {
                           r.researcher.isEmpty ? "" : person(r.researcher), r.status.rawValue]
             fields += attributeSheet.questions.map { q in r.answer(q.key)?.values.joined(separator: "; ") ?? "" }
             lines.append(CSV.line(fields))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+}
+
+// MARK: - Protocol Report
+
+/// A protocol across the empirical files that follow it in a deductive
+/// layer: a row per file, a column per protocol item, and in each cell the
+/// researcher's summary of what the file says for that item (the layer's
+/// Framework Matrix cell for the file and item), with the item's prompt and
+/// response segments there, to read the full answer.
+public struct ProtocolReport: Equatable {
+    public struct Cell: Equatable {
+        public var summary: String = ""
+        /// Selection keys of the item's segments in the file, in text order.
+        public var prompts: [String] = []
+        public var responses: [String] = []
+
+        public init(summary: String = "", prompts: [String] = [], responses: [String] = []) {
+            self.summary = summary
+            self.prompts = prompts
+            self.responses = responses
+        }
+
+        public var isMarked: Bool { !prompts.isEmpty || !responses.isEmpty }
+        public var isEmpty: Bool { summary.isEmpty && !isMarked }
+    }
+
+    public struct Row: Equatable, Identifiable {
+        public var file: String
+        /// By protocol item key.
+        public var cells: [String: Cell]
+
+        public var id: String { file }
+
+        public func cell(_ item: String) -> Cell { cells[item] ?? Cell() }
+    }
+
+    public var studyProtocol: StudyProtocol
+    public var layer: String
+    public var rows: [Row]
+
+    /// The report for a protocol in a deductive layer: the files following
+    /// it there, in the Empirical Files order.
+    public static func make(_ p: Project, protocol key: String, layer layerKey: String) -> ProtocolReport? {
+        guard let pr = p.protocols[key], let layer = p.layer(layerKey), layer.isDeductive else { return nil }
+        let items = Set(pr.items.map(\.key))
+        var rows: [Row] = []
+        for f in p.sortedFiles where layer.protocols[f.key] == key {
+            var cells: [String: Cell] = [:]
+            for (item, summary) in layer.framework[f.key] ?? [:] where items.contains(item) {
+                cells[item, default: Cell()].summary = summary
+            }
+            for s in layer.selections[f.key] ?? [] {
+                guard let segment = s.segment, items.contains(segment.item) else { continue }
+                if segment.part == .prompt {
+                    cells[segment.item, default: Cell()].prompts.append(s.key)
+                } else {
+                    cells[segment.item, default: Cell()].responses.append(s.key)
+                }
+            }
+            rows.append(Row(file: f.key, cells: cells))
+        }
+        return ProtocolReport(studyProtocol: pr, layer: layerKey, rows: rows)
+    }
+
+    /// The report as CSV: working identifier and file, then one column per
+    /// item (its number and label) with the summaries.
+    public func csv(workingIDs: [String: String], title: (String) -> String) -> String {
+        let headings = studyProtocol.items.enumerated().map { i, item in "\(i + 1) \(item.label)" }
+        var lines = [CSV.line(["No.", "File"] + headings)]
+        for r in rows {
+            lines.append(CSV.line([workingIDs[r.file] ?? "", title(r.file)] + studyProtocol.items.map { r.cell($0.key).summary }))
         }
         return lines.joined(separator: "\n") + "\n"
     }

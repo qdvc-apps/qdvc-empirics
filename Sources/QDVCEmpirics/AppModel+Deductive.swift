@@ -50,7 +50,7 @@ extension AppModel {
 
     // MARK: Tags
 
-    /// An open, axial or a priori code as a tag.
+    /// An open, theorising or a priori code as a tag.
     func tag(_ key: String) -> CodingTag? {
         project.code(key)?.tag ?? project.aprioriCodes[key]?.tag
     }
@@ -91,7 +91,7 @@ extension AppModel {
         return names.min { $0.0.localizedCompare($1.0) == .orderedAscending }?.1 ?? .systemGray
     }
 
-    /// Opens an open, axial or a priori code's page.
+    /// Opens an open, theorising or a priori code's page.
     func showTag(_ key: String) {
         if project.code(key) != nil {
             showCode(key)
@@ -275,7 +275,8 @@ extension AppModel {
     }
 
     /// Context-menu items for the document (text and PDF views alike).
-    func documentMenuItems() -> [NSMenuItem] {
+    /// `page` is the PDF page under the pointer, if any.
+    func documentMenuItems(page: Int? = nil) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         let noun = codeNounTitle
         if hasTextSelection {
@@ -286,6 +287,10 @@ extension AppModel {
             }
             items.append(ClosureMenuItem(title: "Highlight Without \(noun)") { [weak self] in self?.highlightOnly() })
             items.append(ClosureMenuItem(title: "Mark as Irrelevant") { [weak self] in self?.toggleIrrelevant() })
+            if canEditTextSelection {
+                items.append(.separator())
+                items.append(ClosureMenuItem(title: "Edit Text…") { [weak self] in self?.editSelectedText() })
+            }
         } else if let key = focusedSelection, let s = project.selection(key) {
             if s.segment != nil {
                 items.append(ClosureMenuItem(title: "Change Protocol Item…") { [weak self] in
@@ -295,9 +300,34 @@ extension AppModel {
             } else if !s.irrelevant {
                 items.append(ClosureMenuItem(title: "Add \(noun)…") { [weak self] in self?.paletteVisible = true })
             }
+            for other in mergeCandidates(for: key) {
+                items.append(ClosureMenuItem(title: mergeTitle(key, other)) { [weak self] in self?.mergeSelections(key, other) })
+            }
             items.append(ClosureMenuItem(title: "Delete Selection") { [weak self] in self?.deleteSelection(key) })
         }
+        if let page, let file = openFileKey, project.files[file]?.kind == .pdf {
+            if !items.isEmpty { items.append(.separator()) }
+            items.append(ClosureMenuItem(title: "Rotate Page \(page + 1) Left") { [weak self] in self?.rotatePage(file: file, page: page, by: -90) })
+            items.append(ClosureMenuItem(title: "Rotate Page \(page + 1) Right") { [weak self] in self?.rotatePage(file: file, page: page, by: 90) })
+            if project.files[file]?.rotations[page] != nil {
+                items.append(ClosureMenuItem(title: "Show Page \(page + 1) Unrotated") { [weak self] in self?.resetPageRotation(file: file, page: page) })
+            }
+        }
         return items
+    }
+
+    // MARK: Protocol summaries
+
+    /// A protocol item's summary for a file in a deductive layer (its
+    /// Framework Matrix cell), or "".
+    func protocolSummary(layer: String, file: String, item: String) -> String {
+        project.layer(layer)?.framework[file]?[item] ?? ""
+    }
+
+    /// Typing: saved, not on Edit › Undo. An empty summary clears it.
+    func setProtocolSummary(_ text: String, layer: String, file: String, item: String) {
+        guard text != protocolSummary(layer: layer, file: file, item: item) else { return }
+        edit { p in _ = try? p.setFrameworkSummary(text, layer: layer, row: file, column: item) }
     }
 
     /// Single keys shared by the text and PDF views: Q and A (protocol
@@ -401,7 +431,7 @@ extension AppModel {
         }
     }
 
-    /// Open and axial codes (any layer) linked to an a priori code, with
+    /// Open and theorising codes (any layer) linked to an a priori code, with
     /// their links.
     func links(to apc: String) -> [(code: QDACode, link: CodeLink)] {
         project.layers.flatMap { l -> [(code: QDACode, link: CodeLink)] in
@@ -420,7 +450,7 @@ extension AppModel {
         alert.messageText = "Delete the a priori code “\(apc.name)”?"
         alert.informativeText = evidence == 0 && linkCount == 0
             ? "It isn't applied anywhere yet. You can undo this."
-            : "Its \(evidence) piece\(evidence == 1 ? "" : "s") of evidence (the selections stay) and \(linkCount) link\(linkCount == 1 ? "" : "s") from open and axial codes go with it. You can undo this."
+            : "Its \(evidence) piece\(evidence == 1 ? "" : "s") of evidence (the selections stay) and \(linkCount) link\(linkCount == 1 ? "" : "s") from open and theorising codes go with it. You can undo this."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true

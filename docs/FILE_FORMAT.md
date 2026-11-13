@@ -21,7 +21,7 @@ My project/
                                        the layer's selections in one file (and,
                                        deductive, the protocol it follows there)
   layers/l-1a2b3c4d/codes/c-1a2b3c4d.yml
-                                       inductive: one per code (open or axial)
+                                       inductive: one per code (open or theorising)
   layers/l-1a2b3c4d/apriori/apc-1a2b3c4d.yml
                                        deductive: the layer's evidence for one
                                        a priori code
@@ -53,9 +53,9 @@ digits. Keys never change, so renaming touches one file and links survive.
 | `f-` | empirical file |
 | `l-` | layer |
 | `s-` | selection |
-| `c-` | code (open or axial) |
+| `c-` | code (open or theorising) |
 | `x-` | interrelation |
-| `ln-` | link from an open or axial code to an a priori code |
+| `ln-` | link from an open or theorising code to an a priori code |
 | `pr-` | protocol |
 | `pi-` | protocol item |
 | `apc-` | a priori code |
@@ -65,7 +65,7 @@ digits. Keys never change, so renaming touches one file and links survive.
 | `i-` | interviewee |
 
 The **working identifiers** shown in the app (`EF 31`, `PR 2`, `AST 4`,
-`APC 7`, `OC 23`, `AC 12`, `R 5`, `I 17`) are not stored anywhere: they are worked out from the
+`APC 7`, `OC 23`, `TC 12`, `R 5`, `I 17`) are not stored anywhere: they are worked out from the
 titles and names each time (alphabetical order, per kind), so they change as
 items come and go. Refer to items by key in anything that must last.
 
@@ -93,10 +93,17 @@ real_names:                       # optional: mapping files, relative to the ful
   researchers: private/researchers-real-names.csv
   interviewees: private/interviewees-real-names.csv
 table_columns:                    # optional: attribute sheet questions shown as table columns
-  files: [q-0a1b2c3d, q-4e5f6a7b] # per table: files | interviewees | open-codes | axial-codes
+  files: [q-0a1b2c3d, q-4e5f6a7b] # per table: files | interviewees | open-codes | theorising-codes
   interviewees: [q-9c8d7e6f]
+table_layouts:                    # optional: how those tables' question columns are arranged
+  files: "{\"…\"}"               # per table: SwiftUI's column customization as JSON (order, widths)
 layers: [l-0a1b2c3d, l-4e5f6a7b]  # display order; folders not listed are added
 ```
+
+`table_layouts` is written by the app when question columns are moved or
+resized, and read back as written; it is not meant to be edited by hand (a
+value the app can't read is ignored, and the columns take their default
+order). Which questions show is `table_columns`, whatever the layout says.
 
 ## files/<f-key>.yml
 
@@ -111,7 +118,13 @@ status: coded                     # not-started | in-progress | coded
 fingerprint: sha256:fb3a…         # of the file's bytes, to notice changes
 attribute_sheets: [ast-c0debee1]  # associated attribute sheets
 added: 2026-11-01
+rotations:                        # optional, PDFs only: pages shown turned, for reading
+  3: 90                           # page number (from 1): 90, 180 or 270 degrees clockwise
 ```
+
+`rotations` only says how a page is shown (a table printed sideways, say):
+it is added to the page's own rotation in the PDF, the PDF itself is never
+changed, and selections, which count into the page's text, are unaffected.
 
 ## layers/<l-key>/layer.yml
 
@@ -125,7 +138,7 @@ researcher: r-a11ce000            # optional
 
 A **deductive** layer applies what was defined beforehand: protocol
 segments, evidence for a priori codes, Framework Matrix summaries. An
-**inductive** layer holds what emerges from the data: open and axial codes.
+**inductive** layer holds what emerges from the data: open and theorising codes.
 A project always has at least one layer of each kind (on load, a missing
 kind gets a layer called Main Deductive or Main Inductive, with a note); new
 projects start with both. A layer's kind can change only while nothing is
@@ -186,6 +199,15 @@ File…) changes its `path`, `kind` (text or Markdown) and `fingerprint` and
 moves its selections the same way; its key, and everything that refers to
 it, stay.
 
+**Editing a text file in place** (right-click selected text › Edit Text…)
+writes the full-text itself (in its own encoding, byte-order mark and line
+endings) and updates the workspace to match, in every layer: selections
+after the edit move by the change in length; selections overlapping it take
+in the new text (irrelevant ones stop at its edges, so irrelevant text never
+comes to overlap other selections); a selection left with no text is
+deleted, with its evidence links; stored quotes are taken again from the new
+text; and the file's `fingerprint` becomes that of the new bytes.
+
 **Rules** (enforced by the app): within a layer, irrelevant selections never
 overlap selections that aren't irrelevant, and are never evidence. On a
 deductive layer, a selection is a protocol segment or evidence for a priori
@@ -198,12 +220,12 @@ becomes a plain selection.
 
 ```yaml
 key: c-843835de
-kind: open                        # open | axial
+kind: open                        # open | theorising
 name: Fatigue in long sessions
 colour: "#E55934"
 description: Tiredness, eyes, pace over hours of coding.
-evidence:                         # open: selections; axial: codes (no cycles)
-  - selection: s-1405501d         # axial codes write "code: c-…"
+evidence:                         # open: selections; theorising: codes (no cycles)
+  - selection: s-1405501d         # theorising codes write "code: c-…"
     memo: Reading comfort matters over hours.   # the interpretation memo
   - selection: s-6092745d
 comments:
@@ -245,13 +267,17 @@ evidence:
 
 A deductive layer's Framework Matrix summaries for one row: an empirical
 file or an interviewee. Each cell is a column (an a priori code or a
-protocol item) and the researcher's summary of the row's data for it.
+protocol item) and the researcher's summary of the row's data for it. A
+file's cells for protocol items are the summaries written in the bubbles
+under its protocol labels, which the Protocol Report shows.
 
 ```yaml
 row: f-1e7e0001
 cells:
   - column: apc-7a0e0001
     summary: Still learning the interface; the shortcuts make long sessions easier.
+  - column: pi-0a000001             # a protocol item
+    summary: An improvement on other QDA tools, but still learning the interface.
 ```
 
 ## protocols/<pr-key>.yml
@@ -298,7 +324,7 @@ Every field but `name` is optional.
 key: ast-c0debee1
 title: Interview context
 description: Answer once per interview.
-applies_to: [files]               # files | interviewees | open-codes | axial-codes
+applies_to: [files]               # files | interviewees | open-codes | theorising-codes
 questions:                        # in order
   - key: q-5e771460
     label: Setting                # at most 16 characters
@@ -389,7 +415,7 @@ to fill in (it never overwrites an existing file).
 ## Not in the workspace
 
 Kept on each Mac (the app's UserDefaults), never in Git: recent projects;
-per project, the full-texts folder (a read-only security-scoped bookmark),
+per project, the full-texts folder (a security-scoped bookmark),
 this Mac's researcher, the Working Area, the page last open, the active and
 hidden layers, quick codes per layer and reading positions. Settings ›
 Privacy forgets them.

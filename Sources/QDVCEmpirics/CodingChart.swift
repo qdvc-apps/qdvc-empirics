@@ -2,9 +2,9 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// Reporting › Coding Chart: the active layer's empirical files on the
+/// Reports › Coding Chart: the active layer's empirical files on the
 /// left, linked (M:N) to the open codes with evidence in them, linked to
-/// the axial codes they are evidence for; axial codes built on other axial
+/// the theorising codes they are evidence for; theorising codes built on other theorising
 /// codes sit further right. Every item is one line (icon, title, working
 /// identifier). Click an item to see it in the inspector and light up what
 /// it is linked to; double-click to open it.
@@ -28,8 +28,8 @@ struct CodingChartPage: View {
             if chart.columns.allSatisfy(\.isEmpty) {
                 ContentUnavailableView("Nothing to Chart Yet", systemImage: "point.3.connected.trianglepath.dotted",
                                        description: Text(chart.unlinked > 0
-                                           ? "Nothing in \(model.inductiveLayer?.name ?? "this layer") is linked yet. Apply open codes to text, and build axial codes from them."
-                                           : "Apply open codes to text in \(model.inductiveLayer?.name ?? "this layer"), and build axial codes from them."))
+                                           ? "Nothing in \(model.inductiveLayer?.name ?? "this layer") is linked yet. Apply open codes to text, and build theorising codes from them."
+                                           : "Apply open codes to text in \(model.inductiveLayer?.name ?? "this layer"), and build theorising codes from them."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ChartCanvas(model: model, chart: chart)
@@ -46,7 +46,7 @@ struct CodingChartPage: View {
                     .fixedSize()
                 Toggle("Show Unlinked Items", isOn: $includeUnlinked)
                     .toggleStyle(.checkbox)
-                    .help("Also show empirical files, open codes and axial codes that nothing links to yet")
+                    .help("Also show empirical files, open codes and theorising codes that nothing links to yet")
                 Spacer(minLength: 8)
                 Text(summary(chart))
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
@@ -60,8 +60,8 @@ struct CodingChartPage: View {
     func summary(_ chart: CodingChart) -> String {
         let files = chart.columns.first?.count ?? 0
         let open = chart.columns.count > 1 ? chart.columns[1].count : 0
-        let axial = chart.columns.dropFirst(2).reduce(0) { $0 + $1.count }
-        var text = "\(files) file\(files == 1 ? "" : "s") · \(open) open · \(axial) axial code\(axial == 1 ? "" : "s")"
+        let theorising = chart.columns.dropFirst(2).reduce(0) { $0 + $1.count }
+        var text = "\(files) file\(files == 1 ? "" : "s") · \(open) open · \(theorising) theorising code\(theorising == 1 ? "" : "s")"
         if chart.unlinked > 0 { text += " · \(chart.unlinked) unlinked not shown" }
         return text
     }
@@ -97,7 +97,7 @@ struct ChartCanvas: View {
             switch c {
             case 0: title = "Empirical Files"
             case 1: title = "Open Codes"
-            default: title = chart.columns.count > 3 ? "Axial Codes · Level \(c - 1)" : "Axial Codes"
+            default: title = chart.columns.count > 3 ? "Theorising Codes · Level \(c - 1)" : "Theorising Codes"
             }
             l.headers.append((title, x))
         }

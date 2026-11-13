@@ -146,6 +146,7 @@ struct CodingBar: View {
                     }
                     .help("Add \(model.aCodeNoun) to this selection (⌘K)")
                 }
+                MergeButton(model: model, key: key, compact: compact)
                 Button(role: .destructive) {
                     model.deleteSelection(key)
                 } label: {
@@ -661,6 +662,38 @@ struct PaletteField: NSViewRepresentable {
                 return false
             }
             return true
+        }
+    }
+}
+
+/// Offered when the focused selection has a neighbour it could be merged
+/// with (next to it, with only white space between, and coded the same
+/// way): merges them into one. Never done without asking. (Takes the model
+/// directly: it is built in the coding bar's and the inspector's menus.)
+struct MergeButton: View {
+    let model: AppModel
+    let key: String
+    var compact = false
+
+    var body: some View {
+        let candidates = model.mergeCandidates(for: key)
+        if candidates.count == 1, let other = candidates.first {
+            Button {
+                model.mergeSelections(key, other)
+            } label: {
+                Label(compact ? "" : "Merge", systemImage: "arrow.triangle.merge")
+            }
+            .help(model.mergeTitle(key, other) + ": it is right next to this one and coded the same way. Their memos are kept, joined.")
+        } else if candidates.count > 1 {
+            Menu {
+                ForEach(candidates, id: \.self) { other in
+                    Button(model.mergeTitle(key, other)) { model.mergeSelections(key, other) }
+                }
+            } label: {
+                Label(compact ? "" : "Merge", systemImage: "arrow.triangle.merge")
+            }
+            .fixedSize()
+            .help("Merge with a selection right next to this one and coded the same way. Their memos are kept, joined.")
         }
     }
 }

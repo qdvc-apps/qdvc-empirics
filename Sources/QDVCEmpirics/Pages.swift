@@ -15,7 +15,7 @@ struct LayersPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Layers").font(.title2.weight(.semibold))
-                Text("Each layer is deductive or inductive. Deductive layers apply what was defined beforehand: protocols and a priori codes. Inductive layers hold what emerges from the data: open and axial codes. Every selection lives in exactly one layer. Add layers for other theoretical lenses or other researchers; a layer's kind can change only while nothing is coded in it. You code in the active layer; other layers can show beside it as underlines.")
+                Text("Each layer is deductive or inductive. Deductive layers apply what was defined beforehand: protocols and a priori codes. Inductive layers hold what emerges from the data: open and theorising codes. Every selection lives in exactly one layer. Add layers for other theoretical lenses or other researchers; a layer's kind can change only while nothing is coded in it. You code in the active layer; other layers can show beside it as underlines.")
                     .foregroundStyle(.secondary)
                 ForEach(Array(model.project.layers.enumerated()), id: \.element.key) { i, layer in
                     row(layer, index: i)
@@ -125,8 +125,8 @@ struct LayersPage: View {
             return "\(layer.selectionCount) selections · \(applied) a priori coding\(applied == 1 ? "" : "s") · \(layer.protocols.count) file\(layer.protocols.count == 1 ? "" : "s") with a protocol"
         }
         let open = layer.codes.values.filter { $0.kind == .open }.count
-        let axial = layer.codes.values.filter { $0.kind == .axial }.count
-        return "\(layer.selectionCount) selections · \(open) open · \(axial) axial codes"
+        let theorising = layer.codes.values.filter { $0.kind == .theorising }.count
+        return "\(layer.selectionCount) selections · \(open) open · \(theorising) theorising codes"
     }
 
     var interlocutor: some View {
@@ -174,7 +174,7 @@ struct ProjectPage: View {
                         Button("Show in Finder") { model.revealInFinder() }.controlSize(.small)
                     }
                 }
-                LabeledField("Full-texts (read only; remembered on this Mac only)") {
+                LabeledField("Full-texts (remembered on this Mac only)") {
                     HStack {
                         Text(model.fullTextsURL?.path ?? "Not set on this Mac")
                             .font(.callout.monospaced())

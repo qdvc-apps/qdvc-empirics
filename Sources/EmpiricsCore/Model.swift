@@ -8,7 +8,7 @@ import Foundation
 // A project's layers are each deductive or inductive. Protocols and a priori
 // codes are defined once for the project and applied on deductive layers
 // (protocol segments; a priori code evidence; Framework Matrix summaries);
-// open and axial codes live in an inductive layer. Interviewees and
+// open and theorising codes live in an inductive layer. Interviewees and
 // attribute sheets belong to the project.
 //
 // Names are chosen not to clash with SwiftUI, AppKit or Foundation (the app
@@ -147,12 +147,16 @@ public struct EmpiricalFile: Identifiable, Equatable {
     /// Attribute sheets associated with this file.
     public var attributeSheets: [String]
     public var added: String
+    /// PDFs: pages shown rotated (zero-based page → 90, 180 or 270 degrees
+    /// clockwise, on top of the page's own rotation). Only how the page is
+    /// shown: the PDF itself is never changed.
+    public var rotations: [Int: Int]
 
     public var id: String { key }
 
     public init(key: String, path: String, kind: FileKind, title: String = "", date: String = "",
                 customID: String = "", status: CodingStatus = .notStarted, fingerprint: String = "",
-                attributeSheets: [String] = [], added: String = "") {
+                attributeSheets: [String] = [], added: String = "", rotations: [Int: Int] = [:]) {
         self.key = key
         self.path = path
         self.kind = kind
@@ -163,6 +167,7 @@ public struct EmpiricalFile: Identifiable, Equatable {
         self.fingerprint = fingerprint
         self.attributeSheets = attributeSheets
         self.added = added
+        self.rotations = rotations
     }
 
     /// The title, or the file name without its extension.
@@ -308,16 +313,16 @@ public struct CodeSelection: Identifiable, Equatable {
 public enum CodeKind: String, CaseIterable, Codable {
     /// Evidenced directly by selections.
     case open
-    /// Evidenced by open codes and other axial codes.
-    case axial
+    /// Evidenced by open codes and other theorising codes.
+    case theorising
 
-    public var label: String { self == .open ? "Open Code" : "Axial Code" }
+    public var label: String { self == .open ? "Open Code" : "Theorising Code" }
 }
 
 /// One piece of evidence for a code, with the researcher's interpretation
 /// memo: why this selection (or code) is evidence for the code.
 public struct Evidence: Equatable, Hashable {
-    /// A selection key (open codes) or a code key (axial codes).
+    /// A selection key (open codes) or a code key (theorising codes).
     public var target: String
     public var memo: String
 
@@ -390,7 +395,7 @@ public struct QDACode: Identifiable, Equatable {
     public func memo(for target: String) -> String { evidence.first { $0.target == target }?.memo ?? "" }
 }
 
-/// How an open or axial code bears on an a priori code: where what emerged
+/// How an open or theorising code bears on an a priori code: where what emerged
 /// from the data meets what was defined beforehand.
 public enum LinkType: String, CaseIterable, Codable {
     case confirms
@@ -410,7 +415,7 @@ public enum LinkType: String, CaseIterable, Codable {
     }
 }
 
-/// A link from an open or axial code to an a priori code, with the
+/// A link from an open or theorising code to an a priori code, with the
 /// researcher's memo on it.
 public struct CodeLink: Identifiable, Equatable {
     public var key: String
@@ -447,7 +452,7 @@ public enum CodePalette {
 // MARK: - Layers
 
 /// Deductive layers apply what was defined beforehand (protocols, a priori
-/// codes); inductive layers hold what emerges from the data (open and axial
+/// codes); inductive layers hold what emerges from the data (open and theorising
 /// codes).
 public enum LayerKind: String, CaseIterable, Codable {
     case deductive
@@ -467,7 +472,7 @@ public struct CodingLayer: Identifiable, Equatable {
     public var researcher: String
     /// Selections by file key, each list sorted by position.
     public var selections: [String: [CodeSelection]]
-    /// Inductive layers: open and axial codes.
+    /// Inductive layers: open and theorising codes.
     public var codes: [String: QDACode]
     /// Deductive layers: evidence (selections of this layer) for each a
     /// priori code, by a priori code key.
@@ -680,14 +685,14 @@ public enum AttributeSheetTarget: String, CaseIterable, Codable, Hashable {
     case files
     case interviewees
     case openCodes = "open-codes"
-    case axialCodes = "axial-codes"
+    case theorisingCodes = "theorising-codes"
 
     public var label: String {
         switch self {
         case .files: return "Empirical Files"
         case .interviewees: return "Interviewees"
         case .openCodes: return "Open Codes"
-        case .axialCodes: return "Axial Codes"
+        case .theorisingCodes: return "Theorising Codes"
         }
     }
 }
@@ -901,15 +906,20 @@ public struct ProjectSettings: Equatable {
     public var researcherNamesFile: String
     public var intervieweeNamesFile: String
     /// Attribute Sheet questions shown as columns in the tables of empirical files,
-    /// interviewees, open codes and axial codes: question keys, per table.
+    /// interviewees, open codes and theorising codes: question keys, per table.
     public var tableColumns: [AttributeSheetTarget: [String]]
+    /// How those tables' question columns are arranged (their order, and
+    /// widths), per table: SwiftUI's column customization as JSON, which the
+    /// app reads back as it wrote it. Which questions show is in
+    /// `tableColumns`.
+    public var tableLayouts: [AttributeSheetTarget: String]
 
     public static let defaultInterrelationTypes = ["Compare", "Contrast"]
 
     public init(key: String, title: String, description: String = "", storeQuotes: Bool = true,
                 interlocutorLayer: Bool = false, interrelationTypes: [String] = ProjectSettings.defaultInterrelationTypes,
                 researcherNamesFile: String = "", intervieweeNamesFile: String = "",
-                tableColumns: [AttributeSheetTarget: [String]] = [:]) {
+                tableColumns: [AttributeSheetTarget: [String]] = [:], tableLayouts: [AttributeSheetTarget: String] = [:]) {
         self.key = key
         self.title = title
         self.description = description
@@ -919,6 +929,7 @@ public struct ProjectSettings: Equatable {
         self.researcherNamesFile = researcherNamesFile
         self.intervieweeNamesFile = intervieweeNamesFile
         self.tableColumns = tableColumns
+        self.tableLayouts = tableLayouts
     }
 }
 

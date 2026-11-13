@@ -56,10 +56,11 @@ struct ContentView: View {
         case .aprioriCodes: return "A Priori Codes"
         case .attributeSheets: return "Attribute Sheets"
         case .openCodes: return "Open Codes"
-        case .axialCodes: return "Axial Codes"
+        case .theorisingCodes: return "Theorising Codes"
         case .layers: return "Layers"
         case .codingChart: return "Coding Chart"
         case .attributeSheetReport: return "Attribute Sheet Report"
+        case .protocolReport: return "Protocol Report"
         case .file(let k), .code(let k), .studyProtocol(let k), .aprioriCode(let k), .attributeSheet(let k),
              .researcher(let k), .interviewee(let k):
             return model.itemLabel(k)
@@ -120,10 +121,11 @@ struct DetailView: View {
         case .aprioriCodes: AprioriCodesTable()
         case .attributeSheets: AttributeSheetsTable()
         case .openCodes: CodesTable(kind: .open).id("open")
-        case .axialCodes: CodesTable(kind: .axial).id("axial")
+        case .theorisingCodes: CodesTable(kind: .theorising).id("theorising")
         case .layers: LayersPage()
         case .codingChart: CodingChartPage()
         case .attributeSheetReport: AttributeSheetReportPage()
+        case .protocolReport: ProtocolReportPage()
         case .file(let k): DocumentPage(fileKey: k)
         case .code(let k): CodePage(codeKey: k)
         case .studyProtocol(let k): ProtocolPage(protocolKey: k).id(k)
@@ -315,14 +317,16 @@ struct Sidebar: View {
             Section("Inductive") {
                 Label("Open Codes", systemImage: "tag")
                     .tag(SidebarItem.openCodes)
-                Label("Axial Codes", systemImage: "tray.full")
-                    .tag(SidebarItem.axialCodes)
+                Label("Theorising Codes", systemImage: "tray.full")
+                    .tag(SidebarItem.theorisingCodes)
             }
-            Section("Reporting") {
+            Section("Reports") {
                 Label("Coding Chart", systemImage: "point.3.connected.trianglepath.dotted")
                     .tag(SidebarItem.codingChart)
                 Label("Attribute Sheet Report", systemImage: "tablecells")
                     .tag(SidebarItem.attributeSheetReport)
+                Label("Protocol Report", systemImage: "list.bullet.rectangle.portrait")
+                    .tag(SidebarItem.protocolReport)
             }
             // Every sidebar row is a single line of fixed height. A wrapping
             // hint row here ("Double-click a file…") was measured at the wrong

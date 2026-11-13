@@ -19,6 +19,7 @@ struct SheetHost: View {
             case .moveToLayer(let item): MoveToLayerSheet(item: item)
             case .updateFile(let file): UpdateFileSheet(fileKey: file)
             case .newCode(let kind, let parent, let child): NewCodeSheet(kind: kind, parent: parent, child: child)
+            case .editText(let file, let start, let length): EditTextSheet(fileKey: file, start: start, length: length)
             }
         }
         .modifier(NoWritingTools())
@@ -50,7 +51,7 @@ struct NewProjectSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("New Project").font(.title2.weight(.semibold))
-            Text("A project keeps its analysis in a **workspace** folder of YAML files, meant for Git. The interview transcripts, documents and consent forms stay in a separate **full-texts** folder that QDVC Empirics only ever reads, and that never goes into the workspace.")
+            Text("A project keeps its analysis in a **workspace** folder of YAML files, meant for Git. The interview transcripts, documents and consent forms stay in a separate **full-texts** folder that never goes into the workspace; QDVC Empirics reads it, and writes to it only when you confirm an edit to a transcript's text.")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Form {
@@ -59,7 +60,7 @@ struct NewProjectSheet: View {
                     folderButton(folder, placeholder: "Choose an empty folder…") { folder = chooseFolder(create: true, message: "Choose an empty folder for the project's workspace (it will be tracked in Git).") }
                 }
                 LabeledContent("Full-texts") {
-                    folderButton(fullTexts, placeholder: "Choose the full-texts folder…") { fullTexts = chooseFolder(create: false, message: "Choose the folder that holds the full-texts (transcripts, PDFs) and consent forms. It is only ever read.") }
+                    folderButton(fullTexts, placeholder: "Choose the full-texts folder…") { fullTexts = chooseFolder(create: false, message: "Choose the folder that holds the full-texts (transcripts, PDFs) and consent forms. It is read, and written only when you confirm an edit to a text file.") }
                 }
                 Section("You (optional)") {
                     TextField("First name", text: $firstName)
@@ -420,11 +421,11 @@ struct MoveToLayerSheet: View {
         let others = model.project.layers.filter { $0.key != from && $0.kind == kind }
         VStack(alignment: .leading, spacing: 14) {
             Text("Move to Another Layer").font(.title3.weight(.semibold))
-            Text("Selections, open codes and axial codes exist in one layer only, so everything linked to this item moves with it: \(component.selections.count) selection\(component.selections.count == 1 ? "" : "s"), \(model.codeCounts(Array(component.codes))).")
+            Text("Selections, open codes and theorising codes exist in one layer only, so everything linked to this item moves with it: \(component.selections.count) selection\(component.selections.count == 1 ? "" : "s"), \(model.codeCounts(Array(component.codes))).")
                 .fixedSize(horizontal: false, vertical: true)
             if !component.codes.isEmpty {
                 let names = component.codes.filter { model.project.code($0) != nil }.map { model.itemLabel($0) }.sorted()
-                Text("Open and axial codes: " + names.prefix(12).joined(separator: ", ") + (names.count > 12 ? "…" : ""))
+                Text("Open and theorising codes: " + names.prefix(12).joined(separator: ", ") + (names.count > 12 ? "…" : ""))
                     .font(.callout).foregroundStyle(.secondary)
             }
             Picker("Move to", selection: $target) {
@@ -469,7 +470,7 @@ struct NewCodeSheet: View {
             if let child, let c = model.project.code(child) {
                 Text("“\(c.name)” will be evidence for it.").foregroundStyle(.secondary)
             }
-            Text(kind == .open ? "Open codes are evidenced directly by selections." : "Axial codes are built from open codes and other axial codes.")
+            Text(kind == .open ? "Open codes are evidenced directly by selections." : "Theorising codes are built from open codes and other theorising codes.")
                 .font(.callout).foregroundStyle(.secondary)
             TextField("Name", text: $name)
                 .textFieldStyle(.roundedBorder)

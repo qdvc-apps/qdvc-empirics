@@ -292,8 +292,16 @@ struct ProtocolSummary: View {
                         }
                     }
                 }
-                Button("Edit Items…") { model.show(.studyProtocol(protocolKey)) }
-                    .controlSize(.small)
+                HStack {
+                    Button("Edit Items…") { model.show(.studyProtocol(protocolKey)) }
+                    if model.sidebar != .protocolReport {
+                        Button("Show Report") {
+                            model.reportProtocol = protocolKey
+                            model.sidebar = .protocolReport
+                        }
+                    }
+                }
+                .controlSize(.small)
                 Divider()
                 ProtocolUsage(protocolKey: protocolKey)
             }
@@ -445,7 +453,7 @@ struct AprioriCodeTableMenu: View {
 // MARK: - A priori code page
 
 /// An a priori code's page: its codebook entry at a glance, the open and
-/// axial codes linked to it, and its evidence by file. The inspector edits
+/// theorising codes linked to it, and its evidence by file. The inspector edits
 /// the entry.
 struct AprioriCodePage: View {
     @Environment(AppModel.self) private var model
@@ -625,7 +633,7 @@ struct AprioriCodeEditor: View {
                 let links = model.links(to: key)
                 SectionHeader(title: "Linked From", trailing: links.isEmpty ? nil : "\(links.count)")
                 if links.isEmpty {
-                    Text("No open or axial code is linked to it yet.").font(.callout).foregroundStyle(.secondary)
+                    Text("No open or theorising code is linked to it yet.").font(.callout).foregroundStyle(.secondary)
                 }
                 ForEach(links, id: \.link.key) { entry in
                     HStack(spacing: 6) {

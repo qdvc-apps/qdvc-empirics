@@ -337,7 +337,7 @@ public enum Workspace {
             let name = p.layers[li].name
             if p.layers[li].isDeductive {
                 if !p.layers[li].codes.isEmpty {
-                    notes.append("\(name) is deductive but had open or axial codes; they are ignored.")
+                    notes.append("\(name) is deductive but had open or theorising codes; they are ignored.")
                     p.layers[li].codes = [:]
                 }
                 // Protocols that exist; segments of the file's protocol.

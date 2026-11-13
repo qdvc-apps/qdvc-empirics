@@ -2,7 +2,7 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-// One way of showing any item (empirical file, attribute sheet, open code, axial
+// One way of showing any item (empirical file, attribute sheet, open code, theorising
 // code, researcher, interviewee) on a single line: a neutral icon, its title
 // and its working-identifier badge ("EF 3", "OC 12"…). Used in the Working
 // Area, the Coding Chart, the Attribute Sheet Report and the inspector headers.
@@ -41,7 +41,7 @@ extension AppModel {
     /// What kind of item it is, in words ("Open Code", "Empirical File"…).
     func itemKind(_ key: String) -> String {
         if project.files[key] != nil { return "Empirical File" }
-        if let c = project.code(key) { return c.kind == .open ? "Open Code" : "Axial Code" }
+        if let c = project.code(key) { return c.kind == .open ? "Open Code" : "Theorising Code" }
         if project.attributeSheets[key] != nil { return "Attribute Sheet" }
         if project.protocols[key] != nil { return "Protocol" }
         if project.aprioriCodes[key] != nil { return "A Priori Code" }
@@ -72,14 +72,14 @@ extension AppModel {
         reportAttributeSheet.flatMap { project.attributeSheets[$0] != nil ? $0 : nil } ?? project.sortedAttributeSheets.first?.key
     }
 
-    /// "3 open codes and 1 axial code", for counts in sentences.
+    /// "3 open codes and 1 theorising code", for counts in sentences.
     func codeCounts(_ keys: [String]) -> String {
         let codes = keys.compactMap { project.code($0) }
-        return Self.codeCounts(open: codes.filter { $0.kind == .open }.count, axial: codes.filter { $0.kind == .axial }.count)
+        return Self.codeCounts(open: codes.filter { $0.kind == .open }.count, theorising: codes.filter { $0.kind == .theorising }.count)
     }
 
-    nonisolated static func codeCounts(open: Int, axial: Int) -> String {
-        "\(open) open code\(open == 1 ? "" : "s") and \(axial) axial code\(axial == 1 ? "" : "s")"
+    nonisolated static func codeCounts(open: Int, theorising: Int) -> String {
+        "\(open) open code\(open == 1 ? "" : "s") and \(theorising) theorising code\(theorising == 1 ? "" : "s")"
     }
 
     /// "OC 12 Fatigue": for menus and other places that take plain text.

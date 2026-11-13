@@ -1,8 +1,8 @@
 import Foundation
 
-/// Read-only access to the full-texts folder. There is deliberately no
-/// way to write through this type: full-texts and consent forms are only
-/// ever read (docs/DESIGN.md §Data security).
+/// Access to the full-texts folder. Full-texts are read; the only write is
+/// `write(_:to:)` (TextEdits.swift), for an edit to a text file the
+/// researcher has confirmed (docs/DESIGN.md §Data security).
 public struct FullTexts {
     public let root: URL
 

@@ -19,7 +19,8 @@ struct TextDecorations: Equatable {
     var stripes: [StripeSpec] = []
     /// Speaker turns.
     var turns: [TurnSpec] = []
-    /// Protocol segments of the active (deductive) layer.
+    /// Protocol segments: the active layer's when it is deductive, else
+    /// those of the visible deductive layers.
     var segments: [SegmentSpec] = []
 }
 
@@ -34,6 +35,12 @@ struct SegmentSpec: Equatable {
     var help: String
     var focused: Bool
     var prompt: Bool
+    /// The deductive layer it is in, and its protocol item (whose summary
+    /// for the file shows in a bubble under the label).
+    var layer: String
+    var item: String
+    /// In another layer than the active one (shown for reference).
+    var reference: Bool
 }
 
 struct StripeSpec: Equatable {
@@ -76,6 +83,11 @@ struct PlacedMark: Identifiable, Equatable {
     var badges: [LabelBadge] = []
     var dashed = false
     var caption: String = ""
+    /// Protocol segments: the layer and the protocol item (for the summary
+    /// bubble), and whether it is in another layer than the active one.
+    var layer: String = ""
+    var item: String = ""
+    var reference = false
 }
 
 /// How the file page's width is shared: speaker names, the text, coding
@@ -109,8 +121,9 @@ struct ColumnLayout: Equatable {
     }
 
     static let stripeWidth: CGFloat = 56
-    static let speakerWidth: CGFloat = 132
-    static let minSpeakerWidth: CGFloat = 88
+    /// Speaker names run up the margin (SpeakerMargin), so it is narrow.
+    static let speakerWidth: CGFloat = 34
+    static let minSpeakerWidth: CGFloat = 34
     static let maxLabelWidth: CGFloat = 200
     static let minLabelWidth: CGFloat = 110
 
@@ -161,7 +174,7 @@ struct TextCodingView: View {
                 FillingScroll {
                     HStack(alignment: .top, spacing: 0) {
                         if layout.protocols > 0 {
-                            SegmentMargin(marks: segmentMarks, width: layout.protocols)
+                            SegmentMargin(fileKey: fileKey, marks: segmentMarks, width: layout.protocols)
                                 .frame(width: layout.protocols)
                                 .frame(maxHeight: .infinity, alignment: .top)
                         }
@@ -285,10 +298,23 @@ struct TextCodingView: View {
                 d.stripes.append(StripeSpec(key: s.key, range: range, color: model.selectionColour(s, in: layer), help: help,
                                             focused: focused, label: label, badges: badges))
             }
-            for s in all {
+        }
+        // Protocol segments are structure, like speaker turns: the active
+        // layer's when it is deductive; while coding on an inductive layer,
+        // those of the deductive layers shown beside it, so the protocol
+        // labels stay in view.
+        let segmentLayers: [CodingLayer]
+        if let active = model.activeLayer, active.isDeductive {
+            segmentLayers = [active]
+        } else {
+            segmentLayers = p.deductiveLayers.filter { model.isLayerVisible($0.key) }
+        }
+        for layer in segmentLayers {
+            let reference = layer.key != model.activeLayerKey
+            for s in layer.selections[fileKey] ?? [] {
                 guard let segment = s.segment, let first = s.spans.first, ok(first), let last = s.spans.last else { continue }
                 let range = NSRange(location: first.start, length: last.end - first.start)
-                let focused = s.key == model.focusedSelection
+                let focused = !reference && s.key == model.focusedSelection
                 if focused {
                     for span in s.spans where ok(span) {
                         d.fills.append(.init(range: NSRange(location: span.start, length: span.length),
@@ -297,10 +323,12 @@ struct TextCodingView: View {
                 }
                 let item = p.protocolItem(segment.item)?.item
                 let number = p.protocolItemNumber(segment.item).map { "\($0) · " } ?? ""
+                var help = model.segmentTitle(segment) + (item.map { $0.text.isEmpty ? "" : "\n" + $0.text } ?? "")
+                if reference { help += "\n\nIn \(layer.name) (switch to it to change the segment)." }
                 d.segments.append(SegmentSpec(key: s.key, range: range, label: number + segment.part.label,
                                               caption: item.map { $0.label.isEmpty ? "Untitled" : $0.label } ?? "Deleted item",
-                                              help: model.segmentTitle(segment) + (item.map { $0.text.isEmpty ? "" : "\n" + $0.text } ?? ""),
-                                              focused: focused, prompt: segment.part == .prompt))
+                                              help: help, focused: focused, prompt: segment.part == .prompt,
+                                              layer: layer.key, item: segment.item, reference: reference))
             }
         }
         if model.showOtherLayers {
@@ -613,42 +641,108 @@ struct CodeNameMargin: View {
     }
 }
 
-/// Speaker names at the start of each turn, with a bar down the turn, in
-/// greyscale (see AppModel.speakerColor).
+/// The Interlocutor layer's margin: a rail down each speaker's turn, and on
+/// it the speaker's name as a badge (a capsule, in capitals) running up the
+/// margin, turned a quarter to the left so the margin can stay narrow. On a
+/// long turn the badge slides down its rail as the text scrolls, so who is
+/// speaking stays in view (like a frozen table heading), until the turn's
+/// end pushes it along. Greyscale (see AppModel.speakerColor).
 struct SpeakerMargin: View {
     var marks: [PlacedMark]
     var width: CGFloat
 
+    /// The badge's thickness across the margin, and its longest length.
+    static let thickness: CGFloat = 17
+    static let maxLength: CGFloat = 240
+    static let kerning: CGFloat = 0.6
+    static let font = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
+    /// Room kept above a sliding badge, at the top of the visible text.
+    static let inset: CGFloat = 8
+
+    /// A badge's length along the rail (its name, capitals and padding).
+    static func length(_ name: String) -> CGFloat {
+        let w = (name.uppercased() as NSString).size(withAttributes: [.font: font, .kern: kerning]).width
+        return min(maxLength, ceil(w) + 18)
+    }
+
+    /// Where a badge goes on its turn's rail: level with the top of the
+    /// visible text while the turn runs past it, but never above the turn's
+    /// start nor past its end.
+    static func badgeY(_ m: PlacedMark, length: CGFloat, visibleTop: CGFloat) -> CGFloat {
+        let lowest = max(m.y, m.y + m.height - length)
+        return min(max(visibleTop + inset, m.y), lowest)
+    }
+
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.clear
-            ForEach(marks) { m in
-                HStack(alignment: .top, spacing: 6) {
-                    Text(m.text)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color(nsColor: m.color))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.top, 2)
+        // Measured once per change of marks, not on every scroll step (only
+        // the GeometryReader's content runs again as the text scrolls).
+        var lengths: [String: CGFloat] = [:]
+        for m in marks { lengths[m.id] = min(Self.length(m.text), max(Self.thickness, m.height)) }
+        let rail = width - 14
+        return GeometryReader { geo in
+            // The top of the visible text, in this margin's coordinates.
+            let visibleTop = max(0, -geo.frame(in: NamedCoordinateSpace.named(ScrollSpace.document)).minY)
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                ForEach(marks) { m in
+                    let color = Color(nsColor: m.color)
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color(nsColor: m.color).opacity(0.3))
+                        .fill(color.opacity(0.3))
                         .frame(width: 2, height: max(8, m.height))
+                        .offset(x: rail - 1, y: m.y)
+                    let length = lengths[m.id] ?? Self.thickness
+                    SpeakerBadge(name: m.text, color: color, length: length)
+                        .offset(x: rail - Self.thickness / 2,
+                                y: Self.badgeY(m, length: length, visibleTop: visibleTop))
                 }
-                .frame(width: max(0, width - 14), alignment: .trailing)
-                .offset(x: -8, y: m.y)
             }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
     }
 }
 
-/// Protocol segments at the far left (deductive layers): a bracket down
-/// each segment (dashed for a prompt, solid for a response) with its item
-/// number and part, and the item's label. Click one to focus it.
+/// A speaker's name as a capsule badge in capitals, reading upwards (turned
+/// 90° anticlockwise).
+struct SpeakerBadge: View {
+    var name: String
+    var color: Color
+    var length: CGFloat
+
+    var body: some View {
+        let t = SpeakerMargin.thickness
+        Text(name.uppercased())
+            .font(.system(size: 9.5, weight: .semibold))
+            .kerning(SpeakerMargin.kerning)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 7)
+            .frame(width: length, height: t)
+            .background(
+                Capsule()
+                    .fill(Color(nsColor: .textBackgroundColor))
+                    .overlay(Capsule().fill(color.opacity(0.10)))
+            )
+            .overlay(Capsule().strokeBorder(color.opacity(0.5), lineWidth: 1))
+            .rotationEffect(.degrees(-90))
+            .frame(width: t, height: length)
+            .help(name)
+    }
+}
+
+/// Protocol segments at the far left: a bracket down each segment (dashed
+/// for a prompt, solid for a response) with its item number and part, the
+/// item's label, and a bubble for the item's summary in this file (dotted
+/// while there is none; double-click it to write one). Click a segment to
+/// focus it. Segments of another layer (shown while coding on an inductive
+/// layer) are lighter, and only for reference.
 struct SegmentMargin: View {
     @Environment(AppModel.self) private var model
+    var fileKey: String
     var marks: [PlacedMark]
     var width: CGFloat
+    /// The segment whose summary is being edited.
+    @State private var editing: String?
 
     var body: some View {
         let color = Color(nsColor: .protocolSegment)
@@ -657,7 +751,7 @@ struct SegmentMargin: View {
             Color.clear
             ForEach(marks) { m in
                 HStack(alignment: .top, spacing: 5) {
-                    VStack(alignment: .trailing, spacing: 1) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         Text(m.label)
                             .font(.system(size: 10, weight: .semibold).monospacedDigit())
                             .foregroundStyle(color.opacity(m.focused ? 1 : 0.8))
@@ -669,17 +763,107 @@ struct SegmentMargin: View {
                                 .lineLimit(3)
                                 .multilineTextAlignment(.trailing)
                         }
+                        if !m.item.isEmpty {
+                            // Read here, not placed with the marks, so typing
+                            // a summary doesn't lay the text out again.
+                            SummaryBubble(summary: model.protocolSummary(layer: m.layer, file: fileKey, item: m.item),
+                                          color: color)
+                                .padding(.top, 1)
+                                .onTapGesture(count: 2) { editing = m.id }
+                                .popover(isPresented: Binding(get: { editing == m.id },
+                                                              set: { if !$0, editing == m.id { editing = nil } }),
+                                         arrowEdge: .trailing) {
+                                    ProtocolSummaryEditor(model: model, layer: m.layer, file: fileKey, item: m.item)
+                                }
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.top, 1)
                     Bracket(dashed: m.dashed, focused: m.focused, color: color, height: max(10, m.height))
                 }
+                .opacity(m.reference ? 0.6 : 1)
                 .frame(width: max(0, width - 10 - CGFloat(m.lane) * 7), alignment: .trailing)
                 .contentShape(Rectangle())
-                .onTapGesture { model.focusSelection(m.id) }
+                .onTapGesture {
+                    if !m.reference { model.focusSelection(m.id) }
+                }
                 .help(m.text)
                 .offset(x: -6 - CGFloat(m.lane) * 7, y: m.y)
             }
+        }
+    }
+}
+
+/// A protocol item's summary in a file, as a small bubble under its label:
+/// a dotted circle while there is none, filled once written.
+struct SummaryBubble: View {
+    var summary: String
+    var color: Color
+
+    var body: some View {
+        let empty = summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ZStack {
+            if empty {
+                Circle().strokeBorder(color.opacity(0.75), style: StrokeStyle(lineWidth: 1.2, dash: [2, 2]))
+            } else {
+                Circle().fill(color.opacity(0.85))
+                Image(systemName: "text.alignleft")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 14, height: 14)
+        .contentShape(Circle())
+        .help(empty ? "No summary yet: double-click to write one (it shows in the Protocol Report)."
+                    : summary + "\n\nDouble-click to edit.")
+    }
+}
+
+/// Writes a protocol item's summary for a file in a deductive layer (the
+/// layer's Framework Matrix cell), as typed. (Takes the model directly: a
+/// popover is hosted apart from the window's views.)
+struct ProtocolSummaryEditor: View {
+    let model: AppModel
+    var layer: String
+    var file: String
+    var item: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @State private var loaded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(model.protocolItemTitle(item)).font(.headline)
+            Text("Summary of what “\(model.itemTitle(file))” says for this item, in \(model.project.layer(layer)?.name ?? "this layer"). It shows in the Protocol Report.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $text)
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .padding(4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.3)))
+                .frame(height: 140)
+            HStack {
+                Button("Clear") { text = "" }
+                    .disabled(text.isEmpty)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(width: 340)
+        .modifier(NoWritingTools())
+        .onAppear {
+            text = model.protocolSummary(layer: layer, file: file, item: item)
+            loaded = true
+        }
+        .onChange(of: text) { _, new in
+            guard loaded else { return }
+            model.setProtocolSummary(new, layer: layer, file: file, item: item)
         }
     }
 }
@@ -1011,7 +1195,7 @@ struct CodingTextView: NSViewRepresentable {
                 if lane == segmentEnds.count { segmentEnds.append(y1) } else { segmentEnds[lane] = max(segmentEnds[lane], y1) }
                 segments.append(PlacedMark(id: g.key, y: y0 + 2, height: y1 - y0 - 4, lane: lane, color: .protocolSegment,
                                            text: g.help, focused: g.focused, label: g.label, dashed: g.prompt,
-                                           caption: g.caption))
+                                           caption: g.caption, layer: g.layer, item: g.item, reference: g.reference))
             }
             guard stripes != lastStripes || turns != lastTurns || segments != lastSegments else { return }
             lastStripes = stripes

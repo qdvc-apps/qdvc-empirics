@@ -9,9 +9,10 @@ import Foundation
 /// Git; Settings › Privacy erases it.
 ///
 /// The app is sandboxed (docs/DESIGN.md §Data security), so folders are
-/// remembered as security-scoped bookmarks. The full-texts folder's
-/// bookmark is read-only, so on later launches macOS itself refuses any
-/// write there.
+/// remembered as security-scoped bookmarks, the full-texts folder's too
+/// (read and write: a confirmed edit to a text file is written there; a
+/// folder chosen before edits existed has a read-only bookmark, and is
+/// chosen again when an edit needs it).
 @MainActor
 enum DeviceStore {
     static var defaults: UserDefaults { .standard }
@@ -90,7 +91,7 @@ enum DeviceStore {
     }
 
     static func setFullTexts(_ url: URL, project: String, title: String) {
-        guard let data = bookmark(url, readOnly: true) else { return }
+        guard let data = bookmark(url, readOnly: false) else { return }
         defaults.set(data, forKey: key("fullTexts", project))
         defaults.set(url.path, forKey: key("fullTextsPath", project))
         defaults.set(title, forKey: key("title", project))

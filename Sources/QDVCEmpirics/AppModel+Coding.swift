@@ -74,7 +74,7 @@ extension AppModel {
             return
         }
         guard code.kind == .open else {
-            showProblem(RuleError("Selections are evidence for open codes. \(code.name) is an axial code: add open codes to it from the Code inspector."))
+            showProblem(RuleError("Selections are evidence for open codes. \(code.name) is a theorising code: add open codes to it from the Code inspector."))
             return
         }
         var target: String?
@@ -223,24 +223,24 @@ extension AppModel {
     func newCode(kind: CodeKind, name: String, parent: String? = nil, child: String? = nil) -> String? {
         // The layer of the code it joins, or on the code pages the inductive
         // layer they show, or the active layer if it is inductive (open and
-        // axial codes live on inductive layers), else the first inductive.
-        let onCodePages = sidebar == .openCodes || sidebar == .axialCodes
+        // theorising codes live on inductive layers), else the first inductive.
+        let onCodePages = sidebar == .openCodes || sidebar == .theorisingCodes
         let joined = parent.flatMap { index.layerOf[$0] } ?? child.flatMap { index.layerOf[$0] }
         let layer = joined ?? (onCodePages || activeIsDeductive ? inductiveLayer?.key : nil) ?? activeLayerKey
         if let existing = project.code(named: name, inLayer: layer) {
-            showProblem(RuleError("This layer already has \(existing.kind == .open ? "an open" : "an axial") code called “\(existing.name)”."))
+            showProblem(RuleError("This layer already has \(existing.kind == .open ? "an open" : "a theorising") code called “\(existing.name)”."))
             return nil
         }
         var made: String?
-        perform(kind == .open ? "New Open Code" : "New Axial Code") { p in
+        perform(kind == .open ? "New Open Code" : "New Theorising Code") { p in
             let c = try p.addCode(layer: layer, kind: kind, name: name, by: currentResearcher ?? "")
             if let parent { try p.addEvidence(code: parent, target: c) }
             if let child { try p.addEvidence(code: c, target: child) }
             made = c
         }
         if let made {
-            if sidebar == .openCodes || sidebar == .axialCodes {
-                sidebar = kind == .open ? .openCodes : .axialCodes
+            if sidebar == .openCodes || sidebar == .theorisingCodes {
+                sidebar = kind == .open ? .openCodes : .theorisingCodes
                 tableSelection = made
             } else if case .code = sidebar {
                 notice = Notice(text: "Created “\(name)”.", action: NoticeAction(title: "Open") { [weak self] in self?.openKey(made) })
@@ -275,15 +275,15 @@ extension AppModel {
     func deleteCode(_ key: String) {
         guard let code = project.code(key) else { return }
         let alert = NSAlert()
-        alert.messageText = "Delete the \(code.kind == .open ? "open" : "axial") code “\(code.name)”?"
+        alert.messageText = "Delete the \(code.kind == .open ? "open" : "theorising") code “\(code.name)”?"
         alert.informativeText = code.evidence.isEmpty
-            ? "It will be removed from any axial codes it is evidence for."
-            : "Its \(code.evidence.count) evidence link\(code.evidence.count == 1 ? "" : "s") and memos go with it; the selections, open codes and axial codes themselves stay. You can undo this."
+            ? "It will be removed from any theorising codes it is evidence for."
+            : "Its \(code.evidence.count) evidence link\(code.evidence.count == 1 ? "" : "s") and memos go with it; the selections, open codes and theorising codes themselves stay. You can undo this."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        perform(code.kind == .open ? "Delete Open Code" : "Delete Axial Code") { p in p.deleteCode(key) }
+        perform(code.kind == .open ? "Delete Open Code" : "Delete Theorising Code") { p in p.deleteCode(key) }
         if let i = quickCodes.firstIndex(of: key) { assignQuickCode(nil, slot: i + 1) }
     }
 
@@ -339,7 +339,7 @@ extension AppModel {
         if let markdown = UTType(filenameExtension: "markdown") { types.append(markdown) }
         panel.allowedContentTypes = types
         panel.prompt = "Add"
-        panel.message = "Choose plain-text, Markdown or PDF files inside the full-texts folder. They are only ever read, never changed."
+        panel.message = "Choose plain-text, Markdown or PDF files inside the full-texts folder. They stay there; QDVC Empirics changes one only when you confirm an edit to its text."
         guard panel.runModal() == .OK else { return }
         var outside: [String] = []
         var paths: [String] = []
@@ -353,7 +353,7 @@ extension AppModel {
         }
         addFiles(paths)
         if !outside.isEmpty {
-            errorMessage = "These files aren't in the full-texts folder, so they weren't added: \(outside.joined(separator: ", ")).\n\nQDVC Empirics never copies or writes into the full-texts folder; move them there yourself, then add them."
+            errorMessage = "These files aren't in the full-texts folder, so they weren't added: \(outside.joined(separator: ", ")).\n\nQDVC Empirics never copies files into the full-texts folder; move them there yourself, then add them."
         }
     }
 

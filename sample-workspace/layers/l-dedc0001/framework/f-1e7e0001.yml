@@ -2,3 +2,7 @@ row: f-1e7e0001
 cells:
   - column: apc-7a0e0001
     summary: Still learning the interface; the shortcuts make long sessions easier.
+  - column: pi-0a000001
+    summary: An improvement on other QDA tools, but still learning the interface.
+  - column: pi-0a000002
+    summary: "Easier than expected: reading comfort and quick-code numbers."

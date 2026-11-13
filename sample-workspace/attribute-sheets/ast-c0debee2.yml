@@ -1,7 +1,7 @@
 key: ast-c0debee2
 title: Code quality
-description: A check on each axial code.
-applies_to: [axial-codes]
+description: A check on each theorising code.
+applies_to: [theorising-codes]
 questions:
   - key: q-9a110001
     label: Saturated

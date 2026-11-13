@@ -5,7 +5,8 @@ the app writes are documented in [FILE_FORMAT.md](FILE_FORMAT.md) and
 checked by the unit tests. Any change to a file name or to the bytes of a
 file is a format change: update FILE_FORMAT.md and the tests with it.
 
-The second: **no network, and full-texts are read-only.** See §Network and
+The second: **no network, and full-texts are written only when the
+researcher confirms an edit to a text file's text.** See §Network and
 §Full-texts below before adding any API or dependency.
 
 ## 1. Layout
@@ -72,14 +73,15 @@ changes nothing unless the generator changed.
 | `YAML.swift` | the YAML subset (from QDVC Response Letter): `YAMLNode`, parser with line numbers, emitter |
 | `Model.swift` | `Keys`, `Stamp`, `EmpiricalFile`, `TextSpan`, `CodeSelection` (with `ProtocolSegment`), `QDACode` (with `CodeLink`), `Evidence`, `Interrelation`, `LayerKind`, `CodingLayer`, `StudyProtocol`, `ProtocolItem`, `AprioriCode`, `AttributeSheet`, `AttributeSheetQuestion`, `ResponseSheet`, `SheetCompleteness`, people, `SpeakerMap`, `Project` |
 | `Editing.swift` | every change and its rules (`RuleError`): layers and their kinds, selections, irrelevance, codes, evidence, cycles, layer moves (`component`, `move`), attribute sheets, sheets; `ProjectIndex`, `WorkingIDs` |
-| `Deductive.swift` | changes to what is defined beforehand and applied on deductive layers: protocols and segments, a priori codes and their evidence, links from open and axial codes, Framework Matrix summaries |
+| `Deductive.swift` | changes to what is defined beforehand and applied on deductive layers: protocols and segments, a priori codes and their evidence, links from open and theorising codes, Framework Matrix summaries |
 | `Workspace.swift` | loading (with repairs and notes, `repairKinds` for the deductive/inductive rules), saving by `WorkspacePart`, `changedParts`, `signature` |
 | `Encoding.swift` | each file's YAML, both ways |
 | `Interlocutors.swift` | `TurnDetector`: speaker candidates, turns, name suggestions |
-| `FullTexts.swift` | read-only `FullTexts`, `TextNormaliser`, `Anchoring` (re-finding selections) |
+| `FullTexts.swift` | `FullTexts` (reading), `TextNormaliser`, `Anchoring` (re-finding selections) |
+| `TextEdits.swift` | edits that follow the full-text: `applyTextEdit` and `textEditImpact` (a text file corrected in place, every layer's selections adjusted), `TextNormaliser.data(for:like:)` (writing text back in the file's encoding and line endings), `FullTexts.write` (the one write), page rotations, merging selections next to each other (`mergeCandidates`, `mergeSelections`) |
 | `SHA256.swift` | fingerprints |
 | `RealNames.swift` | `CSV` reader and writer; `RealNames` (mapping files, templates) |
-| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `AttributeSheetReport` (rows, CSV) |
+| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `AttributeSheetReport` (rows, CSV), `ProtocolReport` (a protocol's summaries across files, CSV) |
 
 `WorkingIDs` (in `Editing.swift`) numbers items alphabetically per kind;
 `ProjectIndex.workingID` holds them, `AppModel.wid(_:)` reads them.
@@ -94,22 +96,29 @@ The app (`QDVCEmpirics`): `EmpiricsApp` (scenes, delegate, menus),
 Working Area, documents, interlocutors, response sheets, real names;
 `@Observable`, main actor), `AppModel+Coding` (coding operations, files,
 layers), `AppModel+Deductive` (`CodingTag`, so the coding UI follows the
-layer's kind; a priori coding, protocol segments, protocol and a priori code
-actions), `DeviceStore` (UserDefaults and security-scoped bookmarks),
+layer's kind; a priori coding, protocol segments and their summaries,
+protocol and a priori code actions, the document's context menu),
+`AppModel+Edits` (editing text, turning PDF pages, merging selections;
+saving a text edit, `saveTextEdit`, is in `AppModel` itself, as it commits
+with its own undo, which writes the file back), `DeviceStore` (UserDefaults and security-scoped bookmarks),
 `ContentView` (split view, sidebar and Working Area, toolbar, document page),
 `Items` (one-line items: `ItemLine`, `WorkingBadge`, `InspectorTitle`, item
 titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
 `ItemPages` (code, attribute sheet and person pages), `DeductivePages`
-(Protocols and A Priori Codes: tables, pages, inspectors), `CodingChart` and
-`AttributeSheetReport` (the Reporting pages),
-`TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
+(Protocols and A Priori Codes: tables, pages, inspectors), `CodingChart`,
+`AttributeSheetReport` and `ProtocolReport` (the Reports pages),
+`TextCodingView` (text view, decorations, margins: the sliding speaker
+badges, protocol segments with their summary bubbles, stripes and labels;
+keys), `PDFCodingView` (with `PDFStripeOverlay`, the stripes beside the
+pages, and page turns), `EditTextSheet` (editing a text file in place),
 `CodingBar` (coding bar, quick codes, code palette, protocol palette), `InspectorView` (routed
 by page), `EvidencePane`, `AttributeSheetsPage` (the attribute sheet editor and the
 response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
 `UpdateFileSheet` (updating a file from a new version of its full-text),
 `QuestionColumns` (attribute sheet questions as table columns: the cells, the
-sort comparator and the column-customization binding that saves the
-choice in the workspace),
+sort comparator, the AST badges in their headings and the
+column-customization binding that saves the choice and the arrangement in
+the workspace),
 `SettingsView`, `Style`.
 
 Navigation is `AppModel.sidebar` (a `SidebarItem`: a list page or an item's
@@ -163,6 +172,15 @@ Long closure chains are slow to type-check: split sorts into statements
   undo manager. Undo swaps whole snapshots; `Project` is a value type, so a
   snapshot costs little.
 - `edit { … }` is for typing: saved, not on Edit › Undo.
+- An edit to a full-text's text (`saveTextEdit`) writes the file first, then
+  commits the adjusted project without the usual snapshot undo, and
+  registers its own: undo writes the previous bytes back and restores the
+  project as it was, registering the redo the same way. The document cache
+  takes the text just written (`useFullText`), so it isn't checked again as
+  if it had changed behind the app's back.
+- Moving or resizing question columns notes the table's arrangement
+  (`pendingTableLayouts`) and saves it with `edit` half a second after the
+  last change; `flushSaves` saves one still waiting.
 - After either, `Workspace.changedParts(from:to:)` works out which files
   differ; they are written 0.6 s later, when the app is left, and on quit.
   Identical content is never rewritten.
@@ -171,7 +189,7 @@ Long closure chains are slow to type-check: split sorts into statements
 
 ### 2.2 Documents
 
-`AppModel.pages(_:)` reads a full-text (through `FullTexts`, read-only) into
+`AppModel.pages(_:)` reads a full-text (through `FullTexts`) into
 `DocumentStore`, which is not observed; `documentsRevision` tells views to
 refresh. `prepareDocument(_:)` also checks the fingerprint and re-anchors
 selections (`Anchoring.reanchor`) once per session per file. When a change
@@ -222,11 +240,17 @@ Nothing may touch the network:
 
 ## 4. Full-texts
 
-- `FullTexts` (core) has no write method; keep it that way.
+- `FullTexts.write` (core, TextEdits.swift) is the only way anything is
+  written to the full-texts folder, and `AppModel.saveTextEdit` (with its
+  undo and redo) the only caller: an edit to a text file's text the
+  researcher has confirmed. Keep it that way; nothing else may write there.
 - PDFs are loaded with `PDFDocument(data:)` and never written; highlights
-  use `highlightedSelections`, not annotations.
-- The full-texts folder's bookmark is created with
-  `.securityScopeAllowOnlyReadAccess`.
+  use `highlightedSelections`, not annotations. Page turns change only the
+  copy in memory (`PDFPage.rotation`), from the workspace's `rotations` and
+  each page's own rotation as loaded (`DocumentStore.pageRotations`).
+- The full-texts folder's bookmark allows reading and writing. One created
+  before text edits existed is read-only; a write refused for that reason
+  asks for the folder again (`reportWriteProblem`).
 - Consent forms are shown in-app (`ConsentViewer`), never opened in another
   app.
 - Real-name mapping files are read with `FullTexts`; the names stay in
@@ -242,7 +266,7 @@ Nothing may touch the network:
   Markdown emphasis, and does not take sentences for headers.
 - Irrelevant text is never evidence: no coding over it, no marking evidence
   irrelevant, irrelevant selections merge, rules are per layer.
-- Axial evidence refuses cycles and the wrong kind.
+- Theorising evidence refuses cycles and the wrong kind.
 - Moving to a layer moves the whole component, and is refused on irrelevant
   clashes.
 - Response sheets refuse to save without blocking answers; new options join
@@ -261,7 +285,7 @@ Nothing may touch the network:
   them); deleting the interviewee deletes the sheets about them.
 - New projects have Main Deductive and Main Inductive; the last layer of
   each kind can't be deleted or change kind; a layer's kind is fixed once it
-  has coding; open and axial codes only in inductive layers; coding moves
+  has coding; open and theorising codes only in inductive layers; coding moves
   only between layers of the same kind (a deductive selection takes its a
   priori evidence along).
 - Protocol segments only on deductive layers, one protocol per file per
@@ -276,8 +300,23 @@ Nothing may touch the network:
 - The sample builds, saves and loads back unchanged.
 - Working identifiers are alphabetical per kind (natural number order) and
   renumber when an item is added.
-- The Coding Chart puts axial codes by level, links files to open codes and
-  codes to the axial codes they are evidence for (also across columns),
+- The Coding Chart puts theorising codes by level, links files to open codes and
+  codes to the theorising codes they are evidence for (also across columns),
   leaves out unlinked items unless asked; the Attribute Sheet Report lists sheets
   and unanswered items, and its CSV quotes fields properly.
-- No networking API in the sources, no dependencies.
+- Editing a text file's text moves the selections after the edit, gives
+  those overlapping it the new text (irrelevant ones stop at its edges and
+  never come to overlap other selections), deletes those left with no text
+  (with their evidence), takes stored quotes again and sets the new
+  fingerprint, in every layer; the impact is reported beforehand; out of
+  range is refused. Text is written back in the file's own encoding
+  (UTF-8 with or without a byte-order mark, UTF-16 either way, Windows-1252
+  while it can hold the text) and line endings, and reads back unchanged.
+- Merging is offered only for selections next to each other (white space
+  between at most) in the same layer and file, coded the same way; memos
+  are joined, interrelations follow, and it is refused over irrelevant text.
+- Page rotations, table layouts and protocol summaries survive the round
+  trip; the Protocol Report lists the files following a protocol in a
+  deductive layer, with summaries and segments per item, and its CSV.
+- No networking API in the sources (a name that merely ends with one, such
+  as `CodeLink(`, doesn't count), no dependencies.

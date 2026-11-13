@@ -110,10 +110,10 @@ extension AppModel {
             panel.allowedContentTypes = types
         }
         panel.prompt = "Choose"
-        panel.message = "Choose the new version of “\(file.displayTitle)” in the full-texts folder. It is only ever read."
+        panel.message = "Choose the new version of “\(file.displayTitle)” in the full-texts folder. It is only read."
         guard panel.runModal() == .OK, let url = panel.url else { return .cancelled }
         guard let rel = ft.relativePath(of: url) else {
-            return .problem("“\(url.lastPathComponent)” isn't in the full-texts folder. QDVC Empirics never copies or writes into that folder: move the new version there yourself, then choose it.")
+            return .problem("“\(url.lastPathComponent)” isn't in the full-texts folder. QDVC Empirics never copies files into that folder: move the new version there yourself, then choose it.")
         }
         guard let kind = FileKind.forPath(rel) else {
             return .problem("“\(url.lastPathComponent)” isn't a plain-text, Markdown or PDF file.")

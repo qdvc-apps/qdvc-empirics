@@ -20,10 +20,11 @@ enum SidebarItem: Hashable {
     case aprioriCodes
     // Inductive
     case openCodes
-    case axialCodes
-    // Reporting
+    case theorisingCodes
+    // Reports
     case codingChart
     case attributeSheetReport
+    case protocolReport
     // Pages of single items (in the Working Area)
     case file(String)
     case code(String)
@@ -54,9 +55,10 @@ enum SidebarItem: Hashable {
         case .attributeSheets: return "attributeSheets"
         case .aprioriCodes: return "aprioriCodes"
         case .openCodes: return "openCodes"
-        case .axialCodes: return "axialCodes"
+        case .theorisingCodes: return "theorisingCodes"
         case .codingChart: return "codingChart"
         case .attributeSheetReport: return "attributeSheetReport"
+        case .protocolReport: return "protocolReport"
         case .file(let k): return "file:" + k
         case .code(let k): return "code:" + k
         case .studyProtocol(let k): return "protocol:" + k
@@ -79,9 +81,10 @@ enum SidebarItem: Hashable {
         case ("attributeSheets", _): self = .attributeSheets
         case ("aprioriCodes", _): self = .aprioriCodes
         case ("openCodes", _): self = .openCodes
-        case ("axialCodes", _): self = .axialCodes
+        case ("theorisingCodes", _): self = .theorisingCodes
         case ("codingChart", _): self = .codingChart
         case ("attributeSheetReport", _): self = .attributeSheetReport
+        case ("protocolReport", _): self = .protocolReport
         case ("file", let k) where !k.isEmpty: self = .file(k)
         case ("code", let k) where !k.isEmpty: self = .code(k)
         case ("protocol", let k) where !k.isEmpty: self = .studyProtocol(k)
@@ -114,6 +117,8 @@ enum SheetKind: Identifiable {
     case updateFile(String)
     /// A new code; `parent` gets it as evidence, `child` becomes its evidence.
     case newCode(kind: CodeKind, parent: String?, child: String?)
+    /// Editing part of a text file's full-text in place.
+    case editText(file: String, start: Int, length: Int)
 
     var id: String {
         switch self {
@@ -126,6 +131,7 @@ enum SheetKind: Identifiable {
         case .moveToLayer(let k): return "move-\(k)"
         case .updateFile(let k): return "update-\(k)"
         case .newCode(let kind, let p, let c): return "newCode-\(kind.rawValue)-\(p ?? "")-\(c ?? "")"
+        case .editText(let f, let start, let length): return "editText-\(f)-\(start)-\(length)"
         }
     }
 }
@@ -168,6 +174,9 @@ final class DocumentStore {
     /// Text of each page (one "page" for text files).
     var pages: [String: [String]] = [:]
     var pdfs: [String: PDFDocument] = [:]
+    /// Each PDF page's own rotation, as loaded (the file's page rotations in
+    /// the workspace turn pages further, for reading).
+    var pageRotations: [String: [Int]] = [:]
     var fingerprints: [String: String] = [:]
     var errors: [String: String] = [:]
     /// Turns per file, with the speakers they were found for.
@@ -177,6 +186,7 @@ final class DocumentStore {
     func clear() {
         pages = [:]
         pdfs = [:]
+        pageRotations = [:]
         fingerprints = [:]
         errors = [:]
         turns = [:]
@@ -186,6 +196,7 @@ final class DocumentStore {
     func forget(_ file: String) {
         pages[file] = nil
         pdfs[file] = nil
+        pageRotations[file] = nil
         fingerprints[file] = nil
         errors[file] = nil
         turns[file] = nil
@@ -235,6 +246,9 @@ final class AppModel {
     var tableSelection: String?
     /// The attribute sheet shown in the Attribute Sheet Report.
     var reportAttributeSheet: String?
+    /// The protocol, and the deductive layer, shown in the Protocol Report.
+    var reportProtocol: String?
+    var reportProtocolLayer: String?
     /// Items being worked on, in the sidebar's Working Area (this Mac).
     private(set) var workingArea: [SidebarItem] = []
     @ObservationIgnored private var backStack: [SidebarItem] = []
@@ -307,6 +321,11 @@ final class AppModel {
     @ObservationIgnored var positions: [String: Int] = [:]
     @ObservationIgnored private var didStartUp = false
     @ObservationIgnored private var revealCounter = 0
+    /// Tables' column arrangements changed but not saved yet, the work that
+    /// will save them, and arrangements read back (by their JSON).
+    @ObservationIgnored var pendingTableLayouts: [AttributeSheetTarget: String] = [:]
+    @ObservationIgnored var tableLayoutWork: DispatchWorkItem?
+    @ObservationIgnored var decodedTableLayouts: [String: Any] = [:]
     /// The document view (text or PDF), to give it the focus back.
     @ObservationIgnored weak var documentView: NSView?
 
@@ -443,6 +462,8 @@ final class AppModel {
         focusedSelection = nil
         tableSelection = nil
         reportAttributeSheet = nil
+        reportProtocol = nil
+        reportProtocolLayer = nil
         workingArea = []
         backStack = []
         forwardStack = []
@@ -517,7 +538,7 @@ final class AppModel {
         panel.canCreateDirectories = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Use This Folder"
-        panel.message = "Choose the full-texts folder for “\(project.settings.title)” on this Mac. QDVC Empirics only ever reads from it."
+        panel.message = "Choose the full-texts folder for “\(project.settings.title)” on this Mac. QDVC Empirics reads from it, and writes to it only when you confirm an edit to a text file."
         if let current = fullTextsURL { panel.directoryURL = current }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if let workspaceURL, let problem = Self.nestingProblem(workspace: workspaceURL, fullTexts: url) {
@@ -597,6 +618,8 @@ final class AppModel {
         if let s = focusedSelection, project.selection(s) == nil { focusedSelection = nil }
         if let t = tableSelection, !keyExists(t) { tableSelection = nil }
         if let c = reportAttributeSheet, project.attributeSheets[c] == nil { reportAttributeSheet = nil }
+        if let pr = reportProtocol, project.protocols[pr] == nil { reportProtocol = nil }
+        if let l = reportProtocolLayer, project.layer(l)?.isDeductive != true { reportProtocolLayer = nil }
         if project.layer(activeLayerKey) == nil { activeLayerKey = defaultLayerKey }
         if let item = sidebar, !exists(item) { sidebar = listPage(for: item) }
         if let r = currentResearcher, project.researcher(r) == nil { currentResearcher = nil }
@@ -620,6 +643,8 @@ final class AppModel {
 
     /// Writes pending changes now (also on leaving the app and on quit).
     func flushSaves() {
+        // A column arrangement still waiting joins the changes first.
+        flushTableLayouts()
         saveWork?.cancel()
         saveWork = nil
         guard let url = workspaceURL, !dirty.isEmpty else { return }
@@ -699,7 +724,7 @@ final class AppModel {
         project.inductiveLayers.first?.key ?? project.layers.first?.key ?? ""
     }
 
-    /// The inductive layer the Open Codes, Axial Codes and Coding Chart pages
+    /// The inductive layer the Open Codes, Theorising Codes and Coding Chart pages
     /// show: the active layer if it is inductive, else the first inductive one.
     var inductiveLayer: CodingLayer? {
         if let l = activeLayer, l.isInductive { return l }
@@ -741,7 +766,7 @@ final class AppModel {
     /// A code just used takes the first empty slot, so the first nine codes
     /// used get 1–9 and keep them (numbers never shift under your fingers).
     func noteUsed(_ code: String) {
-        guard isCodeOfActiveLayer(code), project.code(code)?.kind != .axial, !quickCodes.contains(code),
+        guard isCodeOfActiveLayer(code), project.code(code)?.kind != .theorising, !quickCodes.contains(code),
               let empty = quickCodes.firstIndex(of: "") else { return }
         quickCodes[empty] = code
         saveQuickCodes()
@@ -801,7 +826,7 @@ final class AppModel {
     func listPage(for item: SidebarItem) -> SidebarItem {
         switch item {
         case .file: return .files
-        case .code(let k): return project.code(k)?.kind == .axial ? .axialCodes : .openCodes
+        case .code(let k): return project.code(k)?.kind == .theorising ? .theorisingCodes : .openCodes
         case .studyProtocol: return .protocols
         case .aprioriCode: return .aprioriCodes
         case .attributeSheet: return .attributeSheets
@@ -1002,6 +1027,7 @@ final class AppModel {
                     return nil
                 }
                 documents.pdfs[key] = doc
+                documents.pageRotations[key] = (0..<doc.pageCount).map { doc.page(at: $0)?.rotation ?? 0 }
                 documents.pages[key] = (0..<doc.pageCount).map { doc.page(at: $0)?.string ?? "" }
             } else {
                 documents.pages[key] = [TextNormaliser.text(from: data)]
@@ -1245,6 +1271,118 @@ final class AppModel {
             notice = Notice(text: "Template saved as \(rel). Fill in the real names in a spreadsheet, then choose View › Reload Real Names.")
         } else {
             notice = Notice(text: "Template saved. Move it into the full-texts folder, then choose it in Project Settings.", isWarning: true)
+        }
+    }
+
+    // MARK: - Editing a full-text in place
+
+    /// Replaces part of a text file's full-text (`start ..< start + length`,
+    /// as shown) with `replacement`: writes the file in the full-texts
+    /// folder, written the way it was (encoding, line endings), and adjusts
+    /// every layer's selections to the new text. One step of Edit › Undo,
+    /// which writes the previous text back. Returns false (having said why)
+    /// if nothing was changed.
+    @discardableResult
+    func saveTextEdit(file: String, start: Int, length: Int, replacement: String) -> Bool {
+        guard let f = project.files[file], f.kind.isText else { return false }
+        guard let ft = fullTexts else {
+            chooseFullTextsFolder()
+            return false
+        }
+        let original: Data
+        do {
+            original = try ft.data(f.path)
+        } catch {
+            errorMessage = "Couldn't read “\(f.path)” from the full-texts folder.\n\n\(error.localizedDescription)"
+            return false
+        }
+        let oldText = TextNormaliser.text(from: original)
+        if let shown = documents.pages[file]?.first, shown != oldText {
+            errorMessage = "“\(f.fileName)” was changed on disk after it was opened here, so the edit wasn't made. Choose View › Reload from Disk, then make the edit again."
+            return false
+        }
+        let ns = oldText as NSString
+        guard start >= 0, length >= 0, start + length <= ns.length else {
+            showProblem(RuleError("That part of the text is no longer there. Select it again."))
+            return false
+        }
+        let candidate = ns.replacingCharacters(in: NSRange(location: start, length: length), with: replacement)
+        let encoded = TextNormaliser.data(for: candidate, like: original)
+        let fingerprint = "sha256:" + SHA256.hex(encoded.data)
+        var p = project
+        let newText: String
+        do {
+            newText = try p.applyTextEdit(file: file, oldText: oldText, start: start, length: length,
+                                          replacement: replacement, fingerprint: fingerprint)
+        } catch {
+            showProblem(error)
+            return false
+        }
+        do {
+            try ft.write(encoded.data, to: f.path)
+        } catch {
+            reportWriteProblem(error, path: f.path)
+            return false
+        }
+        let old = project
+        useFullText(file, text: newText, data: encoded.data)
+        commit(p, undo: nil)
+        registerFullTextUndo("Edit Text", file: file, write: original, text: oldText, project: old,
+                             redo: encoded.data, redoText: newText)
+        notice = Notice(text: "Saved the edit to “\(f.fileName)”." + (encoded.changedEncoding
+            ? " Its new text has characters Windows-1252 can't hold, so it is now saved as UTF-8." : ""),
+                        isWarning: encoded.changedEncoding)
+        return true
+    }
+
+    /// The document cache takes a full-text just written (so it isn't read
+    /// and checked again as if it had changed behind the app's back).
+    private func useFullText(_ file: String, text: String, data: Data) {
+        documents.pages[file] = [text]
+        documents.fingerprints[file] = "sha256:" + SHA256.hex(data)
+        documents.turns[file] = nil
+        documents.candidates[file] = nil
+        documents.errors[file] = nil
+        documentsRevision += 1
+    }
+
+    /// Undo (and redo) of an edit to a full-text: writes the other version
+    /// of the file back and restores the project as it was with it.
+    private func registerFullTextUndo(_ name: String, file: String, write data: Data, text: String, project snapshot: Project,
+                                      redo other: Data, redoText: String) {
+        guard let um = undoManager else { return }
+        um.registerUndo(withTarget: self) { target in
+            MainActor.assumeIsolated {
+                guard let path = (target.project.files[file] ?? snapshot.files[file])?.path, let ft = target.fullTexts else { return }
+                do {
+                    try ft.write(data, to: path)
+                } catch {
+                    target.reportWriteProblem(error, path: path)
+                    return
+                }
+                let current = target.project
+                target.useFullText(file, text: text, data: data)
+                target.commit(snapshot, undo: nil)
+                target.registerFullTextUndo(name, file: file, write: other, text: redoText, project: current,
+                                            redo: data, redoText: text)
+            }
+        }
+        um.setActionName(name)
+    }
+
+    /// Writing a full-text failed: most often because this Mac's permission
+    /// for the folder predates edits (it was read-only), so ask for the
+    /// folder again.
+    private func reportWriteProblem(_ error: Error, path: String) {
+        let denied = (error as? CocoaError)?.code == .fileWriteNoPermission
+            || (error as NSError).domain == NSPOSIXErrorDomain && [1, 13].contains((error as NSError).code)
+        if denied {
+            notice = Notice(text: "QDVC Empirics may not write to “\(path)”. Choose the full-texts folder again to let it save edits there (earlier versions could only read it).",
+                            isWarning: true,
+                            action: NoticeAction(title: "Choose Full-Texts Folder…") { [weak self] in self?.chooseFullTextsFolder() })
+            NSSound.beep()
+        } else {
+            errorMessage = "Couldn't save the edit to “\(path)”. Nothing was changed.\n\n\(error.localizedDescription)"
         }
     }
 }

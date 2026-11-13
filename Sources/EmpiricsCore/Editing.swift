@@ -28,13 +28,13 @@ public struct LayerComponent: Equatable {
 //  - selections and codes exist in exactly one layer;
 //  - a project always has at least one deductive and one inductive layer;
 //    a layer's kind can change only while nothing is coded in it;
-//  - open and axial codes exist only in inductive layers; a priori code
+//  - open and theorising codes exist only in inductive layers; a priori code
 //    evidence, protocol segments, the protocol each file follows and
 //    Framework Matrix summaries only in deductive layers;
 //  - in a layer, no irrelevant selection overlaps any other selection that
 //    is not irrelevant (so irrelevant text is never evidence);
-//  - open codes have selections as evidence; axial codes have codes (open
-//    or axial) of their own layer, with no cycles;
+//  - open codes have selections as evidence; theorising codes have codes (open
+//    or theorising) of their own layer, with no cycles;
 //  - a selection on a deductive layer is evidence for a priori codes or a
 //    protocol segment, never both; a protocol segment belongs to an item of
 //    the protocol its file follows in that layer (one protocol per file per
@@ -266,7 +266,7 @@ extension Project {
     public mutating func addCode(layer: String, kind: CodeKind, name: String, by: String = "") throws -> String {
         guard let li = layerIndex(layer) else { throw RuleError("That layer no longer exists.") }
         guard layers[li].isInductive else {
-            throw RuleError("\(layers[li].name) is a deductive layer: open and axial codes belong to inductive layers.")
+            throw RuleError("\(layers[li].name) is a deductive layer: open and theorising codes belong to inductive layers.")
         }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw RuleError("A code needs a name.") }
@@ -312,14 +312,14 @@ extension Project {
         case .open:
             guard let s = layer.selection(target) else {
                 return layer.codes[target] != nil
-                    ? "Open codes are evidenced by selections; make \(code.name) an axial code to build it from codes."
+                    ? "Open codes are evidenced by selections; make \(code.name) a theorising code to build it from codes."
                     : "Evidence must be in the same layer as the code."
             }
             if s.irrelevant { return "Irrelevant text can't be evidence." }
-        case .axial:
+        case .theorising:
             guard let child = layer.codes[target] else {
                 return layer.selection(target) != nil
-                    ? "Axial codes are evidenced by codes, not selections."
+                    ? "Theorising codes are evidenced by codes, not selections."
                     : "Evidence must be in the same layer as the code."
             }
             if child.key == code.key { return "A code can't be evidence for itself." }
@@ -330,13 +330,13 @@ extension Project {
         return nil
     }
 
-    /// True if `to` is reachable from `from` through axial evidence.
+    /// True if `to` is reachable from `from` through theorising evidence.
     func reaches(from: String, to: String, in layer: CodingLayer) -> Bool {
         var stack = [from]
         var seen = Set<String>()
         while let k = stack.popLast() {
             if k == to { return true }
-            guard seen.insert(k).inserted, let c = layer.codes[k], c.kind == .axial else { continue }
+            guard seen.insert(k).inserted, let c = layer.codes[k], c.kind == .theorising else { continue }
             stack.append(contentsOf: c.evidence.map(\.target))
         }
         return false
@@ -362,7 +362,7 @@ extension Project {
         layers[li].codes[codeKey]!.evidence[ei].memo = memo
     }
 
-    /// Changes an open code to axial or back; only while it has no evidence.
+    /// Changes an open code to theorising or back; only while it has no evidence.
     public mutating func setKind(code codeKey: String, _ kind: CodeKind) throws {
         guard let li = layers.firstIndex(where: { $0.codes[codeKey] != nil }) else { return }
         guard layers[li].codes[codeKey]!.kind != kind else { return }
@@ -376,7 +376,7 @@ extension Project {
 
     /// Everything linked to `key` (a selection or code) in its layer:
     /// selections and the open codes they are evidence for, and codes and
-    /// the axial codes they build, followed both ways.
+    /// the theorising codes they build, followed both ways.
     public func component(of key: String) -> LayerComponent {
         guard let lk = layerKey(holding: key), let layer = self.layer(lk) else { return LayerComponent() }
         var selections = Set<String>()
@@ -487,7 +487,7 @@ extension Project {
             guard cb.appliesTo.contains(.interviewees) else { throw RuleError("\(cb.title) isn't for interviewees.") }
             if !interviewees[i].attributeSheets.contains(attributeSheet) { interviewees[i].attributeSheets.append(attributeSheet) }
         } else if let code = code(target) {
-            let needed: AttributeSheetTarget = code.kind == .open ? .openCodes : .axialCodes
+            let needed: AttributeSheetTarget = code.kind == .open ? .openCodes : .theorisingCodes
             guard cb.appliesTo.contains(needed) else { throw RuleError("\(cb.title) isn't for \(needed.label.lowercased()).") }
             var c = code
             if !c.attributeSheets.contains(attributeSheet) { c.attributeSheets.append(attributeSheet) }
@@ -594,14 +594,14 @@ extension Project {
 // MARK: - Index
 
 /// Lookups derived from a project, rebuilt after every change: which codes
-/// each selection is evidence for, which axial codes build on each code, and
+/// each selection is evidence for, which theorising codes build on each code, and
 /// where everything is.
 public struct ProjectIndex {
     /// Selection key → open codes it is evidence for (inductive layers).
     public var codesForSelection: [String: [String]] = [:]
     /// Selection key → a priori codes it is evidence for (deductive layers).
     public var aprioriForSelection: [String: [String]] = [:]
-    /// Code key → axial codes it is evidence for.
+    /// Code key → theorising codes it is evidence for.
     public var parents: [String: [String]] = [:]
     /// Selection or code key → layer key.
     public var layerOf: [String: String] = [:]
@@ -647,7 +647,7 @@ public struct ProjectIndex {
                     }
                 }
             }
-            // Files per code, following axial evidence down to selections.
+            // Files per code, following theorising evidence down to selections.
             var memo: [String: Set<String>] = [:]
             func files(_ key: String, _ depth: Int) -> Set<String> {
                 if let m = memo[key] { return m }
@@ -675,7 +675,7 @@ public struct ProjectIndex {
 
 /// Short identifiers for talking about items while working: "EF 31" (an
 /// empirical file), "PR 2" (protocol), "AST 4" (attribute sheet), "APC 7" (a
-/// priori code), "OC 23" (open code), "AC 12" (axial code), "R 5"
+/// priori code), "OC 23" (open code), "TC 12" (theorising code), "R 5"
 /// (researcher), "I 17" (interviewee). Each kind is numbered
 /// from 1 in alphabetical order of its titles or names (codes across all
 /// layers), so the numbers are NOT stable: adding, renaming or removing an
@@ -686,7 +686,7 @@ public enum WorkingIDs {
     public static let studyProtocol = "PR"
     public static let aprioriCode = "APC"
     public static let openCode = "OC"
-    public static let axialCode = "AC"
+    public static let theorisingCode = "TC"
     public static let researcher = "R"
     public static let interviewee = "I"
 
@@ -705,7 +705,7 @@ public enum WorkingIDs {
         assign(p.aprioriCodes.values.map { ($0.key, $0.name) }, aprioriCode)
         let codes = p.layers.flatMap { Array($0.codes.values) }
         assign(codes.filter { $0.kind == .open }.map { ($0.key, $0.name) }, openCode)
-        assign(codes.filter { $0.kind == .axial }.map { ($0.key, $0.name) }, axialCode)
+        assign(codes.filter { $0.kind == .theorising }.map { ($0.key, $0.name) }, theorisingCode)
         assign(p.researchers.map { ($0.key, $0.fullName) }, researcher)
         assign(p.interviewees.map { ($0.key, $0.fullName) }, interviewee)
         return result

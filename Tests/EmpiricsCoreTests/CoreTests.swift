@@ -136,11 +136,11 @@ final class RuleTests: XCTestCase {
         XCTAssertNotEqual(a, c)
     }
 
-    func testAxialCycles() throws {
+    func testTheorisingCycles() throws {
         var (p, l, _) = makeProject()
         let o = try p.addCode(layer: l, kind: .open, name: "Open")
-        let a = try p.addCode(layer: l, kind: .axial, name: "A")
-        let b = try p.addCode(layer: l, kind: .axial, name: "B")
+        let a = try p.addCode(layer: l, kind: .theorising, name: "A")
+        let b = try p.addCode(layer: l, kind: .theorising, name: "B")
         try p.addEvidence(code: a, target: o)
         try p.addEvidence(code: b, target: a)
         XCTAssertThrowsError(try p.addEvidence(code: a, target: b))   // loop
@@ -170,7 +170,7 @@ final class RuleTests: XCTestCase {
         let s3 = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 20, length: 5)])
         let c1 = try p.addCode(layer: l, kind: .open, name: "C1")
         let c2 = try p.addCode(layer: l, kind: .open, name: "C2")
-        let ax = try p.addCode(layer: l, kind: .axial, name: "Theme")
+        let ax = try p.addCode(layer: l, kind: .theorising, name: "Theme")
         let lone = try p.addCode(layer: l, kind: .open, name: "Lone")
         try p.addEvidence(code: c1, target: s1)
         try p.addEvidence(code: c2, target: s2)
@@ -302,7 +302,7 @@ final class WorkspaceTests: XCTestCase {
         code.description = "Physical strain from screens."
         p.updateCode(code)
         p.addInterrelation(code: c, type: "Contrast", members: [s1, s2], description: "Home vs office")
-        let ax = try p.addCode(layer: l, kind: .axial, name: "Embodiment")
+        let ax = try p.addCode(layer: l, kind: .theorising, name: "Embodiment")
         try p.addEvidence(code: ax, target: c, memo: "")
         let l2 = p.addLayer(name: "Second coder", kind: .inductive)
         p.layers[p.layerIndex(l2)!].description = "Blind recode"
@@ -399,7 +399,7 @@ final class WorkspaceTests: XCTestCase {
         try Workspace.create(at: dir, project: p)
         let old = p
         let from = p.inductiveLayers[0].key
-        let code = p.inductiveLayers[0].codes.values.first { $0.kind == .axial }!
+        let code = p.inductiveLayers[0].codes.values.first { $0.kind == .theorising }!
         try p.move(code.key, toLayer: p.inductiveLayers[1].key)
         try Workspace.save(p, parts: Workspace.changedParts(from: old, to: p), to: dir)
         let reloaded = try Workspace.load(dir).project
@@ -545,14 +545,14 @@ final class WorkingIDTests: XCTestCase {
         let o2 = try p.addCode(layer: l, kind: .open, name: "Zebra")
         let o1 = try p.addCode(layer: l, kind: .open, name: "Apple 10")
         let o3 = try p.addCode(layer: l, kind: .open, name: "Apple 9")
-        let ax = try p.addCode(layer: l, kind: .axial, name: "Theme")
+        let ax = try p.addCode(layer: l, kind: .theorising, name: "Theme")
         var ids = WorkingIDs.compute(p)
         XCTAssertEqual(ids[a], "EF 1")
         XCTAssertEqual(ids[b], "EF 2")
         XCTAssertEqual(ids[o3], "OC 1")   // numbers in order: 9 before 10
         XCTAssertEqual(ids[o1], "OC 2")
         XCTAssertEqual(ids[o2], "OC 3")
-        XCTAssertEqual(ids[ax], "AC 1")
+        XCTAssertEqual(ids[ax], "TC 1")
         // A new file sorting first renumbers the others.
         let c = p.addFile(path: "0.txt", kind: .text, title: "Aardvark")
         ids = ProjectIndex(p).workingID
@@ -577,8 +577,8 @@ final class ReportTests: XCTestCase {
         try p.addEvidence(code: o1, target: s1)
         try p.addEvidence(code: o1, target: s2)
         try p.addEvidence(code: o2, target: s2)
-        let a1 = try p.addCode(layer: l, kind: .axial, name: "Work rhythm")
-        let a2 = try p.addCode(layer: l, kind: .axial, name: "Wellbeing")
+        let a1 = try p.addCode(layer: l, kind: .theorising, name: "Work rhythm")
+        let a2 = try p.addCode(layer: l, kind: .theorising, name: "Wellbeing")
         try p.addEvidence(code: a1, target: o1)
         try p.addEvidence(code: a1, target: o2)
         try p.addEvidence(code: a2, target: a1)   // level 2
@@ -643,7 +643,7 @@ final class DeductiveTests: XCTestCase {
         try p.addSelection(layer: extra, file: f, spans: [TextSpan(start: 0, length: 4)])
         XCTAssertThrowsError(try p.setLayerKind(extra, .inductive))
         try p.deleteLayer(d)   // another deductive layer remains
-        // Open and axial codes only on inductive layers.
+        // Open and theorising codes only on inductive layers.
         XCTAssertThrowsError(try p.addCode(layer: extra, kind: .open, name: "Nope"))
         XCTAssertNoThrow(try p.addCode(layer: i, kind: .open, name: "Yes"))
     }
@@ -703,7 +703,7 @@ final class DeductiveTests: XCTestCase {
         // Inductive selections can't be a priori evidence.
         let si = try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 0, length: 5)])
         XCTAssertNotNil(p.aprioriEvidenceProblem(code: apc, selection: si))
-        // Links from open and axial codes.
+        // Links from open and theorising codes.
         let oc = try p.addCode(layer: i, kind: .open, name: "Doubt")
         try p.addLink(from: oc, to: apc, type: .contradicts)
         XCTAssertThrowsError(try p.addLink(from: oc, to: apc, type: .confirms))   // already linked
@@ -806,7 +806,7 @@ final class NetworkPolicyTests: XCTestCase {
             let text = try String(contentsOf: url, encoding: .utf8)
             for (n, line) in text.components(separatedBy: "\n").enumerated() {
                 let code = line.components(separatedBy: "//").first ?? ""
-                for f in forbidden where code.contains(f) {
+                for f in forbidden where Self.mentions(code, f) {
                     offences.append("\(url.lastPathComponent):\(n + 1): \(f)")
                 }
             }
@@ -815,5 +815,26 @@ final class NetworkPolicyTests: XCTestCase {
         // And no package dependencies.
         let manifest = try String(contentsOf: root.appendingPathComponent("Package.swift"), encoding: .utf8)
         XCTAssertFalse(manifest.contains(".package("), "Package.swift must not declare dependencies")
+    }
+
+    /// True if `code` contains `api` as a name of its own: "Link(" but not
+    /// "CodeLink(" (a name that merely ends with it).
+    static func mentions(_ code: String, _ api: String) -> Bool {
+        var rest = code[...]
+        while let r = rest.range(of: api) {
+            let startsName = api.first.map { $0.isLetter || $0 == "_" } ?? false
+            if !startsName || r.lowerBound == code.startIndex { return true }
+            let before = code[code.index(before: r.lowerBound)]
+            if !(before.isLetter || before.isNumber || before == "_") { return true }
+            rest = code[r.upperBound...]
+        }
+        return false
+    }
+
+    func testMentions() {
+        XCTAssertTrue(Self.mentions("Link(\"x\")", "Link("))
+        XCTAssertTrue(Self.mentions("  SwiftUI.Link(", "Link("))
+        XCTAssertFalse(Self.mentions("CodeLink(key: k)", "Link("))
+        XCTAssertTrue(Self.mentions("CodeLink(); Link(", "Link("))
     }
 }

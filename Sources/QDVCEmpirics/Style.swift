@@ -306,8 +306,17 @@ struct FillingScroll<Content: View>: View {
                     .frame(minHeight: geo.size.height, alignment: .top)
                     .padding(.horizontal, padding)
             }
+            // So content can tell how far it has scrolled (the speaker
+            // badges that stay in view, SpeakerMargin).
+            .coordinateSpace(NamedCoordinateSpace.named(ScrollSpace.document))
         }
     }
+}
+
+/// Names of coordinate spaces.
+enum ScrollSpace {
+    /// A FillingScroll's visible area.
+    static let document = "fillingScroll"
 }
 
 /// An editable list of short texts (comments, questions, options), one

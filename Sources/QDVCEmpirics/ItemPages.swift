@@ -7,7 +7,7 @@ import SwiftUI
 
 // MARK: - Code
 
-/// An open or axial code's page: its evidence. The inspector holds the
+/// An open or theorising code's page: its evidence. The inspector holds the
 /// code itself (name, description, comments, questions, interrelations…).
 struct CodePage: View {
     @Environment(AppModel.self) private var model
@@ -17,7 +17,7 @@ struct CodePage: View {
         if let code = model.project.code(codeKey) {
             EvidencePane(code: code)
         } else {
-            ContentUnavailableView("Open or Axial Code Deleted", systemImage: "tag.slash")
+            ContentUnavailableView("Open or Theorising Code Deleted", systemImage: "tag.slash")
         }
     }
 }
@@ -109,7 +109,7 @@ struct AttributeSheetUsage: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: "Associated With", trailing: "\(files.count + people.count + codes.count)")
             if files.isEmpty && people.isEmpty && codes.isEmpty {
-                Text("Nothing yet. Add it from the inspector of an empirical file, interviewee, open code or axial code.").font(.callout).foregroundStyle(.secondary)
+                Text("Nothing yet. Add it from the inspector of an empirical file, interviewee, open code or theorising code.").font(.callout).foregroundStyle(.secondary)
             }
             ForEach(files) { f in
                 usageRow(target: f.key)

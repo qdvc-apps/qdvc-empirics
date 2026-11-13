@@ -57,7 +57,7 @@ struct InspectorView: View {
             } else {
                 nothing("Select a file to see its details.")
             }
-        case .openCodes, .axialCodes:
+        case .openCodes, .theorisingCodes:
             if let key = model.tableSelection, model.project.code(key) != nil {
                 InspectorScroll { codeEditor(key) }
             } else {
@@ -81,7 +81,7 @@ struct InspectorView: View {
             } else if let key = model.tableSelection, model.project.code(key) != nil {
                 InspectorScroll { codeEditor(key) }
             } else {
-                nothing("Click a file, open code or axial code in the chart to see it here.")
+                nothing("Click a file, open code or theorising code in the chart to see it here.")
             }
         case .attributeSheetReport:
             if let key = model.tableSelection, model.project.files[key] != nil {
@@ -94,6 +94,14 @@ struct InspectorView: View {
                 InspectorScroll { AttributeSheetSummary(attributeSheetKey: cb) }
             } else {
                 nothing("Choose an attribute sheet below the report.")
+            }
+        case .protocolReport:
+            if let key = model.tableSelection, model.project.files[key] != nil {
+                InspectorScroll { FileInspector(fileKey: key) }
+            } else if let pr = model.shownReportProtocol {
+                InspectorScroll { ProtocolSummary(protocolKey: pr) }
+            } else {
+                nothing("Choose a protocol below the report.")
             }
         default:
             nothing("Nothing to inspect on this page.")
@@ -153,6 +161,11 @@ struct SelectionInspector: View {
                             .help("Mark as the response to a protocol item (A)")
                     }
                     .controlSize(.small)
+                }
+                if model.canEditTextSelection {
+                    Button("Edit Text…") { model.editSelectedText() }
+                        .controlSize(.small)
+                        .help("Correct the selected text in the file itself (a typo, say); the coding follows it")
                 }
             }
         } else {
@@ -249,6 +262,7 @@ struct SelectionInspector: View {
                 if model.hasTextSelection {
                     Button("Resize to Text Selection") { model.resizeFocusedToTextSelection() }
                 }
+                MergeButton(model: model, key: key)
                 Spacer()
                 Button(role: .destructive) {
                     model.deleteSelection(key)
@@ -385,7 +399,7 @@ struct SegmentSection: View {
 
 /// One piece of evidence for a code, with the interpretation memo: why it
 /// is evidence for the code. On a selection, `holder` and `shown` are the
-/// same code; inside an axial code, `shown` is the code that is evidence.
+/// same code; inside a theorising code, `shown` is the code that is evidence.
 struct EvidenceMemoRow: View {
     @Environment(AppModel.self) private var model
     var holder: QDACode
@@ -447,7 +461,7 @@ struct CodeEditor: View {
                     ForEach(CodeKind.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .disabled(!code.evidence.isEmpty)
-                .help(code.evidence.isEmpty ? "Open codes take selections as evidence; axial codes take codes" : "Remove the evidence to change the kind")
+                .help(code.evidence.isEmpty ? "Open codes take selections as evidence; theorising codes take codes" : "Remove the evidence to change the kind")
                 if code.kind == .open {
                     Picker("Quick", selection: Binding(get: { model.quickSlot(of: key) ?? 0 }, set: { n in
                         if n == 0 {
@@ -487,7 +501,7 @@ struct CodeEditor: View {
             interrelations(code)
 
             SectionHeader(title: "Attribute Sheets")
-            AttributeSheetAssociations(target: key, kind: code.kind == .open ? .openCodes : .axialCodes)
+            AttributeSheetAssociations(target: key, kind: code.kind == .open ? .openCodes : .theorisingCodes)
 
             Divider()
             HStack {
@@ -498,7 +512,7 @@ struct CodeEditor: View {
                 Button(role: .destructive) {
                     model.deleteCode(key)
                 } label: {
-                    Label(code.kind == .open ? "Delete Open Code…" : "Delete Axial Code…", systemImage: "trash")
+                    Label(code.kind == .open ? "Delete Open Code…" : "Delete Theorising Code…", systemImage: "trash")
                 }
             }
             .controlSize(.small)
@@ -531,13 +545,13 @@ struct CodeEditor: View {
                 let candidates = (layer?.codes.values.map { $0 } ?? [])
                     .filter { model.project.evidenceProblem(code: key, target: $0.key) == nil }
                     .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                Menu("Add Open or Axial Code") {
+                Menu("Add Open or Theorising Code") {
                     ForEach(candidates) { c in
                         Button(model.itemLabel(c.key)) { model.addEvidence(code: key, target: c.key) }
                     }
                     if !candidates.isEmpty { Divider() }
                     Button("New Open Code…") { model.sheet = .newCode(kind: .open, parent: key, child: nil) }
-                    Button("New Axial Code…") { model.sheet = .newCode(kind: .axial, parent: key, child: nil) }
+                    Button("New Theorising Code…") { model.sheet = .newCode(kind: .theorising, parent: key, child: nil) }
                 }
                 .fixedSize()
                 Spacer()
@@ -554,19 +568,19 @@ struct CodeEditor: View {
         let key = code.key
         let parents = (model.index.parents[key] ?? []).compactMap { model.project.code($0) }
         let layer = model.index.layerOf[key].flatMap { model.project.layer($0) }
-        let axial = (layer?.codes.values.map { $0 } ?? [])
-            .filter { $0.kind == .axial && model.project.evidenceProblem(code: $0.key, target: key) == nil }
+        let theorising = (layer?.codes.values.map { $0 } ?? [])
+            .filter { $0.kind == .theorising && model.project.evidenceProblem(code: $0.key, target: key) == nil }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         SectionHeader(title: "Evidence For", trailing: parents.isEmpty ? nil : "\(parents.count)")
         FlowChips(codes: parents) { parent in
             model.perform("Remove from \(parent.name)") { p in p.removeEvidence(code: parent.key, target: key) }
         }
-        Menu("Add to Axial Code") {
-            ForEach(axial) { a in
+        Menu("Add to Theorising Code") {
+            ForEach(theorising) { a in
                 Button(model.itemLabel(a.key)) { model.addEvidence(code: a.key, target: key) }
             }
-            if !axial.isEmpty { Divider() }
-            Button("New Axial Code…") { model.sheet = .newCode(kind: .axial, parent: nil, child: key) }
+            if !theorising.isEmpty { Divider() }
+            Button("New Theorising Code…") { model.sheet = .newCode(kind: .theorising, parent: nil, child: key) }
         }
         .fixedSize()
         .controlSize(.small)

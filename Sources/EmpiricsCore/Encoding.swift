@@ -54,6 +54,12 @@ extension Workspace {
             for t in tables { columns.add(t.rawValue, list: s.tableColumns[t] ?? []) }
             m.add("table_columns", columns.node)
         }
+        let layouts = AttributeSheetTarget.allCases.filter { !(s.tableLayouts[$0] ?? "").isEmpty }
+        if !layouts.isEmpty {
+            var arranged = Pairs()
+            for t in layouts { arranged.add(t.rawValue, s.tableLayouts[t] ?? "") }
+            m.add("table_layouts", arranged.node)
+        }
         m.add("layers", list(p.layers.map(\.key)))
         return m.node
     }
@@ -65,6 +71,11 @@ extension Workspace {
             let keys = pair.value.strings
             if !keys.isEmpty { columns[target] = keys }
         }
+        var layouts: [AttributeSheetTarget: String] = [:]
+        for pair in n["table_layouts"]?.pairs ?? [] {
+            guard let target = AttributeSheetTarget(rawValue: pair.key), let json = pair.value.string, !json.isEmpty else { continue }
+            layouts[target] = json
+        }
         return ProjectSettings(
             key: n["key"]?.string ?? Keys.make(Keys.project),
             title: n["title"]?.string ?? "Untitled Project",
@@ -74,7 +85,8 @@ extension Workspace {
             interrelationTypes: n["interrelation_types"].map { $0.strings } ?? ProjectSettings.defaultInterrelationTypes,
             researcherNamesFile: n["real_names"]?["researchers"]?.string ?? "",
             intervieweeNamesFile: n["real_names"]?["interviewees"]?.string ?? "",
-            tableColumns: columns
+            tableColumns: columns,
+            tableLayouts: layouts
         )
     }
 
@@ -92,6 +104,10 @@ extension Workspace {
         m.add("fingerprint", f.fingerprint)
         m.add("attribute_sheets", list: f.attributeSheets)
         m.add("added", f.added)
+        if !f.rotations.isEmpty {
+            // One-based page numbers, as people count pages.
+            m.add("rotations", .mapping(f.rotations.keys.sorted().map { YAMLPair(String($0 + 1), num(f.rotations[$0]!)) }))
+        }
         return m.node
     }
 
@@ -107,8 +123,22 @@ extension Workspace {
             status: n["status"]?.string.flatMap(CodingStatus.init(rawValue:)) ?? .notStarted,
             fingerprint: n["fingerprint"]?.string ?? "",
             attributeSheets: n["attribute_sheets"]?.strings ?? [],
-            added: n["added"]?.string ?? ""
+            added: n["added"]?.string ?? "",
+            rotations: decodeRotations(n["rotations"])
         )
+    }
+
+    /// Page rotations: one-based page → 90, 180 or 270 (anything else is
+    /// ignored).
+    static func decodeRotations(_ n: YAMLNode?) -> [Int: Int] {
+        var result: [Int: Int] = [:]
+        for pair in n?.pairs ?? [] {
+            guard let page = Int(pair.key.trimmingCharacters(in: .whitespaces)), page >= 1,
+                  let degrees = pair.value.string.flatMap({ Int($0.trimmingCharacters(in: .whitespaces)) }) else { continue }
+            let d = ((degrees % 360) + 360) % 360
+            if [90, 180, 270].contains(d) { result[page - 1] = d }
+        }
+        return result
     }
 
     // MARK: attribute sheets/<key>.yml

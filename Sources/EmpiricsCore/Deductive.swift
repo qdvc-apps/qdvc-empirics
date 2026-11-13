@@ -2,7 +2,7 @@ import Foundation
 
 // Changes to what is defined beforehand and applied on deductive layers:
 // protocols and their segments, a priori codes and their evidence, links
-// from open and axial codes to a priori codes, and Framework Matrix
+// from open and theorising codes to a priori codes, and Framework Matrix
 // summaries. The rules are listed at the top of Editing.swift.
 extension Project {
 

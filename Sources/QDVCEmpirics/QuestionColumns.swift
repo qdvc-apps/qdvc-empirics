@@ -3,22 +3,67 @@ import EmpiricsCore
 import SwiftUI
 
 // Attribute Sheet questions as columns in the tables of the items attribute sheets apply
-// to (empirical files, interviewees, open codes, axial codes). Right-click a
+// to (empirical files, interviewees, open codes, theorising codes). Right-click a
 // column heading to show or hide them: the tables use SwiftUI's column
-// customization, in which only the question columns take part. Which
-// questions are shown is saved in the workspace (project.yml,
-// `table_columns`), so everyone sharing it sees the same columns. A cell
-// shows the answer; when researchers' answers differ, each answer with the
+// customization, in which only the question columns take part. Each is
+// headed by its attribute sheet's working identifier in a badge ("AST 2"),
+// then the question's label. Which questions are shown is saved in the
+// workspace (project.yml, `table_columns`), and so is how they are arranged
+// (`table_layouts`: their order and widths, as SwiftUI's customization), so
+// everyone sharing it sees the same columns in the same places. A cell shows
+// the answer; when researchers' answers differ, each answer with the
 // initials of those who gave it.
 
 /// An attribute sheet question that can be shown as a table column.
 struct QuestionColumn: Identifiable, Hashable {
     var attributeSheet: String
     var question: String
-    /// The column heading (and its name in the headings' menu).
+    /// The question's label (with its attribute sheet's title when two
+    /// sheets use the same label).
     var title: String
+    /// The attribute sheet's working identifier ("AST 2").
+    var badge: String = ""
 
     var id: String { question }
+
+    /// The column heading, and its name in the headings' menu: the badge,
+    /// then the label.
+    @MainActor
+    var heading: Text {
+        guard !badge.isEmpty else { return Text(verbatim: title) }
+        return Text(Image(nsImage: BadgeImage.pill(badge))).baselineOffset(-2) + Text(verbatim: " " + title)
+    }
+}
+
+/// Small capsule badges drawn as images, so they can sit inside a Text (a
+/// table's column heading, its headings' menu).
+@MainActor
+enum BadgeImage {
+    private static var cache: [String: NSImage] = [:]
+
+    static func pill(_ text: String) -> NSImage {
+        if let image = cache[text] { return image }
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
+        let measured = (text as NSString).size(withAttributes: [.font: font])
+        let size = NSSize(width: ceil(measured.width) + 12, height: 14)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
+            let r = rect.insetBy(dx: 0.5, dy: 0.5)
+            let path = NSBezierPath(roundedRect: r, xRadius: r.height / 2, yRadius: r.height / 2)
+            NSColor.secondaryLabelColor.withAlphaComponent(0.14).setFill()
+            path.fill()
+            NSColor.secondaryLabelColor.withAlphaComponent(0.5).setStroke()
+            path.lineWidth = 1
+            path.stroke()
+            let t = (text as NSString).size(withAttributes: attributes)
+            (text as NSString).draw(at: NSPoint(x: (rect.width - t.width) / 2, y: (rect.height - t.height) / 2),
+                                    withAttributes: attributes)
+            return true
+        }
+        image.accessibilityDescription = text
+        cache[text] = image
+        return image
+    }
 }
 
 extension AppModel {
@@ -39,7 +84,7 @@ extension AppModel {
                 let l = label(q)
                 // The same label in two attribute sheets: say which is which.
                 let title = (labelCount[l] ?? 0) > 1 ? "\(cb.title): \(l)" : l
-                result.append(QuestionColumn(attributeSheet: cb.key, question: q.key, title: title))
+                result.append(QuestionColumn(attributeSheet: cb.key, question: q.key, title: title, badge: wid(cb.key)))
             }
         }
         return result
@@ -98,16 +143,18 @@ extension AppModel {
         return letters.isEmpty ? "?" : String(letters).uppercased()
     }
 
-    /// The table's column customization as the workspace says: each
-    /// question column visible if shown, hidden otherwise, with the rest
-    /// (widths, order) kept in `state` for the session. Showing or hiding a
-    /// question from the headings' menu saves it to the workspace.
+    /// The table's column customization as the workspace says: the columns
+    /// arranged as saved (`table_layouts`: order and widths), and each
+    /// question column visible if shown (`table_columns`), hidden otherwise.
+    /// Showing or hiding a question from the headings' menu saves it (one
+    /// step of Edit › Undo); moving or resizing columns saves the
+    /// arrangement half a second after the last change.
     func questionColumnCustomization<Row: Identifiable>(
         _ state: Binding<TableColumnCustomization<Row>>, columns: [QuestionColumn], target: AttributeSheetTarget
     ) -> Binding<TableColumnCustomization<Row>> {
         Binding(
             get: {
-                var c = state.wrappedValue
+                var c = self.savedLayout(for: target, of: Row.self) ?? state.wrappedValue
                 let shown = Set(self.project.settings.tableColumns[target] ?? [])
                 for column in columns {
                     c[visibility: column.id] = shown.contains(column.id) ? .visible : .hidden
@@ -118,8 +165,50 @@ extension AppModel {
                 state.wrappedValue = new
                 let shown = columns.filter { new[visibility: $0.id] == .visible }.map(\.question)
                 self.setTableColumns(shown, for: target)
+                self.saveTableLayout(new, for: target)
             }
         )
+    }
+
+    /// A table's arrangement as last changed here or saved in the workspace.
+    func savedLayout<Row: Identifiable>(for target: AttributeSheetTarget, of _: Row.Type) -> TableColumnCustomization<Row>? {
+        guard let json = pendingTableLayouts[target] ?? project.settings.tableLayouts[target] else { return nil }
+        if let c = decodedTableLayouts[json] as? TableColumnCustomization<Row> { return c }
+        guard let c = try? JSONDecoder().decode(TableColumnCustomization<Row>.self, from: Data(json.utf8)) else { return nil }
+        if decodedTableLayouts.count > 16 { decodedTableLayouts = [:] }
+        decodedTableLayouts[json] = c
+        return c
+    }
+
+    /// Notes a table's new arrangement and saves it to the workspace half a
+    /// second after the last change (dragging a column changes it often).
+    func saveTableLayout<Row: Identifiable>(_ c: TableColumnCustomization<Row>, for target: AttributeSheetTarget) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(c), let json = String(data: data, encoding: .utf8) else { return }
+        guard json != (pendingTableLayouts[target] ?? project.settings.tableLayouts[target]) else { return }
+        // The same arrangement written differently is no change.
+        if let saved = savedLayout(for: target, of: Row.self), saved == c { return }
+        pendingTableLayouts[target] = json
+        tableLayoutWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.flushTableLayouts() }
+        }
+        tableLayoutWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// Writes tables' arrangements noted but not saved yet into the project
+    /// (saved like typing: not on Edit › Undo).
+    func flushTableLayouts() {
+        tableLayoutWork?.cancel()
+        tableLayoutWork = nil
+        guard !pendingTableLayouts.isEmpty else { return }
+        let pending = pendingTableLayouts
+        pendingTableLayouts = [:]
+        edit { p in
+            for (target, json) in pending { p.settings.tableLayouts[target] = json }
+        }
     }
 }
 

@@ -3,7 +3,7 @@ import EmpiricsCore
 import SwiftUI
 
 /// Everything that evidences a code. For an open code, its quotes by file;
-/// for an axial code, the codes it is built from and their quotes.
+/// for a theorising code, the codes it is built from and their quotes.
 struct EvidencePane: View {
     @Environment(AppModel.self) private var model
     var code: QDACode
@@ -15,7 +15,7 @@ struct EvidencePane: View {
                 if code.kind == .open {
                     quotes(for: code)
                 } else {
-                    axial
+                    theorising
                 }
             }
             .padding(20)
@@ -76,11 +76,11 @@ struct EvidencePane: View {
     }
 
     @ViewBuilder
-    var axial: some View {
+    var theorising: some View {
         let layer = model.index.layerOf[code.key].flatMap { model.project.layer($0) }
         let children = code.evidence.compactMap { layer?.codes[$0.target] }
         if children.isEmpty {
-            Text("Not built from any codes yet. Add codes from the inspector, or from a code's “Add to Axial Code” menu.")
+            Text("Not built from any codes yet. Add codes from the inspector, or from a code's “Add to Theorising Code” menu.")
                 .foregroundStyle(.secondary)
         }
         ForEach(children) { child in

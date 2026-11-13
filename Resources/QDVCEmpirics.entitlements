@@ -5,10 +5,11 @@
   (com.apple.security.network.client / .server are deliberately absent),
   so macOS itself refuses any network connection the app might attempt.
 
-  It may read and write only folders the user chooses (the workspace) and
-  keep access to them across launches through security-scoped bookmarks.
-  The full-texts folder's bookmark is created read-only
-  (docs/DESIGN.md, Data security).
+  It may read and write only folders the user chooses (the workspace, the
+  full-texts folder) and keep access to them across launches through
+  security-scoped bookmarks. The full-texts folder is written only to save
+  an edit to a text file that the researcher confirms (docs/DESIGN.md,
+  Data security).
 -->
 <plist version="1.0">
 <dict>

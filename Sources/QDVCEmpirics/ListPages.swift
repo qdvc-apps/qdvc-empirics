@@ -130,7 +130,7 @@ struct FilesTable: View {
     @TableColumnBuilder<EmpiricalFile, KeyPathComparator<EmpiricalFile>>
     func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<EmpiricalFile, KeyPathComparator<EmpiricalFile>> {
         TableColumnForEach(columns) { c in
-            TableColumn(c.title, sortUsing: KeyPathComparator(\EmpiricalFile.key,
+            TableColumn(c.heading, sortUsing: KeyPathComparator(\EmpiricalFile.key,
                                                               comparator: AnswerOrder(question: c.question, texts: answerTexts))) { (f: EmpiricalFile) in
                 AnswerCell(model: model, column: c, target: f.key)
             }
@@ -173,7 +173,7 @@ struct CodesTable: View {
     @State private var customization = TableColumnCustomization<QDACode>()
     @State private var answerTexts = AnswerTexts()
 
-    var target: AttributeSheetTarget { kind == .open ? .openCodes : .axialCodes }
+    var target: AttributeSheetTarget { kind == .open ? .openCodes : .theorisingCodes }
 
     var body: some View {
         @Bindable var model = model
@@ -230,11 +230,11 @@ struct CodesTable: View {
             } primaryAction: { keys in
                 if let key = keys.first { model.show(.code(key)) }
             }
-            TableFooter(count: "\(all.count) \(kind == .open ? "open" : "axial") code\(all.count == 1 ? "" : "s")", filter: $filter) {
+            TableFooter(count: "\(all.count) \(kind == .open ? "open" : "theorising") code\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
                     model.sheet = .newCode(kind: kind, parent: nil, child: nil)
                 } label: {
-                    Label(kind == .open ? "New Open Code" : "New Axial Code", systemImage: "plus")
+                    Label(kind == .open ? "New Open Code" : "New Theorising Code", systemImage: "plus")
                 }
                 LayerMenu(model: model)
                     .fixedSize()
@@ -249,7 +249,7 @@ struct CodesTable: View {
     @TableColumnBuilder<QDACode, KeyPathComparator<QDACode>>
     func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<QDACode, KeyPathComparator<QDACode>> {
         TableColumnForEach(columns) { c in
-            TableColumn(c.title, sortUsing: KeyPathComparator(\QDACode.key,
+            TableColumn(c.heading, sortUsing: KeyPathComparator(\QDACode.key,
                                                               comparator: AnswerOrder(question: c.question, texts: answerTexts))) { (code: QDACode) in
                 AnswerCell(model: model, column: c, target: code.key)
             }
@@ -291,7 +291,7 @@ struct CodeTableMenu: View {
                 Button("Move to Layer…") { model.sheet = .moveToLayer(key) }
             }
             Divider()
-            Button(code.kind == .open ? "Delete Open Code…" : "Delete Axial Code…") { model.deleteCode(key) }
+            Button(code.kind == .open ? "Delete Open Code…" : "Delete Theorising Code…") { model.deleteCode(key) }
         }
     }
 }
@@ -519,7 +519,7 @@ struct IntervieweesTable: View {
     @TableColumnBuilder<Interviewee, KeyPathComparator<Interviewee>>
     func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<Interviewee, KeyPathComparator<Interviewee>> {
         TableColumnForEach(columns) { c in
-            TableColumn(c.title, sortUsing: KeyPathComparator(\Interviewee.key,
+            TableColumn(c.heading, sortUsing: KeyPathComparator(\Interviewee.key,
                                                               comparator: AnswerOrder(question: c.question, texts: answerTexts))) { (i: Interviewee) in
                 AnswerCell(model: model, column: c, target: i.key)
             }
@@ -590,7 +590,7 @@ extension AppModel {
         case .aprioriCodes: return "New A Priori Code"
         case .attributeSheets: return "New Attribute Sheet"
         case .openCodes: return "New Open Code…"
-        case .axialCodes: return "New Axial Code…"
+        case .theorisingCodes: return "New Theorising Code…"
         default: return nil
         }
     }
@@ -606,7 +606,7 @@ extension AppModel {
         case .aprioriCodes: newAprioriCode()
         case .attributeSheets: newAttributeSheet()
         case .openCodes: sheet = .newCode(kind: .open, parent: nil, child: nil)
-        case .axialCodes: sheet = .newCode(kind: .axial, parent: nil, child: nil)
+        case .theorisingCodes: sheet = .newCode(kind: .theorising, parent: nil, child: nil)
         default: break
         }
     }

@@ -3,7 +3,7 @@ import EmpiricsCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Reporting › Attribute Sheet Report: every response to one attribute sheet, as a table
+/// Reports › Attribute Sheet Report: every response to one attribute sheet, as a table
 /// (one row per response sheet, plus the associated items nobody has
 /// answered yet; one column per question). The attribute sheet is chosen in the
 /// bar below the report: like every page, it starts with its scrolling
@@ -22,7 +22,7 @@ struct AttributeSheetReportPage: View {
             if let report {
                 if report.rows.isEmpty {
                     ContentUnavailableView("No Responses Yet", systemImage: "tablecells",
-                                           description: Text("“\(report.attributeSheet.title)” isn't associated with any empirical file, interviewee, open code or axial code yet. Add it from their inspectors."))
+                                           description: Text("“\(report.attributeSheet.title)” isn't associated with any empirical file, interviewee, open code or theorising code yet. Add it from their inspectors."))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ReportTable(model: model, report: report)

@@ -2,11 +2,12 @@
 //
 // QDVC Empirics for macOS — a native app for qualitative data analysis of
 // interview transcripts, documents and articles: highlight selections, code
-// them to open codes, build axial codes from those, answer codebooks, and
+// them to open codes, build theorising codes from those, answer attribute sheets, and
 // keep it all in a Git-friendly folder of plain YAML files.
 //
-// The workspace (YAML) never holds the full-texts; those stay in a separate,
-// read-only folder whose location is remembered per Mac (docs/FILE_FORMAT.md).
+// The workspace (YAML) never holds the full-texts; those stay in a separate
+// folder (written only to save an edit the researcher confirms) whose
+// location is remembered per Mac (docs/FILE_FORMAT.md).
 //
 // No dependencies, and nothing in the app touches the network
 // (docs/MAINTENANCE.md §Network).

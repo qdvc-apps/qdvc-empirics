@@ -86,7 +86,7 @@ struct EmpiricsCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             // ⌘N makes an item of the kind the current list page shows
-            // (a file, researcher, interviewee, attribute sheet, open or axial code).
+            // (a file, researcher, interviewee, attribute sheet, open or theorising code).
             Button(model.newItemTitle ?? "New Item") { model.newItem() }
                 .keyboardShortcut("n")
                 .disabled(model.newItemTitle == nil)
@@ -195,7 +195,7 @@ struct EmpiricsCommands: Commands {
             Divider()
             Button("New Open Code…") { model.sheet = .newCode(kind: .open, parent: nil, child: nil) }
                 .disabled(!model.isOpen)
-            Button("New Axial Code…") { model.sheet = .newCode(kind: .axial, parent: nil, child: nil) }
+            Button("New Theorising Code…") { model.sheet = .newCode(kind: .theorising, parent: nil, child: nil) }
                 .disabled(!model.isOpen)
             Button("New A Priori Code") { model.newAprioriCode() }
                 .disabled(!model.isOpen)
@@ -229,8 +229,9 @@ struct EmpiricsCommands: Commands {
                                                   ("Layers", .layers), ("Project Settings", .settings),
                                                   ("Protocols", .protocols), ("Interviewees", .interviewees),
                                                   ("Attribute Sheets", .attributeSheets), ("A Priori Codes", .aprioriCodes),
-                                                  ("Open Codes", .openCodes), ("Axial Codes", .axialCodes),
-                                                  ("Coding Chart", .codingChart), ("Attribute Sheet Report", .attributeSheetReport)]
+                                                  ("Open Codes", .openCodes), ("Theorising Codes", .theorisingCodes),
+                                                  ("Coding Chart", .codingChart), ("Attribute Sheet Report", .attributeSheetReport),
+                                                  ("Protocol Report", .protocolReport)]
             // ⌃⌘1 … ⌃⌘9, then ⌃⌘0 for the tenth; the rest have none.
             ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
                 Button(page.0) { model.sidebar = page.1 }
