@@ -51,25 +51,32 @@ struct CodingBar: View {
     /// keys still work).
     @ViewBuilder
     var minimal: some View {
+        let noun = model.codeNoun
         HStack(spacing: 6) {
             if model.hasTextSelection, model.textSelectionFile == fileKey {
                 Button { model.paletteVisible = true } label: { Image(systemName: "tag") }
                     .buttonStyle(.borderedProminent)
-                    .help("Apply an open code to the selected text (⌘K or Return)")
+                    .help("Apply \(model.aCodeNoun) to the selected text (⌘K or Return)")
+                if model.activeIsDeductive {
+                    SegmentMenu(fileKey: fileKey, compact: true)
+                }
                 Button { model.highlightOnly() } label: { Image(systemName: "highlighter") }
-                    .help("Highlight without an open code (H)")
+                    .help("Highlight without \(model.aCodeNoun) (H)")
                 Button { model.toggleIrrelevant() } label: { Image(systemName: "eye.slash") }
                     .help("Mark as irrelevant (0)")
             } else if let key = model.focusedSelection, let s = model.project.selection(key), s.fileKey == fileKey {
                 if s.irrelevant {
                     Button { model.toggleIrrelevant() } label: { Image(systemName: "eye") }
                         .help("Mark relevant again")
+                } else if let segment = s.segment {
+                    Image(systemName: "list.bullet.rectangle").foregroundStyle(Color(nsColor: .protocolSegment))
+                        .help(model.segmentTitle(segment))
                 } else {
-                    let n = model.index.codesForSelection[key]?.count ?? 0
+                    let n = model.tags(of: key).count
                     Text("\(n)").monospacedDigit().foregroundStyle(.secondary)
-                        .help("\(n) open code\(n == 1 ? "" : "s") on this selection")
+                        .help("\(n) \(noun)\(n == 1 ? "" : "s") on this selection")
                     Button { model.paletteVisible = true } label: { Image(systemName: "plus") }
-                        .help("Add an open code to this selection (⌘K)")
+                        .help("Add \(model.aCodeNoun) to this selection (⌘K)")
                 }
                 Button(role: .destructive) { model.deleteSelection(key) } label: { Image(systemName: "trash") }
                     .help("Delete this selection (Delete)")
@@ -82,6 +89,8 @@ struct CodingBar: View {
 
     @ViewBuilder
     func content(compact: Bool) -> some View {
+        let noun = model.codeNoun
+        let title = model.codeNounTitle
         HStack(spacing: 8) {
             if model.hasTextSelection, model.textSelectionFile == fileKey {
                 let count = model.textSelection.reduce(0) { $0 + $1.length }
@@ -89,12 +98,15 @@ struct CodingBar: View {
                 Button {
                     model.paletteVisible = true
                 } label: {
-                    Label(compact ? "Open Code" : "Open Code…", systemImage: "tag")
+                    Label(compact ? title : title + "…", systemImage: "tag")
                 }
                 .buttonStyle(.borderedProminent)
-                .help("Apply an open code to the selected text (⌘K or Return)")
+                .help("Apply \(model.aCodeNoun) to the selected text (⌘K or Return)")
+                if model.activeIsDeductive {
+                    SegmentMenu(fileKey: fileKey, compact: compact)
+                }
                 Button(compact ? "Highlight" : "Highlight Only") { model.highlightOnly() }
-                    .help("Make a selection without an open code yet (H)")
+                    .help("Make a selection without \(model.aCodeNoun) yet (H)")
                 Button(compact ? "Irrelevant" : "Mark Irrelevant") { model.toggleIrrelevant() }
                     .help("Mark the text as irrelevant in this layer (0)")
                 if let f = model.focusedSelection, model.project.selection(f) != nil {
@@ -105,25 +117,34 @@ struct CodingBar: View {
                 if s.irrelevant {
                     Label("Irrelevant", systemImage: "eye.slash").foregroundStyle(.secondary)
                     Button("Mark Relevant") { model.toggleIrrelevant() }
+                } else if let segment = s.segment {
+                    Label(model.segmentTitle(segment), systemImage: "list.bullet.rectangle")
+                        .foregroundStyle(Color(nsColor: .protocolSegment))
+                        .lineLimit(1)
+                    SegmentMenu(fileKey: fileKey, compact: compact, title: "Change")
+                    if !compact {
+                        Button("Unmark") { model.clearSegment(key) }
+                            .help("Make this a plain selection again")
+                    }
                 } else {
-                    let codes = (model.index.codesForSelection[key] ?? []).compactMap { model.project.code($0) }
-                    if codes.isEmpty {
-                        Text("No open code yet").foregroundStyle(.secondary)
+                    let tags = model.tags(of: key)
+                    if tags.isEmpty {
+                        Text("No \(noun) yet").foregroundStyle(.secondary)
                     } else {
-                        ForEach(codes.prefix(compact ? 1 : 3)) { c in
-                            CodeChip(code: c, compact: true)
-                                .onTapGesture { model.showCode(c.key) }
+                        ForEach(tags.prefix(compact ? 1 : 3)) { t in
+                            CodeChip(tag: t, compact: true)
+                                .onTapGesture { model.showTag(t.key) }
                         }
-                        if codes.count > (compact ? 1 : 3) {
-                            Text("+\(codes.count - (compact ? 1 : 3))").foregroundStyle(.secondary)
+                        if tags.count > (compact ? 1 : 3) {
+                            Text("+\(tags.count - (compact ? 1 : 3))").foregroundStyle(.secondary)
                         }
                     }
                     Button {
                         model.paletteVisible = true
                     } label: {
-                        Label(compact ? "Add" : "Add Open Code…", systemImage: "plus")
+                        Label(compact ? "Add" : "Add \(title)…", systemImage: "plus")
                     }
-                    .help("Add an open code to this selection (⌘K)")
+                    .help("Add \(model.aCodeNoun) to this selection (⌘K)")
                 }
                 Button(role: .destructive) {
                     model.deleteSelection(key)
@@ -132,7 +153,10 @@ struct CodingBar: View {
                 }
                 .help("Delete this selection (Delete)")
             } else {
-                Text(compact ? "Select text to code it" : "Select text, then press Return to apply an open code, or 1–9 for a quick open code.")
+                Text(compact ? "Select text to code it"
+                     : model.activeIsDeductive
+                        ? "Select text, then press Return for an a priori code, 1–9 for a quick code, or Q / A for a protocol prompt / response."
+                        : "Select text, then press Return to apply an open code, or 1–9 for a quick open code.")
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -142,7 +166,54 @@ struct CodingBar: View {
     }
 }
 
+/// On a deductive layer: mark the text (or change the focused segment) as
+/// the prompt or the response of an item of the file's protocol.
+struct SegmentMenu: View {
+    @Environment(AppModel.self) private var model
+    let fileKey: String
+    var compact: Bool
+    var title = "Protocol"
+
+    var body: some View {
+        let model = self.model
+        let protocols = model.segmentProtocols(file: fileKey)
+        Menu {
+            if protocols.isEmpty {
+                Text("No protocols yet")
+                Button("Make a Protocol…") { model.sidebar = .protocols }
+            }
+            ForEach(ProtocolPart.allCases, id: \.self) { part in
+                Section(part.label + (part == .prompt ? " (Q)" : " (A)")) {
+                    ForEach(protocols) { pr in
+                        if protocols.count > 1 {
+                            Menu(pr.title) { items(pr, part, model) }
+                        } else {
+                            items(pr, part, model)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(compact ? title : title + "…", systemImage: "list.bullet.rectangle")
+        }
+        .fixedSize()
+        .help("Mark the text as a protocol prompt (Q) or response (A)")
+    }
+
+    @ViewBuilder
+    func items(_ pr: StudyProtocol, _ part: ProtocolPart, _ model: AppModel) -> some View {
+        if pr.items.isEmpty {
+            Text("\(pr.title) has no items yet")
+        }
+        ForEach(pr.items) { item in
+            Button(model.protocolItemTitle(item.key)) { model.markSegment(item: item.key, part: part) }
+        }
+    }
+}
+
 /// Quick codes 1–9: click (or press the number) to code the selection.
+/// Each layer has its own nine: open codes on inductive layers, a priori
+/// codes on deductive ones.
 struct QuickCodeStrip: View {
     @Environment(AppModel.self) private var model
     var compact: Bool
@@ -151,9 +222,9 @@ struct QuickCodeStrip: View {
         // Captured here, so the context menu (built apart from the view)
         // doesn't read the environment.
         let model = self.model
-        let slots = model.quickCodes.enumerated().compactMap { i, key -> (Int, QDACode)? in
-            guard !key.isEmpty, let c = model.activeLayer?.codes[key] else { return nil }
-            return (i + 1, c)
+        let slots = model.quickCodes.enumerated().compactMap { i, key -> (Int, CodingTag)? in
+            guard model.isCodeOfActiveLayer(key), let t = model.tag(key) else { return nil }
+            return (i + 1, t)
         }
         if !slots.isEmpty {
             HStack(spacing: 4) {
@@ -167,7 +238,7 @@ struct QuickCodeStrip: View {
                                 CodeDot(color: code.color)
                             }
                         } else {
-                            CodeChip(code: code, slot: slot, compact: true)
+                            CodeChip(tag: code, slot: slot, compact: true)
                                 .frame(maxWidth: 150)
                         }
                     }
@@ -177,7 +248,7 @@ struct QuickCodeStrip: View {
                     .help("\(slot): \(code.name)")
                     .contextMenu {
                         Button("Remove from Quick Codes") { model.assignQuickCode(nil, slot: slot) }
-                        Button("Show Open Code") { model.showCode(code.key) }
+                        Button(code.isApriori ? "Show A Priori Code" : "Show Open Code") { model.showTag(code.key) }
                     }
                 }
             }
@@ -187,16 +258,17 @@ struct QuickCodeStrip: View {
 
 struct KeyboardHelp: View {
     let rows: [(String, String)] = [
-        ("Return or K", "Apply an open code to the selection (opens the palette)"),
-        ("1 … 9", "Apply quick open code 1–9"),
+        ("Return or K", "Apply a code to the selection (opens the palette): open codes on inductive layers, a priori codes on deductive ones"),
+        ("1 … 9", "Apply quick code 1–9 (each layer has its own)"),
+        ("Q / A", "Mark as a protocol prompt / response (deductive layers)"),
         ("0", "Mark irrelevant (or relevant again)"),
-        ("H", "Highlight without an open code"),
+        ("H", "Highlight without a code"),
         ("T", "Select the speaker's turn (Interlocutor layer)"),
         ("P / S", "Select the paragraph / sentence"),
         ("] / [", "Next / previous selection"),
         ("Delete", "Delete the focused selection"),
         ("Esc", "Clear the selection"),
-        ("⌘K", "Open code palette (from anywhere)"),
+        ("⌘K", "Code palette (from anywhere)"),
         ("⌥⌘] / ⌥⌘[", "Next / previous file"),
         ("⌥⌘N", "Next file not yet coded"),
         ("⌘F", "Find in the document"),
@@ -212,21 +284,22 @@ struct KeyboardHelp: View {
                 ForEach(rows, id: \.0) { key, what in
                     GridRow {
                         Text(key).font(.system(.body, design: .rounded).weight(.semibold))
-                        Text(what).foregroundStyle(.secondary)
+                        Text(what).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
         }
         .padding(14)
-        .frame(width: 400)
+        .frame(width: 440)
     }
 }
 
 // MARK: - Quick-code palette
 
-/// ⌘K: type to find an open code (by name, description or working
-/// identifier) or a new open code's name; Return to apply. Open codes in the
-/// quick-code slots come first, then the rest by name.
+/// ⌘K: type to find a code (by name, description or working identifier) or
+/// a new code's name; Return to apply. Codes in the quick-code slots come
+/// first, then the rest by name. Open codes on an inductive layer, a priori
+/// codes (with their definitions) on a deductive one.
 struct QuickCodePalette: View {
     @Environment(AppModel.self) private var model
     @State private var query = ""
@@ -234,13 +307,13 @@ struct QuickCodePalette: View {
 
     struct Row: Identifiable, Equatable {
         var id: String
-        var code: QDACode?
+        var code: CodingTag?
         var createName: String?
     }
 
     var rows: [Row] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        let codes = (model.activeLayer.map { Array($0.codes.values) } ?? []).filter { $0.kind == .open }
+        let codes = model.activeTags
         var result: [Row]
         if q.isEmpty {
             let quick = model.quickCodes.compactMap { k in codes.first { $0.key == k } }
@@ -250,17 +323,17 @@ struct QuickCodePalette: View {
         } else {
             // "oc 12" or "OC12" finds open code OC 12 by its working identifier.
             let squeezed = q.replacingOccurrences(of: " ", with: "").lowercased()
-            func rank(_ c: QDACode) -> Int? {
+            func rank(_ c: CodingTag) -> Int? {
                 if model.wid(c.key).replacingOccurrences(of: " ", with: "").lowercased() == squeezed { return 0 }
                 let n = c.name
                 if n.range(of: q, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil { return 0 }
                 let words = n.split(whereSeparator: { $0 == " " || $0 == "-" || $0 == "/" })
                 if words.contains(where: { $0.range(of: q, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil }) { return 1 }
                 if n.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil { return 2 }
-                if c.description.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil { return 3 }
+                if c.detail.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil { return 3 }
                 return nil
             }
-            var ranked: [(code: QDACode, rank: Int)] = []
+            var ranked: [(code: CodingTag, rank: Int)] = []
             for c in codes {
                 if let r = rank(c) { ranked.append((code: c, rank: r)) }
             }
@@ -278,13 +351,14 @@ struct QuickCodePalette: View {
 
     var body: some View {
         let rows = self.rows
-        let applied = Set(model.focusedSelection.flatMap { model.index.codesForSelection[$0] } ?? [])
+        let noun = model.codeNoun
+        let applied = Set(model.focusedSelection.map { model.tags(of: $0).map(\.key) } ?? [])
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "tag").foregroundStyle(.secondary)
                 PaletteField(
                     text: $query,
-                    placeholder: model.hasTextSelection ? "Apply open code to the selection…" : "Add an open code to the selection…",
+                    placeholder: model.hasTextSelection ? "Apply \(noun) to the selection…" : "Add \(model.aCodeNoun) to the selection…",
                     onMove: { step in
                         guard !rows.isEmpty else { return }
                         highlighted = max(0, min(rows.count - 1, highlighted + step))
@@ -304,7 +378,9 @@ struct QuickCodePalette: View {
             .padding(.vertical, 10)
             Divider()
             if rows.isEmpty {
-                Text("No open codes in this layer yet. Type a name to create the first one.")
+                Text(model.activeIsDeductive
+                     ? "No a priori codes yet. Type a name to create the first one (it joins A Priori Codes, for the whole project)."
+                     : "No open codes in this layer yet. Type a name to create the first one.")
                     .foregroundStyle(.secondary)
                     .padding(12)
             } else {
@@ -328,7 +404,7 @@ struct QuickCodePalette: View {
                 }
             }
             Divider()
-            Text("↩ apply   ↑↓ choose   ⌘↩ new open code with this name   esc close")
+            Text("↩ apply   ↑↓ choose   ⌘↩ new \(noun) with this name   esc close")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -348,8 +424,8 @@ struct QuickCodePalette: View {
             if let code = row.code {
                 CodeDot(color: code.color, size: 11)
                 Text(code.name).lineLimit(1)
-                if !code.description.isEmpty {
-                    Text(code.description).foregroundStyle(.secondary).lineLimit(1).font(.callout)
+                if !code.detail.isEmpty {
+                    Text(code.detail).foregroundStyle(.secondary).lineLimit(1).font(.callout)
                 }
                 Spacer(minLength: 8)
                 if applied {
@@ -363,7 +439,7 @@ struct QuickCodePalette: View {
                 WorkingBadge(text: model.wid(code.key), color: code.color)
             } else if let name = row.createName {
                 Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
-                Text("New open code “\(name)”").lineLimit(1)
+                Text("New \(model.codeNoun) “\(name)”").lineLimit(1)
                 Spacer()
             }
         }
@@ -382,6 +458,141 @@ struct QuickCodePalette: View {
     }
 }
 
+// MARK: - Protocol palette
+
+/// Q or A on a deductive layer: choose the protocol item the text is the
+/// prompt (Q) or the response (A) of; type to filter by number, label or
+/// wording, Tab to switch between prompt and response, Return to mark.
+/// Only the file's protocol is offered once it has one in this layer.
+struct ProtocolPalette: View {
+    @Environment(AppModel.self) private var model
+    @State private var query = ""
+    @State private var highlighted = 0
+
+    struct Row: Identifiable, Equatable {
+        var id: String { item.key }
+        var item: ProtocolItem
+        var number: Int
+        var protocolTitle: String
+    }
+
+    var file: String {
+        model.textSelectionFile ?? model.focusedSelection.flatMap { model.index.fileOf[$0] } ?? model.openFileKey ?? ""
+    }
+
+    var rows: [Row] {
+        let protocols = model.segmentProtocols(file: file)
+        let all = protocols.flatMap { pr in
+            pr.items.enumerated().map { i, item in Row(item: item, number: i + 1, protocolTitle: pr.title) }
+        }
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return all }
+        if let n = Int(q) { return all.filter { $0.number == n } }
+        return all.filter { r in
+            r.item.label.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+                || r.item.text.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
+
+    var body: some View {
+        let rows = self.rows
+        let part = model.protocolPalette ?? .response
+        let current = model.focusedSelection.flatMap { model.project.selection($0)?.segment }
+        let several = Set(rows.map(\.protocolTitle)).count > 1
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "list.bullet.rectangle").foregroundStyle(Color(nsColor: .protocolSegment))
+                PaletteField(
+                    text: $query,
+                    placeholder: "Mark as the \(part.label.lowercased()) of item…",
+                    onMove: { step in
+                        guard !rows.isEmpty else { return }
+                        highlighted = max(0, min(rows.count - 1, highlighted + step))
+                    },
+                    onSubmit: { _ in
+                        if highlighted < rows.count { model.markSegment(item: rows[highlighted].item.key, part: part) }
+                    },
+                    onCancel: { model.protocolPalette = nil },
+                    onTab: { model.protocolPalette = part == .prompt ? .response : .prompt }
+                )
+                Picker("Part", selection: Binding(get: { part }, set: { model.protocolPalette = $0 })) {
+                    ForEach(ProtocolPart.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            Divider()
+            if rows.isEmpty {
+                Text(query.isEmpty ? "This protocol has no items yet. Add them on its page." : "No item matches.")
+                    .foregroundStyle(.secondary)
+                    .padding(12)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                                rowView(row, highlighted: i == highlighted, showProtocol: several,
+                                        current: current?.item == row.item.key ? current?.part : nil)
+                                    .id(row.id)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { model.markSegment(item: row.item.key, part: part) }
+                                    .onHover { if $0 { highlighted = i } }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .frame(maxHeight: 320)
+                    .onChange(of: highlighted) { _, new in
+                        if new < rows.count { proxy.scrollTo(rows[new].id) }
+                    }
+                }
+            }
+            Divider()
+            Text("↩ mark   ↑↓ choose   ⇥ prompt / response   type a number or words to filter   esc close")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+        }
+        .frame(width: 520)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.12)))
+        .shadow(color: .black.opacity(0.25), radius: 24, y: 8)
+        .onChange(of: query) { _, _ in highlighted = 0 }
+        .onDisappear { model.focusDocument() }
+    }
+
+    @ViewBuilder
+    func rowView(_ row: Row, highlighted: Bool, showProtocol: Bool, current: ProtocolPart?) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(row.number)").font(.callout.monospacedDigit().weight(.semibold))
+                .foregroundStyle(Color(nsColor: .protocolSegment))
+                .frame(width: 22, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.item.label.isEmpty ? "Untitled" : row.item.label).lineLimit(1)
+                if !row.item.text.isEmpty {
+                    Text(row.item.text).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            if let current {
+                Text(current.label).font(.caption).foregroundStyle(.secondary)
+                Image(systemName: "checkmark").foregroundStyle(.secondary).help("This selection's item now")
+            }
+            if showProtocol {
+                Text(row.protocolTitle).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 6).fill(highlighted ? Color.accentColor.opacity(0.18) : .clear))
+        .padding(.horizontal, 4)
+    }
+}
+
 /// The palette's search field: an NSTextField, so arrow keys, Return and
 /// Escape reach the palette rather than the field.
 struct PaletteField: NSViewRepresentable {
@@ -390,6 +601,8 @@ struct PaletteField: NSViewRepresentable {
     var onMove: (Int) -> Void
     var onSubmit: (_ createAnyway: Bool) -> Void
     var onCancel: () -> Void
+    /// Tab, if the palette uses it (else Tab moves the focus as usual).
+    var onTab: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -441,6 +654,9 @@ struct PaletteField: NSViewRepresentable {
                 parent?.onSubmit(true)
             case #selector(NSResponder.cancelOperation(_:)):
                 parent?.onCancel()
+            case #selector(NSResponder.insertTab(_:)), #selector(NSResponder.insertBacktab(_:)):
+                guard let onTab = parent?.onTab else { return false }
+                onTab()
             default:
                 return false
             }

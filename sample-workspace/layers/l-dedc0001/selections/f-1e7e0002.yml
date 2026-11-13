@@ -1,0 +1,25 @@
+file: f-1e7e0002
+protocol: pr-1a7e0001
+selections:
+  - key: s-474f65ce
+    item: pi-0a000004
+    part: prompt
+    start: 181
+    length: 43
+    quote: How did you analyse your interviews before?
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-1a376e27
+    item: pi-0a000004
+    part: response
+    start: 253
+    length: 165
+    quote: Highlighters and a printout, honestly, then a spreadsheet. It was slow, and I lost track of why I had put a quote under a theme. I had the quotes but not my reasons.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z
+  - key: s-19cb0a78
+    start: 542
+    length: 36
+    quote: Writing the memo forces me to think.
+    by: r-a11ce000
+    created: 2026-11-01T09:00:00Z

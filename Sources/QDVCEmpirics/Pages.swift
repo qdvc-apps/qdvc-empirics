@@ -288,17 +288,3 @@ struct RealNamesSettings: View {
         }
     }
 }
-
-// MARK: - Pages still to come
-
-/// A page whose feature arrives in a later update.
-struct ComingSoonPage: View {
-    var title: String
-    var systemImage: String
-    var text: String
-
-    var body: some View {
-        ContentUnavailableView(title, systemImage: systemImage, description: Text(text))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}

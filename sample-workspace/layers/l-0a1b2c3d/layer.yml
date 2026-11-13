@@ -1,4 +1,5 @@
 key: l-0a1b2c3d
-name: Main
+kind: inductive
+name: Main Inductive
 description: First reading
 researcher: r-a11ce000

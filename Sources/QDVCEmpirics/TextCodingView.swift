@@ -19,6 +19,21 @@ struct TextDecorations: Equatable {
     var stripes: [StripeSpec] = []
     /// Speaker turns.
     var turns: [TurnSpec] = []
+    /// Protocol segments of the active (deductive) layer.
+    var segments: [SegmentSpec] = []
+}
+
+/// A protocol segment, in the margin at the far left.
+struct SegmentSpec: Equatable {
+    var key: String
+    var range: NSRange
+    /// "2 · Prompt".
+    var label: String
+    /// The item's label ("Long sessions").
+    var caption: String
+    var help: String
+    var focused: Bool
+    var prompt: Bool
 }
 
 struct StripeSpec: Equatable {
@@ -27,10 +42,10 @@ struct StripeSpec: Equatable {
     var color: NSColor
     var help: String
     var focused: Bool
-    /// Shown beside the stripe when there is room: the open codes' names,
-    /// or "Irrelevant".
+    /// Shown beside the stripe when there is room: the codes' names (open
+    /// or a priori), or "Irrelevant".
     var label: String = ""
-    /// The open codes' working identifiers, on the label's first line.
+    /// The codes' working identifiers, on the label's first line.
     var badges: [LabelBadge] = []
     /// Irrelevant text: a dashed grey ribbon.
     var dashed = false
@@ -60,6 +75,7 @@ struct PlacedMark: Identifiable, Equatable {
     var label: String = ""
     var badges: [LabelBadge] = []
     var dashed = false
+    var caption: String = ""
 }
 
 /// How the file page's width is shared: speaker names, the text, coding
@@ -73,8 +89,24 @@ struct ColumnLayout: Equatable {
     var text: CGFloat
     var stripes: CGFloat
     var labels: CGFloat
+    /// Protocol segments (deductive layers), at the far left; 0 if none.
+    var protocols: CGFloat = 0
 
-    var total: CGFloat { speaker + text + stripes + labels }
+    var total: CGFloat { protocols + speaker + text + stripes + labels }
+
+    static let protocolWidth: CGFloat = 118
+    static let narrowProtocolWidth: CGFloat = 64
+
+    /// As `make(width:reading:speakers:stripes:labels:)`, with a protocol
+    /// column taken from the width first (narrower in narrow windows).
+    static func make(width: CGFloat, reading: CGFloat, speakers: Bool, stripes: Bool, labels: Bool,
+                     protocols: Bool) -> ColumnLayout {
+        guard protocols else { return make(width: width, reading: reading, speakers: speakers, stripes: stripes, labels: labels) }
+        let pr = width >= reading + protocolWidth + speakerWidth + stripeWidth ? protocolWidth : narrowProtocolWidth
+        var layout = make(width: width - pr, reading: reading, speakers: speakers, stripes: stripes, labels: labels)
+        layout.protocols = pr
+        return layout
+    }
 
     static let stripeWidth: CGFloat = 56
     static let speakerWidth: CGFloat = 132
@@ -105,27 +137,34 @@ struct ColumnLayout: Equatable {
 }
 
 /// A text or Markdown file, for reading and coding: the text in a readable
-/// column, speaker names on the left (Interlocutor layer), coding stripes on
-/// the right (with open code names beside them when there is room), and the
-/// coding bar below.
+/// column, speaker names on the left (Interlocutor layer), protocol segments
+/// at the far left (deductive layers), coding stripes on the right (with the
+/// codes' names beside them when there is room), and the coding bar below.
 struct TextCodingView: View {
     @Environment(AppModel.self) private var model
     let fileKey: String
     let text: String
     @State private var stripes: [PlacedMark] = []
     @State private var turnMarks: [PlacedMark] = []
+    @State private var segmentMarks: [PlacedMark] = []
 
     var body: some View {
         let speakers = model.project.settings.interlocutorLayer && model.showSpeakers
         let deco = decorations(speakers: speakers)
+        let protocols = !deco.segments.isEmpty
         VStack(spacing: 0) {
             GeometryReader { geo in
                 let layout = ColumnLayout.make(width: geo.size.width, reading: model.readingWidth, speakers: speakers,
-                                               stripes: model.showStripes, labels: model.showCodeNames)
+                                               stripes: model.showStripes, labels: model.showCodeNames, protocols: protocols)
                 // The scroll view spans the whole width (so the margins
                 // scroll too); the column is centred inside it.
                 FillingScroll {
                     HStack(alignment: .top, spacing: 0) {
+                        if layout.protocols > 0 {
+                            SegmentMargin(marks: segmentMarks, width: layout.protocols)
+                                .frame(width: layout.protocols)
+                                .frame(maxHeight: .infinity, alignment: .top)
+                        }
                         if speakers {
                             SpeakerMargin(marks: turnMarks, width: layout.speaker)
                                 .frame(width: layout.speaker)
@@ -175,9 +214,10 @@ struct TextCodingView: View {
             onSelection: { spans in model.documentSelectionChanged(file: fileKey, spans: spans) },
             onClick: { offset in model.documentClicked(file: fileKey, page: nil, offset: offset) },
             onKey: { key, tv in handleKey(key, tv) },
-            onPlaced: { s, t in
+            onPlaced: { s, t, g in
                 stripes = s
                 turnMarks = t
+                segmentMarks = g
             },
             onPosition: { model.rememberPosition(file: fileKey, $0) }
         )
@@ -193,7 +233,10 @@ struct TextCodingView: View {
         let strength = model.highlightStrength
 
         if let layer = model.activeLayer {
-            let list = layer.selections[fileKey] ?? []
+            let all = layer.selections[fileKey] ?? []
+            // Protocol segments are structure, not coding: they go in their
+            // own margin, with a light fill only while focused.
+            let list = all.filter { $0.segment == nil }
             let relevant = list.filter { !$0.irrelevant }
             for s in list where s.irrelevant {
                 for span in s.spans where ok(span) { d.dimmed.append(NSRange(location: span.start, length: span.length)) }
@@ -210,7 +253,7 @@ struct TextCodingView: View {
                 }
             }
             let cuts = Set(starts.keys).union(ends.keys).sorted()
-            let colours = relevant.map { colour(of: $0, in: layer) }
+            let colours = relevant.map { model.selectionColour($0, in: layer) }
             var active = Set<Int>()
             for (n, a) in cuts.enumerated() {
                 for i in ends[a] ?? [] { active.remove(i) }
@@ -233,22 +276,39 @@ struct TextCodingView: View {
                                                 label: "Irrelevant", dashed: true))
                     continue
                 }
-                let codes = (model.index.codesForSelection[s.key] ?? []).compactMap { layer.codes[$0] }
-                    .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                let help = codes.isEmpty ? "Highlighted, no open code yet"
+                let codes = model.tags(of: s.key, in: layer)
+                let none = layer.isDeductive ? "No a priori code yet" : "No open code yet"
+                let help = codes.isEmpty ? "Highlighted, " + none.lowercased()
                     : codes.map { model.itemLabel($0.key) }.joined(separator: "\n")
-                let label = codes.isEmpty ? "No open code yet" : codes.map(\.name).joined(separator: ", ")
+                let label = codes.isEmpty ? none : codes.map(\.name).joined(separator: ", ")
                 let badges = codes.map { LabelBadge(text: model.wid($0.key), color: $0.nsColor) }.filter { !$0.text.isEmpty }
-                d.stripes.append(StripeSpec(key: s.key, range: range, color: colour(of: s, in: layer), help: help,
+                d.stripes.append(StripeSpec(key: s.key, range: range, color: model.selectionColour(s, in: layer), help: help,
                                             focused: focused, label: label, badges: badges))
+            }
+            for s in all {
+                guard let segment = s.segment, let first = s.spans.first, ok(first), let last = s.spans.last else { continue }
+                let range = NSRange(location: first.start, length: last.end - first.start)
+                let focused = s.key == model.focusedSelection
+                if focused {
+                    for span in s.spans where ok(span) {
+                        d.fills.append(.init(range: NSRange(location: span.start, length: span.length),
+                                             color: NSColor.protocolSegment.withAlphaComponent(0.12)))
+                    }
+                }
+                let item = p.protocolItem(segment.item)?.item
+                let number = p.protocolItemNumber(segment.item).map { "\($0) · " } ?? ""
+                d.segments.append(SegmentSpec(key: s.key, range: range, label: number + segment.part.label,
+                                              caption: item.map { $0.label.isEmpty ? "Untitled" : $0.label } ?? "Deleted item",
+                                              help: model.segmentTitle(segment) + (item.map { $0.text.isEmpty ? "" : "\n" + $0.text } ?? ""),
+                                              focused: focused, prompt: segment.part == .prompt))
             }
         }
         if model.showOtherLayers {
             for layer in p.layers where layer.key != model.activeLayerKey && model.isLayerVisible(layer.key) {
-                for s in layer.selections[fileKey] ?? [] where !s.irrelevant {
+                for s in layer.selections[fileKey] ?? [] where !s.irrelevant && s.segment == nil {
                     for span in s.spans where ok(span) {
                         d.underlines.append(.init(range: NSRange(location: span.start, length: span.length),
-                                                  color: colour(of: s, in: layer)))
+                                                  color: model.selectionColour(s, in: layer)))
                     }
                 }
             }
@@ -294,12 +354,6 @@ struct TextCodingView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// A selection's colour: its first code's (by name), or grey.
-    func colour(of s: CodeSelection, in layer: CodingLayer) -> NSColor {
-        let codes = (model.index.codesForSelection[s.key] ?? []).compactMap { layer.codes[$0] }
-        return codes.min { $0.name.localizedCompare($1.name) == .orderedAscending }?.nsColor ?? .systemGray
-    }
-
     // MARK: Keys
 
     /// Single keys while reading (no modifiers): see the coding bar's
@@ -331,8 +385,11 @@ struct TextCodingView: View {
         case "\u{7f}", "\u{f728}":
             guard !model.hasTextSelection, model.focusedSelection != nil else { return false }
             model.deleteFocusedSelection()
+        case "q", "a":
+            return model.handleProtocolKey(key)
         case "\u{1b}":
             model.paletteVisible = false
+            model.protocolPalette = nil
             model.focusedSelection = nil
             tv.setSelectedRange(NSRange(location: tv.selectedRange().location, length: 0))
         default:
@@ -585,6 +642,69 @@ struct SpeakerMargin: View {
     }
 }
 
+/// Protocol segments at the far left (deductive layers): a bracket down
+/// each segment (dashed for a prompt, solid for a response) with its item
+/// number and part, and the item's label. Click one to focus it.
+struct SegmentMargin: View {
+    @Environment(AppModel.self) private var model
+    var marks: [PlacedMark]
+    var width: CGFloat
+
+    var body: some View {
+        let color = Color(nsColor: .protocolSegment)
+        let wide = width >= ColumnLayout.protocolWidth
+        ZStack(alignment: .topTrailing) {
+            Color.clear
+            ForEach(marks) { m in
+                HStack(alignment: .top, spacing: 5) {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(m.label)
+                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(color.opacity(m.focused ? 1 : 0.8))
+                            .lineLimit(1)
+                        if wide {
+                            Text(m.caption)
+                                .font(.system(size: 11, weight: m.focused ? .semibold : .regular))
+                                .foregroundStyle(color)
+                                .lineLimit(3)
+                                .multilineTextAlignment(.trailing)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, 1)
+                    Bracket(dashed: m.dashed, focused: m.focused, color: color, height: max(10, m.height))
+                }
+                .frame(width: max(0, width - 10 - CGFloat(m.lane) * 7), alignment: .trailing)
+                .contentShape(Rectangle())
+                .onTapGesture { model.focusSelection(m.id) }
+                .help(m.text)
+                .offset(x: -6 - CGFloat(m.lane) * 7, y: m.y)
+            }
+        }
+    }
+}
+
+/// A segment's bracket: a line down its lines with short ticks at the top
+/// and bottom; dashed for a prompt.
+struct Bracket: View {
+    var dashed: Bool
+    var focused: Bool
+    var color: Color
+    var height: CGFloat
+
+    var body: some View {
+        Path { p in
+            p.move(to: CGPoint(x: 5, y: 0.5))
+            p.addLine(to: CGPoint(x: 0.5, y: 0.5))
+            p.addLine(to: CGPoint(x: 0.5, y: height - 0.5))
+            p.addLine(to: CGPoint(x: 5, y: height - 0.5))
+        }
+        .stroke(color.opacity(focused ? 1 : 0.7),
+                style: StrokeStyle(lineWidth: focused ? 2 : 1.5, lineCap: .butt, lineJoin: .miter, dash: dashed ? [4, 3] : []))
+        .frame(width: 6, height: height)
+    }
+}
+
 // MARK: - The text view
 
 /// The full-text's text view: read-only, selectable, as tall as its text
@@ -636,7 +756,8 @@ struct CodingTextView: NSViewRepresentable {
     var onSelection: ([TextSpan]) -> Void
     var onClick: (Int) -> Void
     var onKey: (String, CodingNSTextView) -> Bool
-    var onPlaced: ([PlacedMark], [PlacedMark]) -> Void
+    /// Stripes, speaker turns and protocol segments, placed.
+    var onPlaced: ([PlacedMark], [PlacedMark], [PlacedMark]) -> Void
     var onPosition: (Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -843,6 +964,7 @@ struct CodingTextView: NSViewRepresentable {
         var placedFor: (version: Int, width: CGFloat, decorations: TextDecorations?)?
         var lastStripes: [PlacedMark] = []
         var lastTurns: [PlacedMark] = []
+        var lastSegments: [PlacedMark] = []
 
         /// Works out where stripes and speaker names go, from the text laid
         /// out at the view's actual width; reports them when they change.
@@ -879,11 +1001,24 @@ struct CodingTextView: NSViewRepresentable {
                 let (y0, y1) = yRange(t.range)
                 turns.append(PlacedMark(id: "t\(i)", y: y0, height: y1 - y0, lane: 0, color: t.color, text: t.name, focused: false))
             }
-            guard stripes != lastStripes || turns != lastTurns else { return }
+            // Segments in lanes too (nested or overlapping segments are rare).
+            var segmentEnds: [CGFloat] = []
+            var segments: [PlacedMark] = []
+            for g in parent.decorations.segments.sorted(by: { $0.range.location < $1.range.location }) {
+                let (y0, y1) = yRange(g.range)
+                var lane = segmentEnds.firstIndex { $0 < y0 - 2 } ?? segmentEnds.count
+                if lane >= 3 { lane = 2 }
+                if lane == segmentEnds.count { segmentEnds.append(y1) } else { segmentEnds[lane] = max(segmentEnds[lane], y1) }
+                segments.append(PlacedMark(id: g.key, y: y0 + 2, height: y1 - y0 - 4, lane: lane, color: .protocolSegment,
+                                           text: g.help, focused: g.focused, label: g.label, dashed: g.prompt,
+                                           caption: g.caption))
+            }
+            guard stripes != lastStripes || turns != lastTurns || segments != lastSegments else { return }
             lastStripes = stripes
             lastTurns = turns
+            lastSegments = segments
             // Not during a view update.
-            DispatchQueue.main.async { [weak self] in self?.parent?.onPlaced(stripes, turns) }
+            DispatchQueue.main.async { [weak self] in self?.parent?.onPlaced(stripes, turns, segments) }
         }
 
         func scrollToCentre(_ range: NSRange, in tv: NSTextView, flash: Bool) {
@@ -915,18 +1050,7 @@ struct CodingTextView: NSViewRepresentable {
 
         /// Context-menu items for the selection under the pointer.
         func menuItems() -> [NSMenuItem] {
-            guard let parent else { return [] }
-            let model = parent.model
-            var items: [NSMenuItem] = []
-            if model.hasTextSelection {
-                items.append(ClosureMenuItem(title: "Apply Open Code…") { model.paletteVisible = true })
-                items.append(ClosureMenuItem(title: "Highlight Without Open Code") { model.highlightOnly() })
-                items.append(ClosureMenuItem(title: "Mark as Irrelevant") { model.toggleIrrelevant() })
-            } else if let key = model.focusedSelection {
-                items.append(ClosureMenuItem(title: "Add Open Code…") { model.paletteVisible = true })
-                items.append(ClosureMenuItem(title: "Delete Selection") { model.deleteSelection(key) })
-            }
-            return items
+            parent?.model.documentMenuItems() ?? []
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {

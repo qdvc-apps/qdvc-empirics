@@ -520,7 +520,7 @@ struct CheckRow: View {
                     if check.irrelevant {
                         Text("Irrelevant").font(.caption).foregroundStyle(.tertiary)
                     }
-                    ForEach(model.index.codesForSelection[check.selection] ?? [], id: \.self) { c in
+                    ForEach((model.index.codesForSelection[check.selection] ?? []) + (model.index.aprioriForSelection[check.selection] ?? []), id: \.self) { c in
                         WorkingBadge(text: model.wid(c), color: model.itemAccent(c))
                     }
                 }

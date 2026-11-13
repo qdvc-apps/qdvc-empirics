@@ -136,7 +136,7 @@ struct EmpiricsCommands: Commands {
                 .keyboardShortcut("0")
             Divider()
             Toggle("Show Coding Stripes", isOn: Binding(get: { model.showStripes }, set: { model.showStripes = $0 }))
-            Toggle("Show Open Code Names Beside Stripes", isOn: Binding(get: { model.showCodeNames }, set: { model.showCodeNames = $0 }))
+            Toggle("Show Code Names Beside Stripes", isOn: Binding(get: { model.showCodeNames }, set: { model.showCodeNames = $0 }))
                 .disabled(!model.showStripes)
             Toggle("Show Other Layers", isOn: Binding(get: { model.showOtherLayers }, set: { model.showOtherLayers = $0 }))
             if model.project.settings.interlocutorLayer {
@@ -157,23 +157,28 @@ struct EmpiricsCommands: Commands {
         }
 
         CommandMenu("Code") {
-            Button("Apply Open Code to Selection…") { model.paletteVisible = true }
+            Button("Apply \(model.codeNounTitle) to Selection…") { model.paletteVisible = true }
                 .keyboardShortcut("k")
                 .disabled(!inFile || !model.canCode)
-            Button("Highlight Without Open Code") { model.highlightOnly() }
+            Button("Highlight Without \(model.codeNounTitle)") { model.highlightOnly() }
                 .keyboardShortcut("k", modifiers: [.command, .option])
                 .disabled(!model.hasTextSelection)
             Button("Mark as Irrelevant / Relevant") { model.toggleIrrelevant() }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(!model.canCode)
-            Menu("Quick Open Code") {
+            Menu("Quick \(model.codeNounTitle)") {
                 ForEach(1...9, id: \.self) { n in
                     let key = model.quickCodes[n - 1]
-                    Button("\(n): " + (model.project.code(key)?.name ?? "—")) { model.applyQuickCode(n) }
+                    Button("\(n): " + (model.tag(key)?.name ?? "—")) { model.applyQuickCode(n) }
                         .keyboardShortcut(KeyEquivalent(Character(String(n))), modifiers: [.control])
                         .disabled(key.isEmpty || !model.canCode)
                 }
             }
+            Divider()
+            Button("Mark as Protocol Prompt…") { model.openProtocolPalette(.prompt) }
+                .disabled(!inFile || !model.canCode || !model.activeIsDeductive)
+            Button("Mark as Protocol Response…") { model.openProtocolPalette(.response) }
+                .disabled(!inFile || !model.canCode || !model.activeIsDeductive)
             Divider()
             Button("Resize Focused Selection to Text Selection") { model.resizeFocusedToTextSelection() }
                 .disabled(model.focusedSelection == nil || !model.hasTextSelection)
@@ -191,6 +196,10 @@ struct EmpiricsCommands: Commands {
             Button("New Open Code…") { model.sheet = .newCode(kind: .open, parent: nil, child: nil) }
                 .disabled(!model.isOpen)
             Button("New Axial Code…") { model.sheet = .newCode(kind: .axial, parent: nil, child: nil) }
+                .disabled(!model.isOpen)
+            Button("New A Priori Code") { model.newAprioriCode() }
+                .disabled(!model.isOpen)
+            Button("New Protocol") { model.newProtocol() }
                 .disabled(!model.isOpen)
         }
 

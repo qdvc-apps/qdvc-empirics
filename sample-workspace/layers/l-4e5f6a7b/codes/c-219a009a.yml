@@ -6,5 +6,9 @@ description: The keyboard as what lets coding continue uninterrupted.
 evidence:
   - selection: s-3cef0780
     memo: "Fewer interruptions: the tool recedes."
+links:
+  - key: ln-278ed451
+    apriori_code: apc-7a0e0001
+    type: confirms
 by: r-a11ce000
 created: 2026-11-01T09:00:00Z

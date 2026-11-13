@@ -93,17 +93,19 @@ The app (`QDVCEmpirics`): `EmpiricsApp` (scenes, delegate, menus),
 `Welcome`, `AppModel` (state, opening, saving, undo, navigation and the
 Working Area, documents, interlocutors, response sheets, real names;
 `@Observable`, main actor), `AppModel+Coding` (coding operations, files,
-layers), `DeviceStore` (UserDefaults and security-scoped bookmarks),
+layers), `AppModel+Deductive` (`CodingTag`, so the coding UI follows the
+layer's kind; a priori coding, protocol segments, protocol and a priori code
+actions), `DeviceStore` (UserDefaults and security-scoped bookmarks),
 `ContentView` (split view, sidebar and Working Area, toolbar, document page),
 `Items` (one-line items: `ItemLine`, `WorkingBadge`, `InspectorTitle`, item
 titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
-`ItemPages` (code, attribute sheet and person pages), `CodingChart` and
+`ItemPages` (code, attribute sheet and person pages), `DeductivePages`
+(Protocols and A Priori Codes: tables, pages, inspectors), `CodingChart` and
 `AttributeSheetReport` (the Reporting pages),
 `TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
-`CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
+`CodingBar` (coding bar, quick codes, code palette, protocol palette), `InspectorView` (routed
 by page), `EvidencePane`, `AttributeSheetsPage` (the attribute sheet editor and the
-response sheet), `Pages` (Layers, Project Settings, real names, pages still
-to come), `Sheets`,
+response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
 `UpdateFileSheet` (updating a file from a new version of its full-text),
 `QuestionColumns` (attribute sheet questions as table columns: the cells, the
 sort comparator and the column-customization binding that saves the

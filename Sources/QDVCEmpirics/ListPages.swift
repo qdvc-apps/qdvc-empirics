@@ -586,6 +586,8 @@ extension AppModel {
         case .files: return "New Empirical File…"
         case .researchers: return "New Researcher"
         case .interviewees: return "New Interviewee"
+        case .protocols: return "New Protocol"
+        case .aprioriCodes: return "New A Priori Code"
         case .attributeSheets: return "New Attribute Sheet"
         case .openCodes: return "New Open Code…"
         case .axialCodes: return "New Axial Code…"
@@ -600,6 +602,8 @@ extension AppModel {
         case .files: addFilesPanel()
         case .researchers: newPerson(.researchers)
         case .interviewees: newPerson(.interviewees)
+        case .protocols: newProtocol()
+        case .aprioriCodes: newAprioriCode()
         case .attributeSheets: newAttributeSheet()
         case .openCodes: sheet = .newCode(kind: .open, parent: nil, child: nil)
         case .axialCodes: sheet = .newCode(kind: .axial, parent: nil, child: nil)

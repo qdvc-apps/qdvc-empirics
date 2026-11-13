@@ -199,6 +199,17 @@ included and excluded, an ideal example, a counter-example and its source.
 Open and axial codes keep their Straussian names for now (Glaser's and
 Charmaz's alternatives are a debate for later).
 
+The coding UI follows the active layer's kind rather than offering both:
+the same keys, palette, quick codes (nine per layer), stripes and inspector
+apply open codes on an inductive layer and a priori codes on a deductive
+one, so a coder never has to think about which kind of code goes where.
+Protocol segments get their own keys (Q for a prompt, A for a response),
+their own palette and their own margin at the far left, drawn as brackets
+in one neutral colour: they are structure, like speaker turns, and must
+never be read as coding. A file's protocol in a layer is set by its first
+segment (or in the File inspector), so most coders never choose it
+explicitly.
+
 ## Layers
 
 Each layer is deductive or inductive. A project starts with Main Deductive

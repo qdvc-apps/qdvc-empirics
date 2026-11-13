@@ -1,0 +1,16 @@
+key: pr-1a7e0001
+title: Interview protocol
+description: The questions planned for every interview.
+items:
+  - key: pi-0a000001
+    label: Interface
+    text: Do you think the user interface is user friendly?
+  - key: pi-0a000002
+    label: Long sessions
+    text: How do you find working with it over a long session?
+  - key: pi-0a000003
+    label: Worries
+    text: Is there anything that worries you about it?
+  - key: pi-0a000004
+    label: Earlier practice
+    text: How did you analyse your interviews before?

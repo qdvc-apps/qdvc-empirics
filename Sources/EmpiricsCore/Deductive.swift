@@ -147,6 +147,18 @@ extension Project {
         dropFrameworkColumns([key])
     }
 
+    /// An a priori code's evidence in every layer (layer key and evidence),
+    /// in layer order.
+    public func aprioriEvidence(of code: String) -> [(layer: String, evidence: Evidence)] {
+        layers.flatMap { l in (l.aprioriEvidence[code] ?? []).map { (layer: l.key, evidence: $0) } }
+    }
+
+    /// A protocol item's number in its protocol (from 1).
+    public func protocolItemNumber(_ item: String) -> Int? {
+        guard let (pk, _) = protocolItem(item) else { return nil }
+        return protocols[pk]?.items.firstIndex { $0.key == item }.map { $0 + 1 }
+    }
+
     /// Why a selection can't be evidence for an a priori code, or nil if it
     /// can.
     public func aprioriEvidenceProblem(code: String, selection: String) -> String? {

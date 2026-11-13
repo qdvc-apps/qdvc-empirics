@@ -14,7 +14,10 @@ extension AppModel {
     func documentSelectionChanged(file: String, spans: [TextSpan]) {
         textSelection = spans.filter { $0.length > 0 }
         textSelectionFile = textSelection.isEmpty ? nil : file
-        if textSelection.isEmpty { paletteVisible = false }
+        if textSelection.isEmpty {
+            paletteVisible = false
+            protocolPalette = nil
+        }
     }
 
     /// A click (no text selected) at `offset` on `page`: focus the innermost
@@ -43,23 +46,33 @@ extension AppModel {
     /// one, otherwise the focused selection.
     var canCode: Bool { hasTextSelection || focusedSelection != nil }
 
-    private func clearTextSelection() {
+    func clearTextSelection() {
         textSelection = []
         textSelectionFile = nil
         clearTextSelectionRevision += 1
     }
 
-    /// Makes (or finds) a selection from the document's text selection.
-    private func selectionFromText(irrelevant: Bool, in p: inout Project) throws -> String {
+    /// Makes (or finds) a selection from the document's text selection; a
+    /// protocol segment if `segment` is given.
+    func selectionFromText(irrelevant: Bool, segment: ProtocolSegment? = nil, in p: inout Project) throws -> String {
         guard let file = textSelectionFile else { throw RuleError("Select some text first.") }
         let quote = irrelevant ? "" : textSelectionQuote
         return try p.addSelection(layer: activeLayerKey, file: file, spans: textSelection, quote: quote,
-                                  irrelevant: irrelevant, by: currentResearcher ?? "")
+                                  irrelevant: irrelevant, segment: segment, by: currentResearcher ?? "")
     }
 
-    /// Codes the text selection (or the focused selection) with a code.
+    /// Codes the text selection (or the focused selection) with a code: an
+    /// open code on an inductive layer, an a priori code on a deductive one.
     func applyCode(_ codeKey: String) {
+        if project.aprioriCodes[codeKey] != nil {
+            applyApriori(codeKey)
+            return
+        }
         guard let code = project.code(codeKey) else { return }
+        if activeLayer?.isDeductive == true {
+            showProblem(RuleError("\(code.name) is an open code, and \(activeLayer?.name ?? "this layer") is a deductive layer: apply a priori codes here, or switch to an inductive layer."))
+            return
+        }
         guard code.kind == .open else {
             showProblem(RuleError("Selections are evidence for open codes. \(code.name) is an axial code: add open codes to it from the Code inspector."))
             return
@@ -86,10 +99,15 @@ extension AppModel {
         if hasTextSelection { clearTextSelection() }
     }
 
-    /// Creates an open code (or uses the one with that name) and applies it.
+    /// Creates an open code (or uses the one with that name) and applies it;
+    /// on a deductive layer, an a priori code.
     func applyNewCode(named name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if activeLayer?.isDeductive == true {
+            applyNewApriori(named: trimmed)
+            return
+        }
         if let existing = project.code(named: trimmed, inLayer: activeLayerKey), existing.kind == .open {
             applyCode(existing.key)
             return
@@ -122,7 +140,7 @@ extension AppModel {
         guard (1...9).contains(slot) else { return }
         let key = quickCodes[slot - 1]
         guard !key.isEmpty else {
-            notice = Notice(text: "Quick code \(slot) isn't set yet. The first nine codes you use get 1–9; or right-click a code and choose Quick Code.")
+            notice = Notice(text: "Quick code \(slot) isn't set yet in this layer. The first nine codes you use get 1–9; or right-click a code and choose Quick Code.")
             return
         }
         applyCode(key)
@@ -204,10 +222,11 @@ extension AppModel {
     @discardableResult
     func newCode(kind: CodeKind, name: String, parent: String? = nil, child: String? = nil) -> String? {
         // The layer of the code it joins, or on the code pages the inductive
-        // layer they show, or the active layer.
+        // layer they show, or the active layer if it is inductive (open and
+        // axial codes live on inductive layers), else the first inductive.
         let onCodePages = sidebar == .openCodes || sidebar == .axialCodes
-        let layer = parent.flatMap { index.layerOf[$0] } ?? child.flatMap { index.layerOf[$0] }
-            ?? (onCodePages ? inductiveLayer?.key : nil) ?? activeLayerKey
+        let joined = parent.flatMap { index.layerOf[$0] } ?? child.flatMap { index.layerOf[$0] }
+        let layer = joined ?? (onCodePages || activeIsDeductive ? inductiveLayer?.key : nil) ?? activeLayerKey
         if let existing = project.code(named: name, inLayer: layer) {
             showProblem(RuleError("This layer already has \(existing.kind == .open ? "an open" : "an axial") code called “\(existing.name)”."))
             return nil

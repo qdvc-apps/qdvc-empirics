@@ -1,0 +1,11 @@
+key: apc-7a0e0001
+name: Perceived ease of use
+colour: "#F78FB3"
+definition: The degree to which a researcher believes that using the tool would be free of effort.
+included: Learning the tool, effort, friction, fluency, speed of use.
+excluded: Whether the tool makes the research better (see Perceived usefulness).
+example: I barely touch the mouse now.
+counter_example: It's certainly an improvement over alternatives. (A judgement of value, not of effort.)
+source: Davis, F. D. (1989). Perceived usefulness, perceived ease of use, and user acceptance of information technology. MIS Quarterly, 13(3), 319–340.
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

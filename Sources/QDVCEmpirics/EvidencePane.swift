@@ -69,7 +69,7 @@ struct EvidencePane: View {
                     Text("\(byFile[f.key]?.count ?? 0)").font(.caption).foregroundStyle(.secondary)
                 }
                 ForEach((byFile[f.key] ?? []).sorted(by: { ($0.first ?? TextSpan(start: 0, length: 0)) < ($1.first ?? TextSpan(start: 0, length: 0)) })) { s in
-                    QuoteCard(code: open, selection: s)
+                    QuoteCard(code: open.tag, selection: s)
                 }
             }
         }
@@ -99,7 +99,7 @@ struct EvidencePane: View {
                         Text("via \(open.name)").font(.caption).foregroundStyle(.tertiary)
                     }
                     ForEach(open.evidence.compactMap { model.project.selection($0.target) }) { s in
-                        QuoteCard(code: open, selection: s, compact: true)
+                        QuoteCard(code: open.tag, selection: s, compact: true)
                     }
                 }
             }
@@ -125,11 +125,11 @@ struct EvidencePane: View {
     }
 }
 
-/// One quote as evidence for a code: the text, the speaker, the memo, and
-/// the way back to it in its file.
+/// One quote as evidence for a code (open or a priori): the text, the
+/// speaker, the memo, and the way back to it in its file.
 struct QuoteCard: View {
     @Environment(AppModel.self) private var model
-    var code: QDACode
+    var code: CodingTag
     var selection: CodeSelection
     var compact = false
 
@@ -146,9 +146,9 @@ struct QuoteCard: View {
                 if let page = s.first?.page {
                     Text("p. \(page + 1)").foregroundStyle(.secondary)
                 }
-                let others = (model.index.codesForSelection[s.key] ?? []).filter { $0 != code.key }.compactMap { model.project.code($0) }
+                let others = model.tags(of: s.key).filter { $0.key != code.key }
                 ForEach(others.prefix(4)) { o in
-                    CodeChip(code: o, compact: true, badge: model.wid(o.key)).onTapGesture { model.showCode(o.key) }
+                    CodeChip(tag: o, compact: true, badge: model.wid(o.key)).onTapGesture { model.showTag(o.key) }
                 }
                 Spacer()
                 if model.isLost(s.key) {
@@ -161,14 +161,14 @@ struct QuoteCard: View {
             .font(.caption)
             if !compact {
                 TextField("Why is this evidence for “\(code.name)”?", text: Binding(
-                    get: { model.project.code(code.key)?.memo(for: s.key) ?? "" },
-                    set: { model.setMemo(code: code.key, target: s.key, $0) }
+                    get: { model.evidenceMemo(code: code.key, selection: s.key) },
+                    set: { model.setEvidenceMemo(code: code.key, selection: s.key, $0) }
                 ), axis: .vertical)
                 .lineLimit(1...6)
                 .textFieldStyle(.roundedBorder)
                 .font(.callout)
-            } else if !code.memo(for: s.key).isEmpty {
-                Text(code.memo(for: s.key)).font(.caption).foregroundStyle(.secondary)
+            } else if !model.evidenceMemo(code: code.key, selection: s.key).isEmpty {
+                Text(model.evidenceMemo(code: code.key, selection: s.key)).font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(10)

@@ -1,0 +1,11 @@
+key: apc-7a0e0002
+name: Perceived usefulness
+colour: "#C3A46C"
+definition: The degree to which a researcher believes that using the tool would improve their research.
+included: Gains in the quality, rigour, transparency or speed of analysis and writing.
+excluded: How easy the tool is to use (see Perceived ease of use).
+example: Writing the memo forces me to think.
+counter_example: The files are just text. (A property of the tool, not a gain for the research.)
+source: Davis, F. D. (1989). MIS Quarterly, 13(3), 319–340.
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z

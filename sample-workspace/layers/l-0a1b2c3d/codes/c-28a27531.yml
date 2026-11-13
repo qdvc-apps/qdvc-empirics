@@ -9,5 +9,10 @@ evidence:
   - selection: s-78027a8e
     memo: The old mental model (a tree of nodes) gets in the way.
   - selection: s-391fbe80
+links:
+  - key: ln-684f9e6e
+    apriori_code: apc-7a0e0001
+    type: refines
+    memo: Ease of use is learnt over time, not a fixed perception.
 by: r-a11ce000
 created: 2026-11-01T09:00:00Z

@@ -3,8 +3,9 @@ import EmpiricsCore
 import SwiftUI
 
 /// The inspector follows the page: on a file, its Selection and File tabs;
-/// on a code, the code; on an attribute sheet, where it is used; on a list page,
-/// the row selected in the table.
+/// on a code, the code; on a protocol or an attribute sheet, where it is
+/// used; on an a priori code, its codebook entry; on a list page, the row
+/// selected in the table.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
 
@@ -32,6 +33,22 @@ struct InspectorView: View {
             InspectorScroll { codeEditor(key) }
         case .attributeSheet(let key):
             InspectorScroll { AttributeSheetUsage(attributeSheetKey: key) }
+        case .studyProtocol(let key):
+            InspectorScroll { ProtocolUsage(protocolKey: key) }
+        case .aprioriCode(let key):
+            InspectorScroll { AprioriCodeEditor(codeKey: key) }
+        case .protocols:
+            if let key = model.tableSelection, model.project.protocols[key] != nil {
+                InspectorScroll { ProtocolSummary(protocolKey: key) }
+            } else {
+                nothing("Select a protocol to see it.")
+            }
+        case .aprioriCodes:
+            if let key = model.tableSelection, model.project.aprioriCodes[key] != nil {
+                InspectorScroll { AprioriCodeEditor(codeKey: key) }
+            } else {
+                nothing("Select an a priori code to see and edit its codebook entry.")
+            }
         case .researcher(let key), .interviewee(let key):
             InspectorScroll { PersonRelated(key: key) }
         case .files:
@@ -121,16 +138,26 @@ struct SelectionInspector: View {
                 SectionHeader(title: "Selected Text", trailing: model.activeLayer?.name)
                 QuoteBlock(text: model.textSelectionQuote, lineLimit: 12)
                 HStack {
-                    Button("Open Code…") { model.paletteVisible = true }.buttonStyle(.borderedProminent)
-                        .help("Apply an open code to the selected text")
+                    Button(model.codeNounTitle + "…") { model.paletteVisible = true }.buttonStyle(.borderedProminent)
+                        .help("Apply \(model.aCodeNoun) to the selected text")
                     Button("Highlight Only") { model.highlightOnly() }
                     Button("Irrelevant") { model.toggleIrrelevant() }
                 }
                 .controlSize(.small)
+                if model.activeIsDeductive {
+                    HStack {
+                        Text("Protocol").foregroundStyle(.secondary)
+                        Button("Prompt…") { model.openProtocolPalette(.prompt) }
+                            .help("Mark as the prompt of a protocol item (Q)")
+                        Button("Response…") { model.openProtocolPalette(.response) }
+                            .help("Mark as the response to a protocol item (A)")
+                    }
+                    .controlSize(.small)
+                }
             }
         } else {
             ContentUnavailableView("No Selection", systemImage: "highlighter",
-                                   description: Text("Click a highlight in the text to see its open codes and memos, or select text to code it."))
+                                   description: Text("Click a highlight in the text to see its \(model.codeNoun)s and memos, or select text to code it."))
                 .padding(.top, 40)
         }
     }
@@ -138,10 +165,14 @@ struct SelectionInspector: View {
     @ViewBuilder
     func focused(_ key: String, _ s: CodeSelection) -> some View {
         let layer = model.index.layerOf[key].flatMap { model.project.layer($0) }
-        let codes = (model.index.codesForSelection[key] ?? []).compactMap { layer?.codes[$0] }
-        let colour = codes.first?.color ?? .gray
+        let deductive = layer?.isDeductive == true
+        let tags = layer.map { model.tags(of: key, in: $0) } ?? []
+        let colour: Color = s.segment != nil ? Color(nsColor: .protocolSegment) : (tags.first?.color ?? .gray)
+        let noun = deductive ? "a priori code" : "open code"
+        let title = deductive ? "A Priori Code" : "Open Code"
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: s.irrelevant ? "Irrelevant Text" : "Selection", trailing: layer?.name)
+            SectionHeader(title: s.irrelevant ? "Irrelevant Text" : s.segment != nil ? "Protocol Segment" : "Selection",
+                          trailing: layer?.name)
             if model.isLost(key) {
                 Label("This selection's text could not be found after the file changed. Select the right text and choose Resize, or delete it.",
                       systemImage: "exclamationmark.triangle.fill")
@@ -153,33 +184,61 @@ struct SelectionInspector: View {
             details(s)
 
             if s.irrelevant {
-                Text("Irrelevant text can never be evidence for an open code in this layer.")
+                Text("Irrelevant text can never be evidence for an \(noun) in this layer.")
                     .font(.callout).foregroundStyle(.secondary)
                 Button("Mark Relevant Again") {
                     model.focusedSelection = key
                     model.toggleIrrelevant()
                 }
+            } else if let segment = s.segment {
+                SegmentSection(selection: key, segment: segment)
             } else {
-                SectionHeader(title: "Open Codes", trailing: codes.isEmpty ? nil : "\(codes.count)")
-                if codes.isEmpty {
-                    Text("No open code yet.").foregroundStyle(.secondary)
+                SectionHeader(title: title + "s", trailing: tags.isEmpty ? nil : "\(tags.count)")
+                if tags.isEmpty {
+                    Text("No \(noun) yet.").foregroundStyle(.secondary)
                 }
-                ForEach(codes) { code in
-                    EvidenceMemoRow(holder: code, target: key, shown: code)
+                ForEach(tags) { t in
+                    TagMemoRow(code: t, selection: key)
                 }
                 HStack {
                     Button {
-                        if model.openFileKey != s.fileKey { model.showSelection(key) }
+                        if model.openFileKey != s.fileKey || model.activeLayerKey != layer?.key { model.showSelection(key) }
                         model.paletteVisible = true
                     } label: {
-                        Label("Add Open Code…", systemImage: "plus")
+                        Label("Add \(title)…", systemImage: "plus")
                     }
                     Spacer()
                     Button("Mark Irrelevant") { model.toggleIrrelevant() }
-                        .disabled(!codes.isEmpty)
-                        .help(codes.isEmpty ? "Mark this text irrelevant" : "Evidence can't be irrelevant: remove its open codes first")
+                        .disabled(!tags.isEmpty)
+                        .help(tags.isEmpty ? "Mark this text irrelevant" : "Evidence can't be irrelevant: remove its \(noun)s first")
                 }
                 .controlSize(.small)
+                if deductive, let layerKey = layer?.key {
+                    let chosen = model.project.layer(layerKey)?.protocols[s.fileKey].flatMap { model.project.protocols[$0] }
+                    let protocols = chosen.map { [$0] } ?? model.project.sortedProtocols
+                    if !protocols.isEmpty {
+                        Menu("Make Protocol Segment") {
+                            ForEach(ProtocolPart.allCases, id: \.self) { part in
+                                Section(part.label) {
+                                    ForEach(protocols) { pr in
+                                        ForEach(pr.items) { item in
+                                            Button((protocols.count > 1 ? pr.title + ": " : "") + model.protocolItemTitle(item.key)) {
+                                                model.perform("Mark \(part.label)") { p in
+                                                    try p.setSegment(key, ProtocolSegment(item: item.key, part: part))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .fixedSize()
+                        .controlSize(.small)
+                        .disabled(!tags.isEmpty)
+                        .help(tags.isEmpty ? "Make this selection a protocol prompt or response"
+                              : "A protocol segment can't be evidence: remove its a priori codes first, or make a separate selection")
+                    }
+                }
             }
 
             Divider()
@@ -229,6 +288,98 @@ struct SelectionInspector: View {
             }
         }
         .font(.callout)
+    }
+}
+
+/// A code on a selection (open or a priori), with the memo: why the
+/// selection is evidence for it.
+struct TagMemoRow: View {
+    @Environment(AppModel.self) private var model
+    var code: CodingTag
+    var selection: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                CodeDot(color: code.color)
+                Button(code.name) { model.showTag(code.key) }
+                    .buttonStyle(.plain)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                WorkingBadge(text: model.wid(code.key), color: code.color)
+                Button {
+                    model.removeTag(code.key, from: selection)
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(code.isApriori ? "Remove this a priori code from the selection" : "Remove this open code from the selection")
+            }
+            if code.isApriori, !code.detail.isEmpty {
+                Text(code.detail).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+            }
+            TextField("Why is this evidence for “\(code.name)”?", text: Binding(
+                get: { model.evidenceMemo(code: code.key, selection: selection) },
+                set: { model.setEvidenceMemo(code: code.key, selection: selection, $0) }
+            ), axis: .vertical)
+            .lineLimit(1...8)
+            .textFieldStyle(.roundedBorder)
+            .font(.callout)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(code.color.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(code.color.opacity(0.3), lineWidth: 0.5))
+    }
+}
+
+/// A protocol segment in the inspector: which item it is the prompt or
+/// response of, and ways to change that.
+struct SegmentSection: View {
+    @Environment(AppModel.self) private var model
+    var selection: String
+    var segment: ProtocolSegment
+
+    func change(to new: ProtocolSegment) {
+        model.perform("Change Protocol Segment") { p in try p.setSegment(selection, new) }
+    }
+
+    var body: some View {
+        let found = model.project.protocolItem(segment.item)
+        let pr = found.flatMap { model.project.protocols[$0.protocolKey] }
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Protocol", trailing: pr?.title)
+            if let item = found?.item {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.protocolItemTitle(item.key)).font(.headline)
+                        .foregroundStyle(Color(nsColor: .protocolSegment))
+                    if !item.text.isEmpty {
+                        Text(item.text).font(.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Picker("Part", selection: Binding(get: { segment.part }, set: { change(to: ProtocolSegment(item: segment.item, part: $0)) })) {
+                    ForEach(ProtocolPart.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                if let pr {
+                    Picker("Item", selection: Binding(get: { segment.item }, set: { change(to: ProtocolSegment(item: $0, part: segment.part)) })) {
+                        ForEach(pr.items) { i in Text(model.protocolItemTitle(i.key)).tag(i.key) }
+                    }
+                }
+            } else {
+                Text("Its protocol item was deleted.").foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Unmark") { model.clearSegment(selection) }
+                    .help("Make this a plain selection again (to apply a priori codes to it, say)")
+                if let pr, model.sidebar != .studyProtocol(pr.key) {
+                    Button("Open Protocol") { model.show(.studyProtocol(pr.key)) }
+                }
+            }
+            .controlSize(.small)
+        }
     }
 }
 
@@ -537,6 +688,44 @@ struct ColourSwatches: View {
 
 // MARK: - File
 
+/// The protocol a file follows in each deductive layer (one per layer).
+/// Marking a segment sets it; it can't change while the file has segments
+/// of another protocol in that layer.
+struct FileProtocols: View {
+    @Environment(AppModel.self) private var model
+    let fileKey: String
+
+    var body: some View {
+        let layers = model.project.deductiveLayers
+        let several = layers.count > 1
+        SectionHeader(title: several ? "Protocols" : "Protocol")
+        if model.project.protocols.isEmpty {
+            Text("No protocols yet.").font(.callout).foregroundStyle(.secondary)
+            Button("Protocols…") { model.sidebar = .protocols }
+                .controlSize(.small)
+        } else {
+            ForEach(layers) { layer in
+                let segments = (layer.selections[fileKey] ?? []).filter { $0.segment != nil }.count
+                VStack(alignment: .leading, spacing: 2) {
+                    Picker(several ? layer.name : "Follows", selection: Binding(
+                        get: { layer.protocols[fileKey] ?? "" },
+                        set: { model.setFileProtocol($0.isEmpty ? nil : $0, layer: layer.key, file: fileKey) }
+                    )) {
+                        Text("None").tag("")
+                        ForEach(model.project.sortedProtocols) { pr in Text(pr.title).tag(pr.key) }
+                    }
+                    .disabled(segments > 0)
+                    .help(segments > 0 ? "Remove this file's segments in \(layer.name) to change its protocol" : "The protocol this file follows in \(layer.name)")
+                    if segments > 0 {
+                        Text("\(segments) segment\(segments == 1 ? "" : "s") marked")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct FileInspector: View {
     @Environment(AppModel.self) private var model
     let fileKey: String
@@ -618,6 +807,8 @@ struct FileInspector: View {
             SectionHeader(title: "Attribute Sheets")
             AttributeSheetAssociations(target: key, kind: .files)
 
+            FileProtocols(fileKey: key)
+
             if model.project.settings.interlocutorLayer, file.kind.isText {
                 SectionHeader(title: "Speakers")
                 let map = model.project.speakerMaps[key]
@@ -673,11 +864,15 @@ struct FileInspector: View {
 
     @ViewBuilder
     func stats(_ key: String) -> some View {
-        let here = model.activeLayer?.selections[key] ?? []
-        let coded = here.filter { !$0.irrelevant && !(model.index.codesForSelection[$0.key] ?? []).isEmpty }.count
+        let all = model.activeLayer?.selections[key] ?? []
+        let here = all.filter { $0.segment == nil }
+        let segments = all.count - here.count
+        let lookup = model.activeIsDeductive ? model.index.aprioriForSelection : model.index.codesForSelection
+        let coded = here.filter { !$0.irrelevant && !(lookup[$0.key] ?? []).isEmpty }.count
         let irrelevant = here.filter(\.irrelevant).count
-        let codes = Set(here.flatMap { model.index.codesForSelection[$0.key] ?? [] }).count
-        Text("In \(model.activeLayer?.name ?? "this layer"): \(coded) coded selection\(coded == 1 ? "" : "s"), \(codes) open code\(codes == 1 ? "" : "s"), \(here.count - coded - irrelevant) uncoded, \(irrelevant) irrelevant.")
+        let codes = Set(here.flatMap { lookup[$0.key] ?? [] }).count
+        let noun = model.codeNoun
+        Text("In \(model.activeLayer?.name ?? "this layer"): \(coded) coded selection\(coded == 1 ? "" : "s"), \(codes) \(noun)\(codes == 1 ? "" : "s"), \(here.count - coded - irrelevant) uncoded, \(irrelevant) irrelevant" + (model.activeIsDeductive ? ", \(segments) protocol segment\(segments == 1 ? "" : "s")." : "."))
             .font(.caption)
             .foregroundStyle(.secondary)
     }

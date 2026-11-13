@@ -27,6 +27,8 @@ enum SidebarItem: Hashable {
     // Pages of single items (in the Working Area)
     case file(String)
     case code(String)
+    case studyProtocol(String)
+    case aprioriCode(String)
     case attributeSheet(String)
     case researcher(String)
     case interviewee(String)
@@ -34,7 +36,8 @@ enum SidebarItem: Hashable {
     /// The item's key, for the pages of single items.
     var key: String? {
         switch self {
-        case .file(let k), .code(let k), .attributeSheet(let k), .researcher(let k), .interviewee(let k): return k
+        case .file(let k), .code(let k), .studyProtocol(let k), .aprioriCode(let k), .attributeSheet(let k),
+             .researcher(let k), .interviewee(let k): return k
         default: return nil
         }
     }
@@ -56,6 +59,8 @@ enum SidebarItem: Hashable {
         case .attributeSheetReport: return "attributeSheetReport"
         case .file(let k): return "file:" + k
         case .code(let k): return "code:" + k
+        case .studyProtocol(let k): return "protocol:" + k
+        case .aprioriCode(let k): return "aprioriCode:" + k
         case .attributeSheet(let k): return "attributeSheet:" + k
         case .researcher(let k): return "researcher:" + k
         case .interviewee(let k): return "interviewee:" + k
@@ -79,6 +84,8 @@ enum SidebarItem: Hashable {
         case ("attributeSheetReport", _): self = .attributeSheetReport
         case ("file", let k) where !k.isEmpty: self = .file(k)
         case ("code", let k) where !k.isEmpty: self = .code(k)
+        case ("protocol", let k) where !k.isEmpty: self = .studyProtocol(k)
+        case ("aprioriCode", let k) where !k.isEmpty: self = .aprioriCode(k)
         case ("attributeSheet", let k) where !k.isEmpty: self = .attributeSheet(k)
         case ("researcher", let k) where !k.isEmpty: self = .researcher(k)
         case ("interviewee", let k) where !k.isEmpty: self = .interviewee(k)
@@ -242,6 +249,9 @@ final class AppModel {
     var textSelection: [TextSpan] = []
     var textSelectionFile: String?
     var paletteVisible = false
+    /// The protocol palette (Q or A on a deductive layer): which part the
+    /// selected text is to be marked as; nil when closed.
+    var protocolPalette: ProtocolPart?
     var reveal: RevealRequest?
     /// Bumped to ask the document view to clear its text selection.
     var clearTextSelectionRevision = 0
@@ -684,8 +694,7 @@ final class AppModel {
 
     var activeLayer: CodingLayer? { project.layer(activeLayerKey) }
 
-    /// The layer to code in when none is chosen: the first inductive layer
-    /// (open coding works there today; deductive coding comes next).
+    /// The layer to code in when none is chosen: the first inductive layer.
     var defaultLayerKey: String {
         project.inductiveLayers.first?.key ?? project.layers.first?.key ?? ""
     }
@@ -701,12 +710,20 @@ final class AppModel {
 
     private func loadQuickCodes() {
         var slots = DeviceStore.strings("quick.\(activeLayerKey)", project: project.settings.key)
-        slots = (slots + Array(repeating: "", count: 9)).prefix(9).map { project.layer(activeLayerKey)?.codes[$0] != nil ? $0 : "" }
+        slots = (slots + Array(repeating: "", count: 9)).prefix(9).map { isCodeOfActiveLayer($0) ? $0 : "" }
         quickCodes = Array(slots)
     }
 
     private func saveQuickCodes() {
         DeviceStore.setStrings(quickCodes, "quick.\(activeLayerKey)", project: project.settings.key)
+    }
+
+    /// True if `key` is a code the active layer applies: an a priori code on
+    /// a deductive layer, one of its own codes on an inductive one. Quick
+    /// codes are kept per layer, so each kind has its own nine.
+    func isCodeOfActiveLayer(_ key: String) -> Bool {
+        guard let layer = activeLayer, !key.isEmpty else { return false }
+        return layer.isDeductive ? project.aprioriCodes[key] != nil : layer.codes[key] != nil
     }
 
     /// The quick-code number (1–9) of a code, if it has one.
@@ -724,7 +741,7 @@ final class AppModel {
     /// A code just used takes the first empty slot, so the first nine codes
     /// used get 1–9 and keep them (numbers never shift under your fingers).
     func noteUsed(_ code: String) {
-        guard project.code(code)?.kind == .open, !quickCodes.contains(code),
+        guard isCodeOfActiveLayer(code), project.code(code)?.kind != .axial, !quickCodes.contains(code),
               let empty = quickCodes.firstIndex(of: "") else { return }
         quickCodes[empty] = code
         saveQuickCodes()
@@ -753,6 +770,8 @@ final class AppModel {
         switch item {
         case .file(let k): return project.files[k] != nil
         case .code(let k): return project.code(k) != nil
+        case .studyProtocol(let k): return project.protocols[k] != nil
+        case .aprioriCode(let k): return project.aprioriCodes[k] != nil
         case .attributeSheet(let k): return project.attributeSheets[k] != nil
         case .researcher(let k): return project.researcher(k) != nil
         case .interviewee(let k): return project.interviewee(k) != nil
@@ -770,6 +789,8 @@ final class AppModel {
     func item(forKey key: String) -> SidebarItem? {
         if project.files[key] != nil { return .file(key) }
         if project.code(key) != nil { return .code(key) }
+        if project.protocols[key] != nil { return .studyProtocol(key) }
+        if project.aprioriCodes[key] != nil { return .aprioriCode(key) }
         if project.attributeSheets[key] != nil { return .attributeSheet(key) }
         if project.researcher(key) != nil { return .researcher(key) }
         if project.interviewee(key) != nil { return .interviewee(key) }
@@ -781,6 +802,8 @@ final class AppModel {
         switch item {
         case .file: return .files
         case .code(let k): return project.code(k)?.kind == .axial ? .axialCodes : .openCodes
+        case .studyProtocol: return .protocols
+        case .aprioriCode: return .aprioriCodes
         case .attributeSheet: return .attributeSheets
         case .researcher: return .researchers
         case .interviewee: return .interviewees
@@ -836,6 +859,7 @@ final class AppModel {
         textSelection = []
         textSelectionFile = nil
         paletteVisible = false
+        protocolPalette = nil
         savePositions()
         if let old, old != sidebar, !navigatingHistory {
             backStack.append(old)

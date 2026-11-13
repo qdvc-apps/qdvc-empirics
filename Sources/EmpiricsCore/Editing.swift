@@ -609,6 +609,10 @@ public struct ProjectIndex {
     public var fileOf: [String: String] = [:]
     /// Code key → files where it (or anything it builds on) has evidence.
     public var filesForCode: [String: Set<String>] = [:]
+    /// A priori code key → files where it has evidence (all layers).
+    public var filesForApriori: [String: Set<String>] = [:]
+    /// A priori code key → pieces of evidence (all layers).
+    public var aprioriEvidenceCount: [String: Int] = [:]
     /// File key → selection count, all layers.
     public var selectionCount: [String: Int] = [:]
     /// Key → working identifier ("EF 3", "OC 12"…); see `WorkingIDs`.
@@ -627,7 +631,11 @@ public struct ProjectIndex {
                 }
             }
             for (apc, evidence) in layer.aprioriEvidence {
-                for e in evidence { aprioriForSelection[e.target, default: []].append(apc) }
+                for e in evidence {
+                    aprioriForSelection[e.target, default: []].append(apc)
+                    if let f = fileOf[e.target] { filesForApriori[apc, default: []].insert(f) }
+                }
+                aprioriEvidenceCount[apc, default: 0] += evidence.count
             }
             for c in layer.codes.values {
                 layerOf[c.key] = layer.key

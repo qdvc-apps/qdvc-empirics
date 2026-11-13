@@ -60,7 +60,8 @@ struct ContentView: View {
         case .layers: return "Layers"
         case .codingChart: return "Coding Chart"
         case .attributeSheetReport: return "Attribute Sheet Report"
-        case .file(let k), .code(let k), .attributeSheet(let k), .researcher(let k), .interviewee(let k):
+        case .file(let k), .code(let k), .studyProtocol(let k), .aprioriCode(let k), .attributeSheet(let k),
+             .researcher(let k), .interviewee(let k):
             return model.itemLabel(k)
         case nil: return ""
         }
@@ -115,10 +116,8 @@ struct DetailView: View {
         case .researchers: ResearchersTable()
         case .interviewees: IntervieweesTable()
         case .settings: ProjectPage()
-        case .protocols: ComingSoonPage(title: "Protocols", systemImage: "list.bullet.rectangle",
-                                        text: "Protocols (interview protocols, article structures…) arrive in the next update.")
-        case .aprioriCodes: ComingSoonPage(title: "A Priori Codes", systemImage: "character.book.closed",
-                                           text: "A priori codes, with their codebook definitions, arrive in the next update.")
+        case .protocols: ProtocolsTable()
+        case .aprioriCodes: AprioriCodesTable()
         case .attributeSheets: AttributeSheetsTable()
         case .openCodes: CodesTable(kind: .open).id("open")
         case .axialCodes: CodesTable(kind: .axial).id("axial")
@@ -127,6 +126,8 @@ struct DetailView: View {
         case .attributeSheetReport: AttributeSheetReportPage()
         case .file(let k): DocumentPage(fileKey: k)
         case .code(let k): CodePage(codeKey: k)
+        case .studyProtocol(let k): ProtocolPage(protocolKey: k).id(k)
+        case .aprioriCode(let k): AprioriCodePage(codeKey: k).id(k)
         case .attributeSheet(let k): AttributeSheetPage(attributeSheetKey: k).id(k)
         case .researcher(let k), .interviewee(let k): PersonPage(key: k).id(k)
         case nil:
@@ -265,6 +266,10 @@ struct DocumentPage: View {
         .overlay(alignment: .top) {
             if model.paletteVisible, model.canCode {
                 QuickCodePalette()
+                    .padding(.top, 48)
+                    .transition(.opacity)
+            } else if model.protocolPalette != nil, model.canCode {
+                ProtocolPalette()
                     .padding(.top, 48)
                     .transition(.opacity)
             }

@@ -41,26 +41,25 @@ struct PDFCodingView: View {
         let strength = model.highlightStrength
         if model.showOtherLayers {
             for layer in model.project.layers where layer.key != model.activeLayerKey && model.isLayerVisible(layer.key) {
-                for s in layer.selections[fileKey] ?? [] where !s.irrelevant {
-                    result.append(PDFHighlight(key: s.key, spans: s.spans, color: colour(of: s, in: layer).withAlphaComponent(0.12)))
+                for s in layer.selections[fileKey] ?? [] where !s.irrelevant && s.segment == nil {
+                    result.append(PDFHighlight(key: s.key, spans: s.spans, color: model.selectionColour(s, in: layer).withAlphaComponent(0.12)))
                 }
             }
         }
         if let layer = model.activeLayer {
             for s in (layer.selections[fileKey] ?? []).sorted(by: { $0.totalLength > $1.totalLength }) {
                 let focused = s.key == model.focusedSelection
+                // Protocol segments (no margin here): a light wash, stronger
+                // while focused.
                 let color: NSColor = s.irrelevant
                     ? NSColor.systemGray.withAlphaComponent(0.22)
-                    : colour(of: s, in: layer).withAlphaComponent(focused ? min(0.8, strength + 0.3) : strength + 0.1)
+                    : s.segment != nil
+                        ? NSColor.protocolSegment.withAlphaComponent(focused ? 0.28 : 0.1)
+                        : model.selectionColour(s, in: layer).withAlphaComponent(focused ? min(0.8, strength + 0.3) : strength + 0.1)
                 result.append(PDFHighlight(key: s.key, spans: s.spans, color: color))
             }
         }
         return result
-    }
-
-    func colour(of s: CodeSelection, in layer: CodingLayer) -> NSColor {
-        let codes = (model.index.codesForSelection[s.key] ?? []).compactMap { layer.codes[$0] }
-        return codes.min { $0.name.localizedCompare($1.name) == .orderedAscending }?.nsColor ?? .systemGray
     }
 }
 
@@ -254,8 +253,11 @@ struct PDFCodingRepresentable: NSViewRepresentable {
             case "\u{7f}", "\u{f728}":
                 guard !model.hasTextSelection, model.focusedSelection != nil else { return false }
                 model.deleteFocusedSelection()
+            case "q", "a":
+                return model.handleProtocolKey(key)
             case "\u{1b}":
                 model.paletteVisible = false
+                model.protocolPalette = nil
                 model.focusedSelection = nil
                 view?.clearSelection()
             default:
@@ -265,17 +267,7 @@ struct PDFCodingRepresentable: NSViewRepresentable {
         }
 
         func menuItems() -> [NSMenuItem] {
-            guard let model = parent?.model else { return [] }
-            var items: [NSMenuItem] = []
-            if model.hasTextSelection {
-                items.append(ClosureMenuItem(title: "Apply Open Code…") { model.paletteVisible = true })
-                items.append(ClosureMenuItem(title: "Highlight Without Open Code") { model.highlightOnly() })
-                items.append(ClosureMenuItem(title: "Mark as Irrelevant") { model.toggleIrrelevant() })
-            } else if let key = model.focusedSelection {
-                items.append(ClosureMenuItem(title: "Add Open Code…") { model.paletteVisible = true })
-                items.append(ClosureMenuItem(title: "Delete Selection") { model.deleteSelection(key) })
-            }
-            return items
+            parent?.model.documentMenuItems() ?? []
         }
     }
 }

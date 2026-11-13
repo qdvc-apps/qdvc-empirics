@@ -656,6 +656,9 @@ final class DeductiveTests: XCTestCase {
         let q1 = try XCTUnwrap(p.addProtocolItem(to: pr1, label: "Q1"))
         let pr2 = p.addProtocol(title: "Article")
         let intro = try XCTUnwrap(p.addProtocolItem(to: pr2, label: "Introduction"))
+        let findings = try XCTUnwrap(p.addProtocolItem(to: pr2, label: "Findings"))
+        XCTAssertEqual(p.protocolItemNumber(findings), 2)
+        XCTAssertNil(p.protocolItemNumber("pi-missing"))
         // Not on inductive layers.
         XCTAssertThrowsError(try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 0, length: 5)],
                                                 segment: ProtocolSegment(item: q1, part: .prompt)))
@@ -693,6 +696,9 @@ final class DeductiveTests: XCTestCase {
         try p.addAprioriEvidence(code: apc, selection: s, memo: "why")
         XCTAssertThrowsError(try p.addAprioriEvidence(code: apc, selection: s))   // twice
         XCTAssertEqual(ProjectIndex(p).aprioriForSelection[s], [apc])
+        XCTAssertEqual(ProjectIndex(p).filesForApriori[apc], [f])
+        XCTAssertEqual(ProjectIndex(p).aprioriEvidenceCount[apc], 1)
+        XCTAssertEqual(p.aprioriEvidence(of: apc).map { $0.evidence.memo }, ["why"])
         XCTAssertThrowsError(try p.setIrrelevant(s, true))
         // Inductive selections can't be a priori evidence.
         let si = try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 0, length: 5)])

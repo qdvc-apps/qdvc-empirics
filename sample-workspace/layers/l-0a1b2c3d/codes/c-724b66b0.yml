@@ -7,5 +7,10 @@ evidence:
   - selection: s-70a3f53e
     memo: Git history imagined as an answer to reviewers' doubts.
   - selection: s-2156575a
+links:
+  - key: ln-643e1c84
+    apriori_code: apc-7a0e0002
+    type: extends
+    memo: Usefulness to others (reviewers), which the model doesn't name.
 by: r-a11ce000
 created: 2026-11-01T09:00:00Z

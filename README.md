@@ -59,9 +59,10 @@ sections:
   put it here; right-click to move it up or down, or to remove it (or the
   others). It is remembered on this Mac.
 
-**Working identifiers.** Every empirical file, attribute sheet, open code, axial
-code, researcher and interviewee has a short identifier to talk about it
-while working: `EF 31`, `AST 4`, `OC 23`, `AC 12`, `R 5`, `I 17`. They number
+**Working identifiers.** Every empirical file, protocol, attribute sheet, a
+priori code, open code, axial code, researcher and interviewee has a short
+identifier to talk about it while working: `EF 31`, `PR 1`, `AST 4`,
+`APC 7`, `OC 23`, `AC 12`, `R 5`, `I 17`. They number
 each kind alphabetically (by title or pseudonym), so they are **not stable**:
 adding, renaming or removing an item renumbers the ones after it. They are
 shown in the tables (the No. column), the Working Area, the inspectors, the
@@ -86,7 +87,10 @@ retrace your steps. The pages of single items are:
 - an **open or axial code**: its evidence, with the code itself (name,
   colour, description, comments, questions, interrelations, attribute sheets) in
   the inspector;
-- a **attribute sheet**: its questions;
+- a **protocol**: its items;
+- an **a priori code**: its codebook entry, the open and axial codes linked
+  to it and its evidence, with the entry itself in the inspector;
+- an **attribute sheet**: its questions;
 - a **researcher** or **interviewee**: a card as in Contacts, with the
   transcripts they speak in.
 
@@ -103,10 +107,20 @@ retrace your steps. The pages of single items are:
   labels; the sidebar is never pushed off the window. PDFs are coded on their own pages (PDFKit), with the same keys.
 - Select text, then press **Return** (or ⌘K) to open the **code palette**:
   type a few letters, Return applies the code; a name that isn't a code yet
-  creates it (⌘Return always creates). Press **1–9** for **quick codes**: the
-  first nine codes you use take 1–9 and keep them, so the numbers never shift
-  under your fingers (reassign them from any code's context menu or the Code
-  inspector).
+  creates it (⌘Return always creates). On an inductive layer the palette
+  holds the layer's open codes; on a deductive layer, the project's a priori
+  codes (a new name makes a new a priori code). Press **1–9** for **quick
+  codes**: the first nine codes you use take 1–9 and keep them, so the
+  numbers never shift under your fingers (reassign them from any code's
+  context menu or inspector). Each layer has its own nine.
+- On a deductive layer, **Q** marks the selected text as the **prompt** of a
+  protocol item and **A** as its **response** (or use the coding bar's
+  Protocol menu): a small palette lists the items of the file's protocol
+  (type a number or words, Tab switches prompt and response). Segments are
+  structure, not coding: they show at the far left, a bracket and the item
+  beside the lines (dashed for a prompt), and are never evidence. A file
+  follows one protocol per deductive layer, set by its first segment or in
+  the File inspector.
 - **0** marks the selected text irrelevant: it is greyed out in a faint grey,
   speaker names included. Irrelevant text can never
   be evidence: the app refuses to code over it, and refuses to mark evidence
@@ -180,19 +194,22 @@ Markdown emphasis, and maps each speaker to a researcher or interviewee
 greyscale so they never compete with code colours: interviewees dark,
 interviewers a lighter grey.
 
-**Protocols** and **A Priori Codes** are defined once for the project and
-applied on deductive layers. A **protocol** is a predefined set of items
-(the questions of an interview protocol, the sections of an article) that
-each file follows in part or in whole; in a file, an item's *prompt* and
-*response* are marked as protocol segments, shown in the margin like
-speakers. An **a priori code** is defined before coding, with its codebook
-entry: name, definition, what is included and excluded, an ideal example, a
-counter-example (a near miss) and its source. Open and axial codes can be
-**linked** to a priori codes (confirms, refines, extends, contradicts, not
-covered), which is where theory and data meet. *This update brings the
-model and workspace format for all of this; the Protocols and A Priori Codes
-pages, deductive coding, side-by-side layers and the Codebook, Coverage
-Report, Overlap Matrix and Framework Matrix follow in the next updates.*
+**Protocols** (⌃⌘5) and **A Priori Codes** (⌃⌘8) are defined once for the
+project and applied on deductive layers. A **protocol** is a predefined set
+of items (the questions of an interview protocol, the sections of an
+article), each with a short label and its full wording, that each file
+follows in part or in whole; in a file, an item's *prompt* and *response*
+are marked as protocol segments (above). Its page edits the items (add,
+reorder, delete); its inspector shows which files follow it and how many
+segments each item has. An **a priori code** is defined before coding, with
+its codebook entry: name, definition, what is included and excluded, an
+ideal example, a counter-example (a near miss) and its source; its page
+shows the entry, the codes linked to it and its evidence by file, with a
+memo on each piece. Open and axial codes can be **linked** to a priori codes
+(confirms, refines, extends, contradicts, not covered), which is where
+theory and data meet. *Side-by-side layers, editing links, and the
+Codebook, Coverage Report, Overlap Matrix and Framework Matrix follow in the
+next updates.*
 
 **Project Settings** (⌃⌘4): title, description, the two folders, real-name
 mapping files, quote storage and interrelation types.
@@ -310,11 +327,12 @@ icon template, built like the other QDVC apps' icons. It appears in the
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘N | New item on the current page (file, researcher, interviewee, attribute sheet, open or axial code) |
+| ⌘N | New item on the current page (file, researcher, protocol, interviewee, attribute sheet, a priori code, open or axial code) |
 | ⇧⌘N / ⌘O | New / open project |
 | ⇧⌘A | Add files from the full-texts folder |
 | Return, K, ⌘K | Code the selection (code palette) |
 | 1 … 9 (⌃1 … ⌃9) | Quick codes |
+| Q / A | Mark as a protocol prompt / response (deductive layers) |
 | 0 (⌥⌘0) | Mark irrelevant / relevant |
 | H (⌥⌘K) | Highlight without a code |
 | T / P / S | Select turn / paragraph / sentence |
