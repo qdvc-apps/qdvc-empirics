@@ -2,7 +2,7 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-// Codebook questions as columns in the tables of the items codebooks apply
+// Attribute Sheet questions as columns in the tables of the items attribute sheets apply
 // to (empirical files, interviewees, open codes, axial codes). Right-click a
 // column heading to show or hide them: the tables use SwiftUI's column
 // customization, in which only the question columns take part. Which
@@ -11,9 +11,9 @@ import SwiftUI
 // shows the answer; when researchers' answers differ, each answer with the
 // initials of those who gave it.
 
-/// A codebook question that can be shown as a table column.
+/// An attribute sheet question that can be shown as a table column.
 struct QuestionColumn: Identifiable, Hashable {
-    var codebook: String
+    var attributeSheet: String
     var question: String
     /// The column heading (and its name in the headings' menu).
     var title: String
@@ -22,10 +22,10 @@ struct QuestionColumn: Identifiable, Hashable {
 }
 
 extension AppModel {
-    /// The questions a table can show: those of the codebooks that apply
-    /// to its items, codebooks by title, questions in codebook order.
-    func questionColumns(for target: CodebookTarget) -> [QuestionColumn] {
-        let books = project.codebooks.values.filter { $0.appliesTo.contains(target) }
+    /// The questions a table can show: those of the attribute sheets that apply
+    /// to its items, attribute sheets by title, questions in attribute sheet order.
+    func questionColumns(for target: AttributeSheetTarget) -> [QuestionColumn] {
+        let books = project.attributeSheets.values.filter { $0.appliesTo.contains(target) }
             .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         var labelCount: [String: Int] = [:]
         for cb in books {
@@ -37,27 +37,27 @@ extension AppModel {
             for q in cb.questions where !seen.contains(q.key) {
                 seen.insert(q.key)
                 let l = label(q)
-                // The same label in two codebooks: say which is which.
+                // The same label in two attribute sheets: say which is which.
                 let title = (labelCount[l] ?? 0) > 1 ? "\(cb.title): \(l)" : l
-                result.append(QuestionColumn(codebook: cb.key, question: q.key, title: title))
+                result.append(QuestionColumn(attributeSheet: cb.key, question: q.key, title: title))
             }
         }
         return result
     }
 
-    private func label(_ q: CodebookQuestion) -> String {
+    private func label(_ q: AttributeSheetQuestion) -> String {
         let l = q.label.trimmingCharacters(in: .whitespacesAndNewlines)
         return l.isEmpty ? "Question" : l
     }
 
     /// The question columns a table shows.
-    func shownQuestionColumns(for target: CodebookTarget) -> [QuestionColumn] {
+    func shownQuestionColumns(for target: AttributeSheetTarget) -> [QuestionColumn] {
         let shown = Set(project.settings.tableColumns[target] ?? [])
         return questionColumns(for: target).filter { shown.contains($0.question) }
     }
 
     /// Saves which questions a table shows (one step of Edit › Undo).
-    func setTableColumns(_ questions: [String], for target: CodebookTarget) {
+    func setTableColumns(_ questions: [String], for target: AttributeSheetTarget) {
         let old = project.settings.tableColumns[target] ?? []
         guard questions != old else { return }
         perform(questions.count >= old.count ? "Show Column" : "Hide Column") { p in
@@ -70,7 +70,7 @@ extension AppModel {
     /// who gave it ("Yes (AB) · No (CD)"); and a tooltip with everyone's
     /// answer by name.
     func answerSummary(_ column: QuestionColumn, target: String) -> (text: String, help: String, differs: Bool) {
-        let given = project.answers(codebook: column.codebook, question: column.question, target: target)
+        let given = project.answers(attributeSheet: column.attributeSheet, question: column.question, target: target)
         guard !given.isEmpty else { return ("", "", false) }
         var groups: [(text: String, who: [String])] = []
         for g in given {
@@ -103,7 +103,7 @@ extension AppModel {
     /// (widths, order) kept in `state` for the session. Showing or hiding a
     /// question from the headings' menu saves it to the workspace.
     func questionColumnCustomization<Row: Identifiable>(
-        _ state: Binding<TableColumnCustomization<Row>>, columns: [QuestionColumn], target: CodebookTarget
+        _ state: Binding<TableColumnCustomization<Row>>, columns: [QuestionColumn], target: AttributeSheetTarget
     ) -> Binding<TableColumnCustomization<Row>> {
         Binding(
             get: {

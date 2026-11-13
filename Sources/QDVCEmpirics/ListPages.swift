@@ -18,10 +18,10 @@ extension QDACode {
     var questionCount: Int { questions.count }
 }
 
-extension Codebook {
+extension AttributeSheet {
     var questionCount: Int { questions.count }
     var appliesToLabel: String {
-        CodebookTarget.allCases.filter { appliesTo.contains($0) }.map(\.label).joined(separator: ", ")
+        AttributeSheetTarget.allCases.filter { appliesTo.contains($0) }.map(\.label).joined(separator: ", ")
     }
 }
 
@@ -93,8 +93,8 @@ struct FilesTable: View {
                     Text("\(model.index.selectionCount[f.key] ?? 0)").monospacedDigit()
                 }
                 .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Codebooks") { (f: EmpiricalFile) in
-                    Text(model.codebookTitles(f.key)).foregroundStyle(.secondary).lineLimit(1)
+                TableColumn("Attribute Sheets") { (f: EmpiricalFile) in
+                    Text(model.attributeSheetTitles(f.key)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .width(min: 80, ideal: 160)
                 TableColumn("Location", value: \EmpiricalFile.path) { (f: EmpiricalFile) in
@@ -120,13 +120,13 @@ struct FilesTable: View {
                 .fixedSize()
                 Button("Next File Not Yet Coded") { model.nextUncodedFile() }
                 Text(questions.isEmpty ? "Double-click a file to code it."
-                     : "Double-click a file to code it. Right-click a column heading to show codebook questions.")
+                     : "Double-click a file to code it. Right-click a column heading to show attribute sheet questions.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
 
-    /// Codebook questions, hidden until chosen from the headings' menu.
+    /// Attribute Sheet questions, hidden until chosen from the headings' menu.
     @TableColumnBuilder<EmpiricalFile, KeyPathComparator<EmpiricalFile>>
     func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<EmpiricalFile, KeyPathComparator<EmpiricalFile>> {
         TableColumnForEach(columns) { c in
@@ -173,12 +173,12 @@ struct CodesTable: View {
     @State private var customization = TableColumnCustomization<QDACode>()
     @State private var answerTexts = AnswerTexts()
 
-    var target: CodebookTarget { kind == .open ? .openCodes : .axialCodes }
+    var target: AttributeSheetTarget { kind == .open ? .openCodes : .axialCodes }
 
     var body: some View {
         @Bindable var model = model
         let q = filter.trimmingCharacters(in: .whitespaces)
-        let all: [QDACode] = (model.activeLayer.map { Array($0.codes.values) } ?? []).filter { $0.kind == kind }
+        let all: [QDACode] = (model.inductiveLayer.map { Array($0.codes.values) } ?? []).filter { $0.kind == kind }
         let shown: [QDACode] = q.isEmpty ? all : all.filter { c in
             c.name.localizedCaseInsensitiveContains(q) || c.description.localizedCaseInsensitiveContains(q)
         }
@@ -215,8 +215,8 @@ struct CodesTable: View {
                     Text(c.questions.isEmpty ? "" : "\(c.questions.count)").monospacedDigit()
                 }
                 .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Codebooks") { (c: QDACode) in
-                    Text(model.codebookTitles(c.key)).foregroundStyle(.secondary).lineLimit(1)
+                TableColumn("Attribute Sheets") { (c: QDACode) in
+                    Text(model.attributeSheetTitles(c.key)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .width(min: 80, ideal: 160)
                 TableColumn("Quick") { (c: QDACode) in
@@ -239,13 +239,13 @@ struct CodesTable: View {
                 LayerMenu(model: model)
                     .fixedSize()
                 if !questions.isEmpty {
-                    Text("Right-click a column heading to show codebook questions.").font(.caption).foregroundStyle(.secondary)
+                    Text("Right-click a column heading to show attribute sheet questions.").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    /// Codebook questions, hidden until chosen from the headings' menu.
+    /// Attribute Sheet questions, hidden until chosen from the headings' menu.
     @TableColumnBuilder<QDACode, KeyPathComparator<QDACode>>
     func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<QDACode, KeyPathComparator<QDACode>> {
         TableColumnForEach(columns) { c in
@@ -296,80 +296,80 @@ struct CodeTableMenu: View {
     }
 }
 
-// MARK: - Codebooks
+// MARK: - Attribute Sheets
 
-struct CodebooksTable: View {
+struct AttributeSheetsTable: View {
     @Environment(AppModel.self) private var model
-    @State private var sortOrder = [KeyPathComparator(\Codebook.title)]
+    @State private var sortOrder = [KeyPathComparator(\AttributeSheet.title)]
     @State private var filter = ""
 
     var body: some View {
         @Bindable var model = model
         let q = filter.trimmingCharacters(in: .whitespaces)
-        let all: [Codebook] = Array(model.project.codebooks.values)
-        let shown: [Codebook] = q.isEmpty ? all : all.filter { $0.title.localizedCaseInsensitiveContains(q) }
-        let rows: [Codebook] = shown.sorted(using: sortOrder)
+        let all: [AttributeSheet] = Array(model.project.attributeSheets.values)
+        let shown: [AttributeSheet] = q.isEmpty ? all : all.filter { $0.title.localizedCaseInsensitiveContains(q) }
+        let rows: [AttributeSheet] = shown.sorted(using: sortOrder)
         VStack(spacing: 0) {
             Table(rows, selection: $model.tableSelection, sortOrder: $sortOrder) {
-                TableColumn("No.", value: \Codebook.title) { (cb: Codebook) in
+                TableColumn("No.", value: \AttributeSheet.title) { (cb: AttributeSheet) in
                     WorkingIDCell(model: model, key: cb.key)
                 }
                 .width(min: 50, ideal: 62, max: 80)
-                TableColumn("Title", value: \Codebook.title) { (cb: Codebook) in
+                TableColumn("Title", value: \AttributeSheet.title) { (cb: AttributeSheet) in
                     Label(cb.title, systemImage: "text.book.closed")
                 }
                 .width(min: 160, ideal: 260)
-                TableColumn("Questions", value: \Codebook.questionCount) { (cb: Codebook) in
+                TableColumn("Questions", value: \AttributeSheet.questionCount) { (cb: AttributeSheet) in
                     Text("\(cb.questions.count)").monospacedDigit()
                 }
                 .width(min: 60, ideal: 70, max: 90)
-                TableColumn("Applies To", value: \Codebook.appliesToLabel)
+                TableColumn("Applies To", value: \AttributeSheet.appliesToLabel)
                     .width(min: 120, ideal: 220)
-                TableColumn("Response Sheets") { (cb: Codebook) in
+                TableColumn("Response Sheets") { (cb: AttributeSheet) in
                     Text(sheetSummary(cb)).foregroundStyle(.secondary)
                 }
                 .width(min: 100, ideal: 150)
             }
             .contextMenu(forSelectionType: String.self) { keys in
-                CodebookTableMenu(model: model, keys: keys)
+                AttributeSheetTableMenu(model: model, keys: keys)
             } primaryAction: { keys in
-                if let key = keys.first { model.show(.codebook(key)) }
+                if let key = keys.first { model.show(.attributeSheet(key)) }
             }
-            TableFooter(count: "\(all.count) codebook\(all.count == 1 ? "" : "s")", filter: $filter) {
+            TableFooter(count: "\(all.count) attribute sheet\(all.count == 1 ? "" : "s")", filter: $filter) {
                 Button {
-                    model.newCodebook()
+                    model.newAttributeSheet()
                 } label: {
-                    Label("New Codebook", systemImage: "plus")
+                    Label("New Attribute Sheet", systemImage: "plus")
                 }
-                Text("Double-click a codebook to edit its questions.").font(.caption).foregroundStyle(.secondary)
+                Text("Double-click an attribute sheet to edit its questions.").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
 
-    func sheetSummary(_ cb: Codebook) -> String {
-        let sheets = model.project.responses.values.filter { $0.id.codebook == cb.key }
+    func sheetSummary(_ cb: AttributeSheet) -> String {
+        let sheets = model.project.responses.values.filter { $0.id.attributeSheet == cb.key }
         guard !sheets.isEmpty else { return "None yet" }
         let complete = sheets.filter { SheetCompleteness.of($0.answers, against: cb).isComplete }.count
         return "\(sheets.count) (\(complete) complete)"
     }
 }
 
-struct CodebookTableMenu: View {
+struct AttributeSheetTableMenu: View {
     let model: AppModel
     let keys: Set<String>
 
     var body: some View {
         if let key = keys.first {
-            Button("Open") { model.show(.codebook(key)) }
-            Button("Add to Working Area") { model.addToWorkingArea(.codebook(key)) }
-                .disabled(model.workingArea.contains(.codebook(key)))
+            Button("Open") { model.show(.attributeSheet(key)) }
+            Button("Add to Working Area") { model.addToWorkingArea(.attributeSheet(key)) }
+                .disabled(model.workingArea.contains(.attributeSheet(key)))
             Divider()
             Button("Show Report") {
-                model.reportCodebook = key
-                model.sidebar = .codebookReport
+                model.reportAttributeSheet = key
+                model.sidebar = .attributeSheetReport
             }
             Divider()
-            Button("Delete Codebook…") { model.deleteCodebook(key) }
+            Button("Delete Attribute Sheet…") { model.deleteAttributeSheet(key) }
         }
     }
 }
@@ -449,7 +449,7 @@ struct ResearchersTable: View {
                 }
                 .labelsHidden()
                 .fixedSize()
-                .help("Who you are on this Mac: your selections and codebook answers are filed under this name")
+                .help("Who you are on this Mac: your selections and attribute sheet answers are filed under this name")
             }
         }
     }
@@ -491,8 +491,8 @@ struct IntervieweesTable: View {
                     Text("\(model.transcripts(of: i.key).count)").monospacedDigit()
                 }
                 .width(min: 70, ideal: 80, max: 100)
-                TableColumn("Codebooks") { (i: Interviewee) in
-                    Text(model.codebookTitles(i.key)).foregroundStyle(.secondary).lineLimit(1)
+                TableColumn("Attribute Sheets") { (i: Interviewee) in
+                    Text(model.attributeSheetTitles(i.key)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .width(min: 80, ideal: 160)
                 questionTableColumns(questions)
@@ -509,13 +509,13 @@ struct IntervieweesTable: View {
                     Label("New Interviewee", systemImage: "plus")
                 }
                 Text(questions.isEmpty ? "Names are pseudonyms."
-                     : "Names are pseudonyms. Right-click a column heading to show codebook questions.")
+                     : "Names are pseudonyms. Right-click a column heading to show attribute sheet questions.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
 
-    /// Codebook questions, hidden until chosen from the headings' menu.
+    /// Attribute Sheet questions, hidden until chosen from the headings' menu.
     @TableColumnBuilder<Interviewee, KeyPathComparator<Interviewee>>
     func questionTableColumns(_ columns: [QuestionColumn]) -> some TableColumnContent<Interviewee, KeyPathComparator<Interviewee>> {
         TableColumnForEach(columns) { c in
@@ -586,7 +586,7 @@ extension AppModel {
         case .files: return "New Empirical File…"
         case .researchers: return "New Researcher"
         case .interviewees: return "New Interviewee"
-        case .codebooks: return "New Codebook"
+        case .attributeSheets: return "New Attribute Sheet"
         case .openCodes: return "New Open Code…"
         case .axialCodes: return "New Axial Code…"
         default: return nil
@@ -600,7 +600,7 @@ extension AppModel {
         case .files: addFilesPanel()
         case .researchers: newPerson(.researchers)
         case .interviewees: newPerson(.interviewees)
-        case .codebooks: newCodebook()
+        case .attributeSheets: newAttributeSheet()
         case .openCodes: sheet = .newCode(kind: .open, parent: nil, child: nil)
         case .axialCodes: sheet = .newCode(kind: .axial, parent: nil, child: nil)
         default: break
@@ -621,19 +621,19 @@ extension AppModel {
         tableSelection = made
     }
 
-    func newCodebook() {
-        let key = project.newKey(Keys.codebook)
-        perform("New Codebook") { p in
-            p.codebooks[key] = Codebook(key: key, title: "New Codebook", appliesTo: [.files])
+    func newAttributeSheet() {
+        let key = project.newKey(Keys.attributeSheet)
+        perform("New Attribute Sheet") { p in
+            p.attributeSheets[key] = AttributeSheet(key: key, title: "New Attribute Sheet", appliesTo: [.files])
         }
-        show(.codebook(key))
+        show(.attributeSheet(key))
     }
 
-    func deleteCodebook(_ key: String) {
-        guard let cb = project.codebooks[key] else { return }
-        let sheets = project.responses.keys.filter { $0.codebook == key }.count
+    func deleteAttributeSheet(_ key: String) {
+        guard let cb = project.attributeSheets[key] else { return }
+        let sheets = project.responses.keys.filter { $0.attributeSheet == key }.count
         let alert = NSAlert()
-        alert.messageText = "Delete the codebook “\(cb.title)”?"
+        alert.messageText = "Delete the attribute sheet “\(cb.title)”?"
         alert.informativeText = sheets == 0
             ? "It is removed from every file and code it is associated with."
             : "Its \(sheets) response sheet\(sheets == 1 ? "" : "s") are deleted too. You can undo this while the project is open."
@@ -641,6 +641,6 @@ extension AppModel {
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        perform("Delete Codebook") { p in p.deleteCodebook(key) }
+        perform("Delete Attribute Sheet") { p in p.deleteAttributeSheet(key) }
     }
 }

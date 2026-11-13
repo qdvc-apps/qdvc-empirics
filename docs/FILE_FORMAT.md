@@ -9,20 +9,34 @@ layers, touch different files.
 My project/
   project.yml                          title, settings, layer order
   files/f-1a2b3c4d.yml                 one catalogue entry per full-text
-  codebooks/cb-1a2b3c4d.yml            one per codebook
-  responses/cb-1a2b3c4d/f-1a2b3c4d--r-1a2b3c4d.yml
-                                       one response sheet per codebook, item
-                                       (file, code or interviewee) and
+  protocols/pr-1a2b3c4d.yml            one per protocol, with its items
+  apriori-codes/apc-1a2b3c4d.yml       one per a priori code (its codebook entry)
+  attribute-sheets/ast-1a2b3c4d.yml    one per attribute sheet
+  attribute-responses/ast-1a2b3c4d/f-1a2b3c4d--r-1a2b3c4d.yml
+                                       one response sheet per attribute sheet,
+                                       item (file, code or interviewee) and
                                        researcher
-  layers/l-1a2b3c4d/layer.yml          a layer's name and description
+  layers/l-1a2b3c4d/layer.yml          a layer's kind, name and description
   layers/l-1a2b3c4d/selections/f-1a2b3c4d.yml
-                                       the layer's selections in one file
+                                       the layer's selections in one file (and,
+                                       deductive, the protocol it follows there)
   layers/l-1a2b3c4d/codes/c-1a2b3c4d.yml
-                                       one per code (open or axial)
+                                       inductive: one per code (open or axial)
+  layers/l-1a2b3c4d/apriori/apc-1a2b3c4d.yml
+                                       deductive: the layer's evidence for one
+                                       a priori code
+  layers/l-1a2b3c4d/framework/f-1a2b3c4d.yml
+                                       deductive: Framework Matrix summaries for
+                                       one row (a file or an interviewee)
   people/researchers.yml
   people/interviewees.yml
   interlocutors/f-1a2b3c4d.yml         speaker labels → people, per transcript
 ```
+
+What is defined beforehand (protocols, a priori codes, attribute sheets)
+belongs to the project, at the top level. What a coder makes lives in their
+layer, one small file per file, code or row, so two coders working in
+different layers never touch the same file.
 
 The full-texts (transcripts, PDFs, consent forms) are **never** in the
 workspace. They live in a separate full-texts folder, whose location each
@@ -41,13 +55,17 @@ digits. Keys never change, so renaming touches one file and links survive.
 | `s-` | selection |
 | `c-` | code (open or axial) |
 | `x-` | interrelation |
-| `cb-` | codebook |
-| `q-` | codebook question |
+| `ln-` | link from an open or axial code to an a priori code |
+| `pr-` | protocol |
+| `pi-` | protocol item |
+| `apc-` | a priori code |
+| `ast-` | attribute sheet |
+| `q-` | attribute sheet question |
 | `r-` | researcher |
 | `i-` | interviewee |
 
-The **working identifiers** shown in the app (`EF 31`, `CB 4`, `OC 23`,
-`AC 12`, `R 5`, `I 17`) are not stored anywhere: they are worked out from the
+The **working identifiers** shown in the app (`EF 31`, `PR 2`, `AST 4`,
+`APC 7`, `OC 23`, `AC 12`, `R 5`, `I 17`) are not stored anywhere: they are worked out from the
 titles and names each time (alphabetical order, per kind), so they change as
 items come and go. Refer to items by key in anything that must last.
 
@@ -74,7 +92,7 @@ interrelation_types: [Compare, Contrast]
 real_names:                       # optional: mapping files, relative to the full-texts folder
   researchers: private/researchers-real-names.csv
   interviewees: private/interviewees-real-names.csv
-table_columns:                    # optional: codebook questions shown as table columns
+table_columns:                    # optional: attribute sheet questions shown as table columns
   files: [q-0a1b2c3d, q-4e5f6a7b] # per table: files | interviewees | open-codes | axial-codes
   interviewees: [q-9c8d7e6f]
 layers: [l-0a1b2c3d, l-4e5f6a7b]  # display order; folders not listed are added
@@ -91,7 +109,7 @@ date: 2026-03-14                  # optional, YYYY-MM-DD
 id: SF-2026-01                    # optional, the researcher's own ID
 status: coded                     # not-started | in-progress | coded
 fingerprint: sha256:fb3a…         # of the file's bytes, to notice changes
-codebooks: [cb-c0debee1]          # associated codebooks
+attribute_sheets: [ast-c0debee1]  # associated attribute sheets
 added: 2026-11-01
 ```
 
@@ -99,17 +117,30 @@ added: 2026-11-01
 
 ```yaml
 key: l-0a1b2c3d
-name: Main
+kind: inductive                   # deductive | inductive (missing: inductive)
+name: Main Inductive
 description: First reading
 researcher: r-a11ce000            # optional
 ```
 
+A **deductive** layer applies what was defined beforehand: protocol
+segments, evidence for a priori codes, Framework Matrix summaries. An
+**inductive** layer holds what emerges from the data: open and axial codes.
+A project always has at least one layer of each kind (on load, a missing
+kind gets a layer called Main Deductive or Main Inductive, with a note); new
+projects start with both. A layer's kind can change only while nothing is
+coded in it. Content of the wrong kind for its layer is ignored on load,
+with a note.
+
 ## layers/<l-key>/selections/<f-key>.yml
 
-The layer's selections in one file, in order.
+The layer's selections in one file, in order, and (deductive layers) the
+protocol the file follows in this layer. The file exists while either is
+there.
 
 ```yaml
 file: f-1e7e0001
+protocol: pr-1a7e0001             # deductive layers: at most one per file per layer
 selections:
   - key: s-1d9c13bd
     start: 396                    # UTF-16 offset into the normalised text
@@ -124,6 +155,11 @@ selections:
   - key: s-77aa0012               # a PDF selection
     page: 2                       # one-based
     start: 120                    # offset into PDFKit's text of that page
+    length: 64
+  - key: s-2b000001               # a protocol segment (deductive layers)
+    item: pi-0a000001             # an item of the file's protocol
+    part: prompt                  # prompt | response
+    start: 312
     length: 64
   - key: s-77aa0013               # across pages: one span per page
     spans:
@@ -151,9 +187,12 @@ moves its selections the same way; its key, and everything that refers to
 it, stay.
 
 **Rules** (enforced by the app): within a layer, irrelevant selections never
-overlap selections that aren't irrelevant, and are never evidence. If a hand
-edit makes an irrelevant selection evidence, that evidence is ignored on
-load (with a note).
+overlap selections that aren't irrelevant, and are never evidence. On a
+deductive layer, a selection is a protocol segment or evidence for a priori
+codes, never both, and a segment's item belongs to the protocol its file
+follows there. If a hand edit breaks these rules, what breaks them is
+ignored on load (with a note): the evidence is dropped, or the segment
+becomes a plain selection.
 
 ## layers/<l-key>/codes/<c-key>.yml
 
@@ -170,24 +209,93 @@ evidence:                         # open: selections; axial: codes (no cycles)
 comments:
   - Self-report and observation point the same way.
 questions: ["Is this fatigue, or a shift from coding to interpreting?"]
+links:                            # to a priori codes (where data meets theory)
+  - key: ln-7c01ab22
+    apriori_code: apc-7a0e0001
+    type: refines                 # confirms | refines | extends | contradicts | not-covered
+    memo: Ease of use is learnt over time, not a fixed perception.
 interrelations:
   - key: x-bf8eb359
     type: Compare                 # one of project.yml's types (or any text)
     members: [s-1405501d, s-6092745d]   # evidence of this code
     description: |-
       Interview and observation agree…
-codebooks: [cb-c0debee2]
+attribute_sheets: [ast-c0debee2]
 by: r-a11ce000
 created: 2026-11-01T09:00:00Z
 ```
 
-Evidence must be in the code's own layer. `evidence: [s-…]` (keys alone) is
-accepted when written by hand.
+Codes exist only in inductive layers. Evidence must be in the code's own
+layer. `evidence: [s-…]` (keys alone) is accepted when written by hand.
 
-## codebooks/<cb-key>.yml
+## layers/<l-key>/apriori/<apc-key>.yml
+
+A deductive layer's evidence for one a priori code (the code itself is
+defined once, in `apriori-codes/`).
 
 ```yaml
-key: cb-c0debee1
+apriori_code: apc-7a0e0001
+evidence:
+  - selection: s-3c000001         # a selection of this layer: not irrelevant,
+    memo: Effort falls with the shortcuts.   # not a protocol segment
+  - selection: s-3c000002
+```
+
+## layers/<l-key>/framework/<row>.yml
+
+A deductive layer's Framework Matrix summaries for one row: an empirical
+file or an interviewee. Each cell is a column (an a priori code or a
+protocol item) and the researcher's summary of the row's data for it.
+
+```yaml
+row: f-1e7e0001
+cells:
+  - column: apc-7a0e0001
+    summary: Still learning the interface; the shortcuts make long sessions easier.
+```
+
+## protocols/<pr-key>.yml
+
+A predefined set of items expected to occur, in part or in whole, in the
+files that follow it: an interview protocol, the structure of an article.
+
+```yaml
+key: pr-1a7e0001
+title: Interview protocol
+description: The questions planned for every interview.
+items:                            # a flat list, in order
+  - key: pi-0a000001
+    label: Interface              # short, for margins and headings
+    text: Do you think the user interface is user friendly?
+  - key: pi-0a000002
+    label: Long sessions
+```
+
+## apriori-codes/<apc-key>.yml
+
+An a priori code: defined before coding, and its codebook entry. Applied on
+deductive layers (`layers/<l-key>/apriori/`).
+
+```yaml
+key: apc-7a0e0001
+name: Perceived ease of use
+colour: "#F78FB3"
+definition: The degree to which a researcher believes that using the tool would be free of effort.
+included: Learning the tool, effort, friction, fluency, speed of use.
+excluded: Whether the tool makes the research better (see Perceived usefulness).
+example: I barely touch the mouse now.
+counter_example: It's certainly an improvement over alternatives.
+source: Davis, F. D. (1989). MIS Quarterly, 13(3), 319–340.
+by: r-a11ce000
+created: 2026-11-01T09:00:00Z
+```
+
+Every field but `name` is optional.
+
+## attribute-sheets/<ast-key>.yml
+
+```yaml
+key: ast-c0debee1
 title: Interview context
 description: Answer once per interview.
 applies_to: [files]               # files | interviewees | open-codes | axial-codes
@@ -201,14 +309,14 @@ questions:                        # in order
     requirement: mandatory-blocking   # | mandatory-non-blocking | optional
 ```
 
-## responses/<cb-key>/<target>[--<r-key>].yml
+## attribute-responses/<ast-key>/<target>[--<r-key>].yml
 
-One response sheet: a codebook's answers about one file, code or
+One response sheet: an attribute sheet's answers about one file, code or
 interviewee, by one researcher (the `--r-…` part is absent when the project lists no
 researchers).
 
 ```yaml
-codebook: cb-c0debee1
+attribute_sheet: ast-c0debee1
 target: f-1e7e0001
 researcher: r-a11ce000
 updated: 2026-11-01T09:30:00Z
@@ -243,7 +351,7 @@ interviewees:
     first: John                   # pseudonyms
     last: Smith
     consent_form: consent/john-smith.pdf   # relative to the full-texts folder
-    codebooks: [cb-c0debee3]               # associated codebooks (optional)
+    attribute_sheets: [ast-c0debee3]       # associated attribute sheets (optional)
 ```
 
 ## interlocutors/<f-key>.yml

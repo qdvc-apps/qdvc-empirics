@@ -4,12 +4,20 @@ import Foundation
 public enum WorkspacePart: Hashable {
     case project
     case file(String)
-    case codebook(String)
+    case studyProtocol(String)
+    case aprioriCode(String)
+    case attributeSheet(String)
     case response(ResponseID)
     /// layers/<key>/layer.yml; the whole folder goes if the layer is deleted.
     case layer(String)
+    /// A file's selections in a layer, and (deductive layers) the protocol
+    /// it follows there.
     case selections(layer: String, file: String)
     case code(layer: String, code: String)
+    /// A deductive layer's evidence for one a priori code.
+    case aprioriEvidence(layer: String, code: String)
+    /// A deductive layer's Framework Matrix summaries for one row.
+    case framework(layer: String, row: String)
     case researchers
     case interviewees
     case speakers(String)
@@ -42,11 +50,15 @@ public struct LoadedWorkspace {
 ///
 ///     project.yml                          title, settings, layer order
 ///     files/<f-key>.yml                    the catalogue, one file per full-text
-///     codebooks/<cb-key>.yml               codebooks and their questions
-///     responses/<cb-key>/<target>[--<r-key>].yml   response sheets
-///     layers/<l-key>/layer.yml             a layer's name and description
+///     protocols/<pr-key>.yml               protocols and their items
+///     apriori-codes/<apc-key>.yml          a priori codes (codebook entries)
+///     attribute-sheets/<ast-key>.yml       attribute sheets and their questions
+///     attribute-responses/<ast-key>/<target>[--<r-key>].yml   response sheets
+///     layers/<l-key>/layer.yml             a layer's kind, name and description
 ///     layers/<l-key>/selections/<f-key>.yml   its selections in one file
-///     layers/<l-key>/codes/<c-key>.yml     its codes, one file each
+///     layers/<l-key>/codes/<c-key>.yml     inductive: its codes, one file each
+///     layers/<l-key>/apriori/<apc-key>.yml    deductive: evidence for one a priori code
+///     layers/<l-key>/framework/<row>.yml   deductive: Framework Matrix summaries
 ///     people/researchers.yml, people/interviewees.yml
 ///     interlocutors/<f-key>.yml            speaker labels → people
 ///
@@ -56,8 +68,10 @@ public enum Workspace {
     public static let appName = "QDVC Empirics"
     public static let projectFile = "project.yml"
     public static let filesFolder = "files"
-    public static let codebooksFolder = "codebooks"
-    public static let responsesFolder = "responses"
+    public static let protocolsFolder = "protocols"
+    public static let aprioriCodesFolder = "apriori-codes"
+    public static let attributeSheetsFolder = "attribute-sheets"
+    public static let responsesFolder = "attribute-responses"
     public static let layersFolder = "layers"
     public static let peopleFolder = "people"
     public static let researchersFile = "people/researchers.yml"
@@ -88,11 +102,15 @@ public enum Workspace {
         switch part {
         case .project: return projectFile
         case .file(let k): return "\(filesFolder)/\(k).yml"
-        case .codebook(let k): return "\(codebooksFolder)/\(k).yml"
+        case .studyProtocol(let k): return "\(protocolsFolder)/\(k).yml"
+        case .aprioriCode(let k): return "\(aprioriCodesFolder)/\(k).yml"
+        case .attributeSheet(let k): return "\(attributeSheetsFolder)/\(k).yml"
         case .response(let id): return id.path
         case .layer(let k): return "\(layersFolder)/\(k)/layer.yml"
         case .selections(let l, let f): return "\(layersFolder)/\(l)/selections/\(f).yml"
         case .code(let l, let c): return "\(layersFolder)/\(l)/codes/\(c).yml"
+        case .aprioriEvidence(let l, let c): return "\(layersFolder)/\(l)/apriori/\(c).yml"
+        case .framework(let l, let r): return "\(layersFolder)/\(l)/framework/\(r).yml"
         case .researchers: return researchersFile
         case .interviewees: return intervieweesFile
         case .speakers(let f): return "\(interlocutorsFolder)/\(f).yml"
@@ -111,13 +129,19 @@ public enum Workspace {
     public static func allParts(of p: Project) -> Set<WorkspacePart> {
         var parts: Set<WorkspacePart> = [.project, .researchers, .interviewees]
         for k in p.files.keys { parts.insert(.file(k)) }
-        for k in p.codebooks.keys { parts.insert(.codebook(k)) }
+        for k in p.protocols.keys { parts.insert(.studyProtocol(k)) }
+        for k in p.aprioriCodes.keys { parts.insert(.aprioriCode(k)) }
+        for k in p.attributeSheets.keys { parts.insert(.attributeSheet(k)) }
         for k in p.responses.keys { parts.insert(.response(k)) }
         for k in p.speakerMaps.keys { parts.insert(.speakers(k)) }
         for layer in p.layers {
             parts.insert(.layer(layer.key))
-            for f in layer.selections.keys { parts.insert(.selections(layer: layer.key, file: f)) }
+            for f in Set(layer.selections.keys).union(layer.protocols.keys) {
+                parts.insert(.selections(layer: layer.key, file: f))
+            }
             for c in layer.codes.keys { parts.insert(.code(layer: layer.key, code: c)) }
+            for c in layer.aprioriEvidence.keys { parts.insert(.aprioriEvidence(layer: layer.key, code: c)) }
+            for r in layer.framework.keys { parts.insert(.framework(layer: layer.key, row: r)) }
         }
         return parts
     }
@@ -133,7 +157,9 @@ public enum Workspace {
             for k in Set(a.keys).union(b.keys) where a[k] != b[k] { parts.insert(make(k)) }
         }
         diff(old.files, new.files) { .file($0) }
-        diff(old.codebooks, new.codebooks) { .codebook($0) }
+        diff(old.protocols, new.protocols) { .studyProtocol($0) }
+        diff(old.aprioriCodes, new.aprioriCodes) { .aprioriCode($0) }
+        diff(old.attributeSheets, new.attributeSheets) { .attributeSheet($0) }
         diff(old.responses, new.responses) { .response($0) }
         diff(old.speakerMaps, new.speakerMaps) { .speakers($0) }
         let oldLayers = Dictionary(old.layers.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
@@ -143,7 +169,10 @@ public enum Workspace {
             if a == b { continue }
             if a?.meta != b?.meta { parts.insert(.layer(k)) }
             diff(a?.selections ?? [:], b?.selections ?? [:]) { .selections(layer: k, file: $0) }
+            diff(a?.protocols ?? [:], b?.protocols ?? [:]) { .selections(layer: k, file: $0) }
             diff(a?.codes ?? [:], b?.codes ?? [:]) { .code(layer: k, code: $0) }
+            diff(a?.aprioriEvidence ?? [:], b?.aprioriEvidence ?? [:]) { .aprioriEvidence(layer: k, code: $0) }
+            diff(a?.framework ?? [:], b?.framework ?? [:]) { .framework(layer: k, row: $0) }
         }
         return parts
     }
@@ -171,10 +200,22 @@ public enum Workspace {
             }
         }
 
-        for name in yamlFiles(in: url.appendingPathComponent(codebooksFolder)) {
-            let node = try readYAML(url, "\(codebooksFolder)/\(name)", required: true)
-            let cb = decodeCodebook(key: String(name.dropLast(4)), node)
-            project.codebooks[cb.key] = cb
+        for name in yamlFiles(in: url.appendingPathComponent(protocolsFolder)) {
+            let node = try readYAML(url, "\(protocolsFolder)/\(name)", required: true)
+            let pr = decodeProtocol(key: String(name.dropLast(4)), node)
+            project.protocols[pr.key] = pr
+        }
+
+        for name in yamlFiles(in: url.appendingPathComponent(aprioriCodesFolder)) {
+            let node = try readYAML(url, "\(aprioriCodesFolder)/\(name)", required: true)
+            let c = decodeAprioriCode(key: String(name.dropLast(4)), node)
+            project.aprioriCodes[c.key] = c
+        }
+
+        for name in yamlFiles(in: url.appendingPathComponent(attributeSheetsFolder)) {
+            let node = try readYAML(url, "\(attributeSheetsFolder)/\(name)", required: true)
+            let cb = decodeAttributeSheet(key: String(name.dropLast(4)), node)
+            project.attributeSheets[cb.key] = cb
         }
 
         let responsesURL = url.appendingPathComponent(responsesFolder)
@@ -184,7 +225,7 @@ public enum Workspace {
                 let node = try readYAML(url, rel, required: true)
                 let stem = String(name.dropLast(4))
                 let parts = stem.components(separatedBy: "--")
-                let id = ResponseID(codebook: cbFolder, target: parts[0], researcher: parts.count > 1 ? parts[1] : "")
+                let id = ResponseID(attributeSheet: cbFolder, target: parts[0], researcher: parts.count > 1 ? parts[1] : "")
                 project.responses[id] = decodeResponse(id: id, node)
             }
         }
@@ -205,7 +246,10 @@ public enum Workspace {
                 continue
             }
             let meta = try readYAML(url, "\(layersFolder)/\(lk)/layer.yml", required: false)
-            var layer = CodingLayer(key: lk, name: meta["name"]?.string ?? "Layer",
+            // A layer that doesn't say is inductive (as every layer was before
+            // layers had kinds).
+            var layer = CodingLayer(key: lk, kind: meta["kind"]?.string.flatMap(LayerKind.init(rawValue:)) ?? .inductive,
+                                    name: meta["name"]?.string ?? "Layer",
                                     description: meta["description"]?.string ?? "",
                                     researcher: meta["researcher"]?.string ?? "")
             for name in yamlFiles(in: layersURL.appendingPathComponent("\(lk)/selections")) {
@@ -213,17 +257,24 @@ public enum Workspace {
                 let node = try readYAML(url, "\(layersFolder)/\(lk)/selections/\(name)", required: true)
                 let list = decodeSelections(fileKey: fk, node)
                 if !list.isEmpty { layer.selections[fk] = list.sorted(by: Project.selectionOrder) }
+                if let pr = node["protocol"]?.string, !pr.isEmpty { layer.protocols[fk] = pr }
             }
             for name in yamlFiles(in: layersURL.appendingPathComponent("\(lk)/codes")) {
                 let node = try readYAML(url, "\(layersFolder)/\(lk)/codes/\(name)", required: true)
                 let code = decodeCode(key: String(name.dropLast(4)), node)
                 layer.codes[code.key] = code
             }
+            for name in yamlFiles(in: layersURL.appendingPathComponent("\(lk)/apriori")) {
+                let node = try readYAML(url, "\(layersFolder)/\(lk)/apriori/\(name)", required: true)
+                let evidence = decodeAprioriEvidence(node)
+                if !evidence.isEmpty { layer.aprioriEvidence[String(name.dropLast(4))] = evidence }
+            }
+            for name in yamlFiles(in: layersURL.appendingPathComponent("\(lk)/framework")) {
+                let node = try readYAML(url, "\(layersFolder)/\(lk)/framework/\(name)", required: true)
+                let cells = decodeFrameworkRow(node)
+                if !cells.isEmpty { layer.framework[String(name.dropLast(4))] = cells }
+            }
             project.layers.append(layer)
-        }
-        if project.layers.isEmpty {
-            project.layers = [CodingLayer(key: project.newKey(Keys.layer), name: "Main")]
-            notes.append("The project had no layers, so a layer called Main was added.")
         }
 
         project.researchers = try readYAML(url, researchersFile, required: false)["researchers"]?.items.compactMap(decodeResearcher) ?? []
@@ -271,6 +322,99 @@ public enum Workspace {
                     p.layers[li].codes[ck]!.evidence = valid
                 }
             }
+        }
+        notes.append(contentsOf: repairKinds(&p))
+        return notes
+    }
+
+    /// The rules about deductive and inductive layers (Editing.swift):
+    /// each kind's content only in layers of that kind, a priori evidence
+    /// and protocol segments that fit, links to existing a priori codes, and
+    /// at least one layer of each kind.
+    static func repairKinds(_ p: inout Project) -> [String] {
+        var notes: [String] = []
+        for li in p.layers.indices {
+            let name = p.layers[li].name
+            if p.layers[li].isDeductive {
+                if !p.layers[li].codes.isEmpty {
+                    notes.append("\(name) is deductive but had open or axial codes; they are ignored.")
+                    p.layers[li].codes = [:]
+                }
+                // Protocols that exist; segments of the file's protocol.
+                for (file, pr) in p.layers[li].protocols where p.protocols[pr] == nil {
+                    notes.append("\(name) gave a file a protocol that doesn't exist; it is ignored.")
+                    p.layers[li].protocols[file] = nil
+                }
+                for (file, list) in p.layers[li].selections {
+                    var fixed = list
+                    for i in fixed.indices {
+                        guard let seg = fixed[i].segment else { continue }
+                        let owner = p.protocolItem(seg.item)?.protocolKey
+                        if fixed[i].irrelevant || owner == nil {
+                            fixed[i].segment = nil
+                        } else if let current = p.layers[li].protocols[file] {
+                            if current != owner { fixed[i].segment = nil }
+                        } else {
+                            p.layers[li].protocols[file] = owner
+                        }
+                    }
+                    if fixed != list {
+                        notes.append("Some protocol segments in \(name) don't belong to their file's protocol; they are plain selections now.")
+                        p.layers[li].selections[file] = fixed
+                    }
+                }
+                // A priori evidence: existing codes; selections of this layer
+                // that are neither irrelevant nor protocol segments.
+                let layer = p.layers[li]
+                for (apc, evidence) in layer.aprioriEvidence {
+                    guard p.aprioriCodes[apc] != nil else {
+                        notes.append("\(name) has evidence for an a priori code that doesn't exist; it is ignored.")
+                        p.layers[li].aprioriEvidence[apc] = nil
+                        continue
+                    }
+                    let valid = evidence.filter { e in
+                        layer.selection(e.target).map { !$0.irrelevant && $0.segment == nil } ?? false
+                    }
+                    if valid.count != evidence.count {
+                        notes.append("\(p.aprioriCodes[apc]!.name) listed evidence in \(name) that isn't there (or is irrelevant, or a protocol segment); it is ignored.")
+                        p.layers[li].aprioriEvidence[apc] = valid.isEmpty ? nil : valid
+                    }
+                }
+            } else {
+                if !p.layers[li].aprioriEvidence.isEmpty || !p.layers[li].protocols.isEmpty || !p.layers[li].framework.isEmpty {
+                    notes.append("\(name) is inductive but had a priori code evidence, protocols or Framework Matrix summaries; they are ignored.")
+                    p.layers[li].aprioriEvidence = [:]
+                    p.layers[li].protocols = [:]
+                    p.layers[li].framework = [:]
+                }
+                for (file, list) in p.layers[li].selections where list.contains(where: { $0.segment != nil }) {
+                    notes.append("\(name) is inductive but had protocol segments; they are plain selections now.")
+                    p.layers[li].selections[file] = list.map { s in
+                        var s = s
+                        s.segment = nil
+                        return s
+                    }
+                }
+                // Links to a priori codes that exist.
+                for ck in p.layers[li].codes.keys {
+                    let links = p.layers[li].codes[ck]!.links
+                    let valid = links.filter { p.aprioriCodes[$0.aprioriCode] != nil }
+                    if valid.count != links.count {
+                        notes.append("\(p.layers[li].codes[ck]!.name) linked to a priori codes that don't exist; those links are ignored.")
+                        p.layers[li].codes[ck]!.links = valid
+                    }
+                }
+            }
+        }
+        if !p.layers.contains(where: { $0.isDeductive }) {
+            let key = p.newKey(Keys.layer)
+            p.layers.insert(CodingLayer(key: key, kind: .deductive, name: Project.mainDeductiveName), at: 0)
+            notes.append("The project had no deductive layer, so \(Project.mainDeductiveName) was added.")
+        }
+        if !p.layers.contains(where: { $0.isInductive }) {
+            let key = p.newKey(Keys.layer)
+            p.layers.append(CodingLayer(key: key, kind: .inductive, name: Project.mainInductiveName))
+            notes.append("The project had no inductive layer, so \(Project.mainInductiveName) was added.")
         }
         return notes
     }
@@ -325,18 +469,28 @@ public enum Workspace {
             switch part {
             case .project: text = emit(encodeSettings(p))
             case .file(let k): text = p.files[k].map { emit(encodeFile($0)) }
-            case .codebook(let k): text = p.codebooks[k].map { emit(encodeCodebook($0)) }
+            case .studyProtocol(let k): text = p.protocols[k].map { emit(encodeProtocol($0)) }
+            case .aprioriCode(let k): text = p.aprioriCodes[k].map { emit(encodeAprioriCode($0)) }
+            case .attributeSheet(let k): text = p.attributeSheets[k].map { emit(encodeAttributeSheet($0)) }
             case .response(let id):
-                text = p.responses[id].map { emit(encodeResponse($0, codebook: p.codebooks[id.codebook])) }
+                text = p.responses[id].map { emit(encodeResponse($0, attributeSheet: p.attributeSheets[id.attributeSheet])) }
             case .layer(let k):
                 guard let layer = layers[k] else { continue }
                 text = emit(encodeLayer(layer))
             case .selections(let l, let f):
                 guard let layer = layers[l] else { continue }
-                text = (layer.selections[f]).flatMap { $0.isEmpty ? nil : emit(encodeSelections(file: f, $0)) }
+                let list = layer.selections[f] ?? []
+                let pr = layer.protocols[f]
+                text = list.isEmpty && pr == nil ? nil : emit(encodeSelections(file: f, list, protocolKey: pr))
             case .code(let l, let c):
                 guard let layer = layers[l] else { continue }
                 text = layer.codes[c].map { emit(encodeCode($0)) }
+            case .aprioriEvidence(let l, let c):
+                guard let layer = layers[l] else { continue }
+                text = layer.aprioriEvidence[c].flatMap { $0.isEmpty ? nil : emit(encodeAprioriEvidence(code: c, $0)) }
+            case .framework(let l, let r):
+                guard let layer = layers[l] else { continue }
+                text = layer.framework[r].flatMap { $0.isEmpty ? nil : emit(encodeFrameworkRow(row: r, $0)) }
             case .researchers:
                 text = p.researchers.isEmpty ? nil : "# First and last names are pseudonyms. Real names, if mapped, stay in the full-texts folder.\n"
                     + emit(.mapping([YAMLPair("researchers", .sequence(p.researchers.map(encodeResearcher)))]))

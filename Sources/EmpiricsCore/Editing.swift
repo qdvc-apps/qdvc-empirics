@@ -26,11 +26,21 @@ public struct LayerComponent: Equatable {
 // whatever the user interface does:
 //
 //  - selections and codes exist in exactly one layer;
+//  - a project always has at least one deductive and one inductive layer;
+//    a layer's kind can change only while nothing is coded in it;
+//  - open and axial codes exist only in inductive layers; a priori code
+//    evidence, protocol segments, the protocol each file follows and
+//    Framework Matrix summaries only in deductive layers;
 //  - in a layer, no irrelevant selection overlaps any other selection that
 //    is not irrelevant (so irrelevant text is never evidence);
 //  - open codes have selections as evidence; axial codes have codes (open
 //    or axial) of their own layer, with no cycles;
-//  - moving anything to another layer moves everything linked to it.
+//  - a selection on a deductive layer is evidence for a priori codes or a
+//    protocol segment, never both; a protocol segment belongs to an item of
+//    the protocol its file follows in that layer (one protocol per file per
+//    layer);
+//  - moving anything to another layer (of the same kind) moves everything
+//    linked to it.
 extension Project {
 
     // MARK: Files
@@ -52,6 +62,8 @@ extension Project {
             let gone = (layers[i].selections[key] ?? []).map(\.key)
             layers[i].selections[key] = nil
             for k in gone { unlinkSelection(k, inLayerAt: i) }
+            layers[i].protocols[key] = nil
+            layers[i].framework[key] = nil
         }
         speakerMaps[key] = nil
         for id in responses.keys where id.target == key { responses[id] = nil }
@@ -62,19 +74,37 @@ extension Project {
     // MARK: Layers
 
     @discardableResult
-    public mutating func addLayer(name: String, researcher: String = "") -> String {
+    public mutating func addLayer(name: String, kind: LayerKind, researcher: String = "") -> String {
         let key = newKey(Keys.layer)
-        layers.append(CodingLayer(key: key, name: name, researcher: researcher))
+        layers.append(CodingLayer(key: key, kind: kind, name: name, researcher: researcher))
         return key
     }
 
-    /// Deletes a layer with everything in it. The last layer can't go.
+    /// Deletes a layer with everything in it. The last layer of each kind
+    /// can't go.
     public mutating func deleteLayer(_ key: String) throws {
-        guard layers.count > 1 else { throw RuleError("A project needs at least one layer.") }
         guard let i = layerIndex(key) else { return }
+        let kind = layers[i].kind
+        guard layers.filter({ $0.kind == kind }).count > 1 else {
+            throw RuleError("A project needs at least one \(kind.label.lowercased()) layer.")
+        }
         let codes = Set(layers[i].codes.keys)
         layers.remove(at: i)
         for id in responses.keys where codes.contains(id.target) { responses[id] = nil }
+    }
+
+    /// Makes a layer deductive or inductive: only while nothing is coded in
+    /// it, and not if it is the last layer of its kind.
+    public mutating func setLayerKind(_ key: String, _ kind: LayerKind) throws {
+        guard let i = layerIndex(key), layers[i].kind != kind else { return }
+        guard layers[i].isEmpty else {
+            throw RuleError("\(layers[i].name) has coding in it, so it stays \(layers[i].kind.label.lowercased()).")
+        }
+        let old = layers[i].kind
+        guard layers.filter({ $0.kind == old }).count > 1 else {
+            throw RuleError("\(layers[i].name) is the only \(old.label.lowercased()) layer; a project needs one.")
+        }
+        layers[i].kind = kind
     }
 
     public mutating func moveLayer(_ key: String, to index: Int) {
@@ -101,13 +131,21 @@ extension Project {
     /// irrelevant selections they overlap or touch (returning the merged
     /// selection's key); a selection exactly matching an existing one that
     /// is not irrelevant returns that one instead of making a duplicate.
+    /// A protocol segment (`segment`) can only be made on a deductive layer,
+    /// for an item of the protocol the file follows there (which it starts
+    /// following, if it follows none yet).
     @discardableResult
     public mutating func addSelection(layer: String, file: String, spans: [TextSpan], quote: String = "",
-                                      irrelevant: Bool = false, by: String = "") throws -> String {
+                                      irrelevant: Bool = false, segment: ProtocolSegment? = nil,
+                                      by: String = "") throws -> String {
         guard let li = layerIndex(layer) else { throw RuleError("That layer no longer exists.") }
         guard files[file] != nil else { throw RuleError("That file is no longer in the project.") }
         let spans = TextSpan.normalised(spans)
         guard !spans.isEmpty else { throw RuleError("Select some text first.") }
+        if let segment {
+            guard !irrelevant else { throw RuleError("Irrelevant text can't be a protocol segment.") }
+            try checkSegment(segment, layerAt: li, file: file)
+        }
 
         let clashes = conflicts(layer: layer, file: file, spans: spans, irrelevant: irrelevant)
         if !clashes.isEmpty {
@@ -118,7 +156,7 @@ extension Project {
 
         var list = layers[li].selections[file] ?? []
         let quoteText = settings.storeQuotes ? quote : ""
-        if !irrelevant, let same = list.first(where: { !$0.irrelevant && $0.spans == spans }) {
+        if !irrelevant, let same = list.first(where: { !$0.irrelevant && $0.spans == spans && $0.segment == segment }) {
             return same.key
         }
         if irrelevant {
@@ -136,8 +174,11 @@ extension Project {
         }
         let key = newKey(Keys.selection)
         list.append(CodeSelection(key: key, fileKey: file, spans: spans, quote: irrelevant ? "" : quoteText,
-                                  irrelevant: irrelevant, by: by, created: Stamp.now()))
+                                  irrelevant: irrelevant, segment: segment, by: by, created: Stamp.now()))
         layers[li].selections[file] = list.sorted(by: Self.selectionOrder)
+        if let segment, layers[li].protocols[file] == nil {
+            layers[li].protocols[file] = protocolItem(segment.item)?.protocolKey
+        }
         if files[file]?.status == .notStarted { files[file]?.status = .inProgress }
         return key
     }
@@ -170,10 +211,13 @@ extension Project {
         let s = layers[li].selections[file]![si]
         guard s.irrelevant != irrelevant else { return }
         if irrelevant {
-            let codes = layers[li].codes.values.filter { $0.hasEvidence(key) }
-            if !codes.isEmpty {
-                let names = codes.map(\.name).sorted().joined(separator: ", ")
-                throw RuleError("This selection is evidence for \(names), so it can't be marked irrelevant. Remove it from \(codes.count == 1 ? "that code" : "those codes") first.")
+            var names = layers[li].codes.values.filter { $0.hasEvidence(key) }.map(\.name)
+            names += layers[li].aprioriCodes(for: key).compactMap { aprioriCodes[$0]?.name }
+            if !names.isEmpty {
+                throw RuleError("This selection is evidence for \(names.sorted().joined(separator: ", ")), so it can't be marked irrelevant. Remove it from \(names.count == 1 ? "that code" : "those codes") first.")
+            }
+            if s.segment != nil {
+                throw RuleError("This selection is a protocol segment, so it can't be marked irrelevant.")
             }
         }
         if !conflicts(layer: layers[li].key, file: file, spans: s.spans, irrelevant: irrelevant, excluding: key).isEmpty {
@@ -200,6 +244,10 @@ extension Project {
             for j in c.interrelations.indices { c.interrelations[j].members.removeAll { $0 == key } }
             layers[li].codes[ck] = c
         }
+        for apc in layers[li].aprioriCodes(for: key) {
+            layers[li].aprioriEvidence[apc]!.removeAll { $0.target == key }
+            if layers[li].aprioriEvidence[apc]!.isEmpty { layers[li].aprioriEvidence[apc] = nil }
+        }
     }
 
     /// (layer index, file key, index in the file's list).
@@ -217,6 +265,9 @@ extension Project {
     @discardableResult
     public mutating func addCode(layer: String, kind: CodeKind, name: String, by: String = "") throws -> String {
         guard let li = layerIndex(layer) else { throw RuleError("That layer no longer exists.") }
+        guard layers[li].isInductive else {
+            throw RuleError("\(layers[li].name) is a deductive layer: open and axial codes belong to inductive layers.")
+        }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw RuleError("A code needs a name.") }
         let key = newKey(Keys.code)
@@ -355,6 +406,9 @@ extension Project {
         guard let from = layerKey(holding: key), let fi = layerIndex(from) else { return LayerComponent() }
         guard let ti = layerIndex(target) else { throw RuleError("That layer no longer exists.") }
         guard from != target else { return LayerComponent() }
+        guard layers[fi].kind == layers[ti].kind else {
+            throw RuleError("\(layers[ti].name) is \(layers[ti].kind.label.lowercased()) and \(layers[fi].name) is \(layers[fi].kind.label.lowercased()): coding moves only between layers of the same kind.")
+        }
         let comp = component(of: key)
 
         var moving: [CodeSelection] = []
@@ -365,6 +419,11 @@ extension Project {
                 let title = files[s.fileKey]?.displayTitle ?? "a file"
                 throw RuleError("In \(title), a selection being moved overlaps \(s.irrelevant ? "selected" : "irrelevant") text in \(layers[ti].name). Resolve that first.")
             }
+            if s.segment != nil, let here = layers[fi].protocols[s.fileKey], let there = layers[ti].protocols[s.fileKey],
+               here != there {
+                let title = files[s.fileKey]?.displayTitle ?? "a file"
+                throw RuleError("In \(layers[ti].name), \(title) follows another protocol, so its protocol segments can't move there.")
+            }
         }
         for s in moving {
             layers[fi].selections[s.fileKey]?.removeAll { $0.key == s.key }
@@ -372,6 +431,16 @@ extension Project {
             var list = layers[ti].selections[s.fileKey] ?? []
             list.append(s)
             layers[ti].selections[s.fileKey] = list.sorted(by: Self.selectionOrder)
+            // Deductive layers: its a priori code evidence and protocol go along.
+            for apc in layers[fi].aprioriCodes(for: s.key) {
+                guard let e = layers[fi].aprioriEvidence[apc]?.first(where: { $0.target == s.key }) else { continue }
+                layers[fi].aprioriEvidence[apc]!.removeAll { $0.target == s.key }
+                if layers[fi].aprioriEvidence[apc]!.isEmpty { layers[fi].aprioriEvidence[apc] = nil }
+                layers[ti].aprioriEvidence[apc, default: []].append(e)
+            }
+            if s.segment != nil, layers[ti].protocols[s.fileKey] == nil {
+                layers[ti].protocols[s.fileKey] = layers[fi].protocols[s.fileKey]
+            }
         }
         for ck in comp.codes {
             if let c = layers[fi].codes.removeValue(forKey: ck) { layers[ti].codes[ck] = c }
@@ -390,51 +459,51 @@ extension Project {
         return key
     }
 
-    // MARK: Codebooks and responses
+    // MARK: Attribute Sheets and responses
 
-    /// Deletes a codebook, its associations and its response sheets.
-    public mutating func deleteCodebook(_ key: String) {
-        let questions = Set(codebooks[key]?.questions.map(\.key) ?? [])
+    /// Deletes an attribute sheet, its associations and its response sheets.
+    public mutating func deleteAttributeSheet(_ key: String) {
+        let questions = Set(attributeSheets[key]?.questions.map(\.key) ?? [])
         dropTableColumns(questions)
-        codebooks[key] = nil
-        for k in files.keys { files[k]!.codebooks.removeAll { $0 == key } }
-        for i in interviewees.indices { interviewees[i].codebooks.removeAll { $0 == key } }
+        attributeSheets[key] = nil
+        for k in files.keys { files[k]!.attributeSheets.removeAll { $0 == key } }
+        for i in interviewees.indices { interviewees[i].attributeSheets.removeAll { $0 == key } }
         for li in layers.indices {
-            for ck in layers[li].codes.keys where layers[li].codes[ck]!.codebooks.contains(key) {
-                layers[li].codes[ck]!.codebooks.removeAll { $0 == key }
+            for ck in layers[li].codes.keys where layers[li].codes[ck]!.attributeSheets.contains(key) {
+                layers[li].codes[ck]!.attributeSheets.removeAll { $0 == key }
             }
         }
-        for id in responses.keys where id.codebook == key { responses[id] = nil }
+        for id in responses.keys where id.attributeSheet == key { responses[id] = nil }
     }
 
-    /// Associates a codebook with a file, code or interviewee (if the
-    /// codebook applies to it).
-    public mutating func associate(codebook: String, with target: String) throws {
-        guard let cb = codebooks[codebook] else { return }
+    /// Associates an attribute sheet with a file, code or interviewee (if the
+    /// attribute sheet applies to it).
+    public mutating func associate(attributeSheet: String, with target: String) throws {
+        guard let cb = attributeSheets[attributeSheet] else { return }
         if files[target] != nil {
             guard cb.appliesTo.contains(.files) else { throw RuleError("\(cb.title) isn't for empirical files.") }
-            if !files[target]!.codebooks.contains(codebook) { files[target]!.codebooks.append(codebook) }
+            if !files[target]!.attributeSheets.contains(attributeSheet) { files[target]!.attributeSheets.append(attributeSheet) }
         } else if let i = interviewees.firstIndex(where: { $0.key == target }) {
             guard cb.appliesTo.contains(.interviewees) else { throw RuleError("\(cb.title) isn't for interviewees.") }
-            if !interviewees[i].codebooks.contains(codebook) { interviewees[i].codebooks.append(codebook) }
+            if !interviewees[i].attributeSheets.contains(attributeSheet) { interviewees[i].attributeSheets.append(attributeSheet) }
         } else if let code = code(target) {
-            let needed: CodebookTarget = code.kind == .open ? .openCodes : .axialCodes
+            let needed: AttributeSheetTarget = code.kind == .open ? .openCodes : .axialCodes
             guard cb.appliesTo.contains(needed) else { throw RuleError("\(cb.title) isn't for \(needed.label.lowercased()).") }
             var c = code
-            if !c.codebooks.contains(codebook) { c.codebooks.append(codebook) }
+            if !c.attributeSheets.contains(attributeSheet) { c.attributeSheets.append(attributeSheet) }
             updateCode(c)
         }
     }
 
     /// Removes the association (response sheets are kept, in case it is
     /// associated again).
-    public mutating func dissociate(codebook: String, from target: String) {
+    public mutating func dissociate(attributeSheet: String, from target: String) {
         if files[target] != nil {
-            files[target]!.codebooks.removeAll { $0 == codebook }
+            files[target]!.attributeSheets.removeAll { $0 == attributeSheet }
         } else if let i = interviewees.firstIndex(where: { $0.key == target }) {
-            interviewees[i].codebooks.removeAll { $0 == codebook }
+            interviewees[i].attributeSheets.removeAll { $0 == attributeSheet }
         } else if var c = code(target) {
-            c.codebooks.removeAll { $0 == codebook }
+            c.attributeSheets.removeAll { $0 == attributeSheet }
             updateCode(c)
         }
     }
@@ -442,32 +511,32 @@ extension Project {
     /// Saves a response sheet; refused while blocking questions are
     /// unanswered.
     public mutating func saveSheet(_ sheet: ResponseSheet) throws {
-        guard let cb = codebooks[sheet.id.codebook] else { throw RuleError("That codebook no longer exists.") }
+        guard let cb = attributeSheets[sheet.id.attributeSheet] else { throw RuleError("That attribute sheet no longer exists.") }
         let completeness = SheetCompleteness.of(sheet.answers, against: cb)
         guard completeness.canSave else {
             let labels = completeness.missingBlocking.map(\.label).joined(separator: ", ")
             throw RuleError("Answer the mandatory questions first: \(labels).")
         }
         var s = sheet
-        // Drop answers to questions no longer in the codebook, and empty ones.
+        // Drop answers to questions no longer in the attribute sheet, and empty ones.
         s.answers = s.answers.filter { k, a in cb.question(k) != nil && !a.isEmpty }
         s.updated = Stamp.now()
         responses[s.id] = s
-        // New options typed into lists that aren't strict join the codebook.
+        // New options typed into lists that aren't strict join the attribute sheet.
         var book = cb
         for i in book.questions.indices where book.questions[i].type.usesOptions && !book.questions[i].strict {
             for v in s.answers[book.questions[i].key]?.values ?? [] where !book.questions[i].options.contains(v) {
                 book.questions[i].options.append(v)
             }
         }
-        if book != cb { codebooks[cb.key] = book }
+        if book != cb { attributeSheets[cb.key] = book }
     }
 
-    /// Deletes a question from a codebook, and its answers.
-    public mutating func deleteQuestion(_ key: String, from codebook: String) {
-        codebooks[codebook]?.questions.removeAll { $0.key == key }
+    /// Deletes a question from an attribute sheet, and its answers.
+    public mutating func deleteQuestion(_ key: String, from attributeSheet: String) {
+        attributeSheets[attributeSheet]?.questions.removeAll { $0.key == key }
         dropTableColumns([key])
-        for id in responses.keys where id.codebook == codebook { responses[id]!.answers[key] = nil }
+        for id in responses.keys where id.attributeSheet == attributeSheet { responses[id]!.answers[key] = nil }
     }
 
     /// Stops showing questions as table columns.
@@ -479,14 +548,14 @@ extension Project {
         }
     }
 
-    /// Each researcher's answer to a codebook question about an item (empty
+    /// Each researcher's answer to an attribute sheet question about an item (empty
     /// answers left out), in the order of the researchers list; the
     /// researcher is "" for a sheet filled in while the project listed none.
-    public func answers(codebook: String, question: String, target: String) -> [(researcher: String, answer: Answer)] {
+    public func answers(attributeSheet: String, question: String, target: String) -> [(researcher: String, answer: Answer)] {
         let order = Dictionary(researchers.enumerated().map { pair in (pair.element.key, pair.offset) },
                                uniquingKeysWith: { first, _ in first })
         return responses.values
-            .filter { $0.id.codebook == codebook && $0.id.target == target }
+            .filter { $0.id.attributeSheet == attributeSheet && $0.id.target == target }
             .compactMap { sheet -> (researcher: String, answer: Answer)? in
                 guard let a = sheet.answers[question], !a.isEmpty else { return nil }
                 return (sheet.id.researcher, a)
@@ -498,10 +567,10 @@ extension Project {
             }
     }
 
-    /// Codebooks associated with a file, code or interviewee.
-    public func codebooks(for target: String) -> [Codebook] {
-        let keys = files[target]?.codebooks ?? interviewee(target)?.codebooks ?? code(target)?.codebooks ?? []
-        return keys.compactMap { codebooks[$0] }
+    /// Attribute sheets associated with a file, code or interviewee.
+    public func attributeSheets(for target: String) -> [AttributeSheet] {
+        let keys = files[target]?.attributeSheets ?? interviewee(target)?.attributeSheets ?? code(target)?.attributeSheets ?? []
+        return keys.compactMap { attributeSheets[$0] }
     }
 
     // MARK: People
@@ -512,12 +581,13 @@ extension Project {
         for k in speakerMaps.keys { speakerMaps[k]!.assignments.removeAll { $0.person == key } }
     }
 
-    /// Deletes an interviewee, their place in speaker maps and the response
-    /// sheets about them.
+    /// Deletes an interviewee, their place in speaker maps, the response
+    /// sheets about them and their Framework Matrix rows.
     public mutating func deleteInterviewee(_ key: String) {
         interviewees.removeAll { $0.key == key }
         for k in speakerMaps.keys { speakerMaps[k]!.assignments.removeAll { $0.person == key } }
         for id in responses.keys where id.target == key { responses[id] = nil }
+        for i in layers.indices { layers[i].framework[key] = nil }
     }
 }
 
@@ -527,8 +597,10 @@ extension Project {
 /// each selection is evidence for, which axial codes build on each code, and
 /// where everything is.
 public struct ProjectIndex {
-    /// Selection key → open codes it is evidence for.
+    /// Selection key → open codes it is evidence for (inductive layers).
     public var codesForSelection: [String: [String]] = [:]
+    /// Selection key → a priori codes it is evidence for (deductive layers).
+    public var aprioriForSelection: [String: [String]] = [:]
     /// Code key → axial codes it is evidence for.
     public var parents: [String: [String]] = [:]
     /// Selection or code key → layer key.
@@ -553,6 +625,9 @@ public struct ProjectIndex {
                     layerOf[s.key] = layer.key
                     fileOf[s.key] = file
                 }
+            }
+            for (apc, evidence) in layer.aprioriEvidence {
+                for e in evidence { aprioriForSelection[e.target, default: []].append(apc) }
             }
             for c in layer.codes.values {
                 layerOf[c.key] = layer.key
@@ -583,6 +658,7 @@ public struct ProjectIndex {
             for k in layer.codes.keys { filesForCode[k] = files(k, 0) }
         }
         for k in codesForSelection.keys { codesForSelection[k]!.sort() }
+        for k in aprioriForSelection.keys { aprioriForSelection[k]!.sort() }
         for k in parents.keys { parents[k]!.sort() }
     }
 }
@@ -590,14 +666,17 @@ public struct ProjectIndex {
 // MARK: - Working identifiers
 
 /// Short identifiers for talking about items while working: "EF 31" (an
-/// empirical file), "CB 4" (codebook), "OC 23" (open code), "AC 12" (axial
-/// code), "R 5" (researcher), "I 17" (interviewee). Each kind is numbered
+/// empirical file), "PR 2" (protocol), "AST 4" (attribute sheet), "APC 7" (a
+/// priori code), "OC 23" (open code), "AC 12" (axial code), "R 5"
+/// (researcher), "I 17" (interviewee). Each kind is numbered
 /// from 1 in alphabetical order of its titles or names (codes across all
 /// layers), so the numbers are NOT stable: adding, renaming or removing an
 /// item can renumber others. They are never stored; keys are what last.
 public enum WorkingIDs {
     public static let file = "EF"
-    public static let codebook = "CB"
+    public static let attributeSheet = "AST"
+    public static let studyProtocol = "PR"
+    public static let aprioriCode = "APC"
     public static let openCode = "OC"
     public static let axialCode = "AC"
     public static let researcher = "R"
@@ -613,7 +692,9 @@ public enum WorkingIDs {
             for (i, item) in sorted.enumerated() { result[item.key] = "\(prefix) \(i + 1)" }
         }
         assign(p.files.values.map { ($0.key, $0.displayTitle) }, file)
-        assign(p.codebooks.values.map { ($0.key, $0.title) }, codebook)
+        assign(p.attributeSheets.values.map { ($0.key, $0.title) }, attributeSheet)
+        assign(p.protocols.values.map { ($0.key, $0.title) }, studyProtocol)
+        assign(p.aprioriCodes.values.map { ($0.key, $0.name) }, aprioriCode)
         let codes = p.layers.flatMap { Array($0.codes.values) }
         assign(codes.filter { $0.kind == .open }.map { ($0.key, $0.name) }, openCode)
         assign(codes.filter { $0.kind == .axial }.map { ($0.key, $0.name) }, axialCode)

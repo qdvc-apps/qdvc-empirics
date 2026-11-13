@@ -22,45 +22,45 @@ struct CodePage: View {
     }
 }
 
-// MARK: - Codebook
+// MARK: - Attribute Sheet
 
-struct CodebookPage: View {
+struct AttributeSheetPage: View {
     @Environment(AppModel.self) private var model
-    let codebookKey: String
+    let attributeSheetKey: String
 
     var body: some View {
-        if let cb = model.project.codebooks[codebookKey] {
-            CodebookEditor(codebook: cb, delete: { model.deleteCodebook(codebookKey) })
+        if let cb = model.project.attributeSheets[attributeSheetKey] {
+            AttributeSheetEditor(attributeSheet: cb, delete: { model.deleteAttributeSheet(attributeSheetKey) })
         } else {
-            ContentUnavailableView("Codebook Deleted", systemImage: "text.book.closed")
+            ContentUnavailableView("Attribute Sheet Deleted", systemImage: "text.book.closed")
         }
     }
 }
 
-/// The inspector for a codebook chosen in the table: its title, what it
+/// The inspector for an attribute sheet chosen in the table: its title, what it
 /// applies to, and its questions at a glance.
-struct CodebookSummary: View {
+struct AttributeSheetSummary: View {
     @Environment(AppModel.self) private var model
-    let codebookKey: String
+    let attributeSheetKey: String
 
     var body: some View {
-        if let cb = model.project.codebooks[codebookKey] {
+        if let cb = model.project.attributeSheets[attributeSheetKey] {
             VStack(alignment: .leading, spacing: 12) {
-                InspectorTitle(model: model, title: "Codebook", key: codebookKey)
-                TextField("Title", text: Binding(get: { model.project.codebooks[codebookKey]?.title ?? "" },
-                                                 set: { v in model.edit { $0.codebooks[codebookKey]?.title = v } }))
+                InspectorTitle(model: model, title: "Attribute Sheet", key: attributeSheetKey)
+                TextField("Title", text: Binding(get: { model.project.attributeSheets[attributeSheetKey]?.title ?? "" },
+                                                 set: { v in model.edit { $0.attributeSheets[attributeSheetKey]?.title = v } }))
                     .textFieldStyle(.roundedBorder)
                     .font(.title3)
-                TextField("Description", text: Binding(get: { model.project.codebooks[codebookKey]?.description ?? "" },
-                                                       set: { v in model.edit { $0.codebooks[codebookKey]?.description = v } }),
+                TextField("Description", text: Binding(get: { model.project.attributeSheets[attributeSheetKey]?.description ?? "" },
+                                                       set: { v in model.edit { $0.attributeSheets[attributeSheetKey]?.description = v } }),
                           axis: .vertical)
                     .lineLimit(2...6)
                     .textFieldStyle(.roundedBorder)
                 SectionHeader(title: "Applies To")
-                ForEach(CodebookTarget.allCases, id: \.self) { t in
+                ForEach(AttributeSheetTarget.allCases, id: \.self) { t in
                     Toggle(t.label, isOn: Binding(get: { cb.appliesTo.contains(t) }, set: { on in
-                        model.perform("Change Codebook") { p in
-                            if on { p.codebooks[codebookKey]?.appliesTo.insert(t) } else { p.codebooks[codebookKey]?.appliesTo.remove(t) }
+                        model.perform("Change Attribute Sheet") { p in
+                            if on { p.attributeSheets[attributeSheetKey]?.appliesTo.insert(t) } else { p.attributeSheets[attributeSheetKey]?.appliesTo.remove(t) }
                         }
                     }))
                     .toggleStyle(.checkbox)
@@ -80,31 +80,31 @@ struct CodebookSummary: View {
                     }
                 }
                 HStack {
-                    Button("Edit Questions…") { model.show(.codebook(codebookKey)) }
-                    if model.sidebar != .codebookReport {
+                    Button("Edit Questions…") { model.show(.attributeSheet(attributeSheetKey)) }
+                    if model.sidebar != .attributeSheetReport {
                         Button("Show Report") {
-                            model.reportCodebook = codebookKey
-                            model.sidebar = .codebookReport
+                            model.reportAttributeSheet = attributeSheetKey
+                            model.sidebar = .attributeSheetReport
                         }
                     }
                 }
                 Divider()
-                CodebookUsage(codebookKey: codebookKey)
+                AttributeSheetUsage(attributeSheetKey: attributeSheetKey)
             }
         }
     }
 }
 
-/// Where a codebook is used, and how far this Mac's researcher has got.
-struct CodebookUsage: View {
+/// Where an attribute sheet is used, and how far this Mac's researcher has got.
+struct AttributeSheetUsage: View {
     @Environment(AppModel.self) private var model
-    let codebookKey: String
+    let attributeSheetKey: String
 
     var body: some View {
-        let files = model.project.sortedFiles.filter { $0.codebooks.contains(codebookKey) }
-        let codes = model.project.layers.flatMap { Array($0.codes.values) }.filter { $0.codebooks.contains(codebookKey) }
+        let files = model.project.sortedFiles.filter { $0.attributeSheets.contains(attributeSheetKey) }
+        let codes = model.project.layers.flatMap { Array($0.codes.values) }.filter { $0.attributeSheets.contains(attributeSheetKey) }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        let people = model.project.interviewees.filter { $0.codebooks.contains(codebookKey) }
+        let people = model.project.interviewees.filter { $0.attributeSheets.contains(attributeSheetKey) }
             .sorted { model.itemTitle($0.key).localizedStandardCompare(model.itemTitle($1.key)) == .orderedAscending }
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: "Associated With", trailing: "\(files.count + people.count + codes.count)")
@@ -120,10 +120,10 @@ struct CodebookUsage: View {
             ForEach(codes) { c in
                 usageRow(target: c.key)
             }
-            if model.sidebar == .codebook(codebookKey) {
+            if model.sidebar == .attributeSheet(attributeSheetKey) {
                 Button("Show Report") {
-                    model.reportCodebook = codebookKey
-                    model.sidebar = .codebookReport
+                    model.reportAttributeSheet = attributeSheetKey
+                    model.sidebar = .attributeSheetReport
                 }
                 .controlSize(.small)
             }
@@ -132,8 +132,8 @@ struct CodebookUsage: View {
 
     @ViewBuilder
     func usageRow(target: String) -> some View {
-        let cb = model.project.codebooks[codebookKey]
-        let mine = model.responseID(codebook: codebookKey, target: target).flatMap { model.project.responses[$0] }
+        let cb = model.project.attributeSheets[attributeSheetKey]
+        let mine = model.responseID(attributeSheet: attributeSheetKey, target: target).flatMap { model.project.responses[$0] }
         let complete = cb.map { SheetCompleteness.of(mine?.answers ?? [:], against: $0).isComplete } ?? false
         HStack(spacing: 6) {
             Image(systemName: mine == nil ? "circle.dashed" : complete ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
@@ -144,7 +144,7 @@ struct CodebookUsage: View {
                 ItemLine(model: model, key: target, iconWidth: 16)
             }
             .buttonStyle(.plain)
-            Button(mine == nil ? "Fill In…" : "Edit…") { model.openResponseSheet(codebook: codebookKey, target: target) }
+            Button(mine == nil ? "Fill In…" : "Edit…") { model.openResponseSheet(attributeSheet: attributeSheetKey, target: target) }
                 .controlSize(.small)
         }
     }
@@ -241,8 +241,8 @@ struct PersonForm: View {
                     PersonRelated(key: key)
                 } else {
                     if kind == .interviewee {
-                        SectionHeader(title: "Codebooks")
-                        CodebookAssociations(target: key, kind: .interviewees)
+                        SectionHeader(title: "Attribute Sheets")
+                        AttributeSheetAssociations(target: key, kind: .interviewees)
                     }
                     Button("Open") { model.show(kind == .researcher ? SidebarItem.researcher(key) : SidebarItem.interviewee(key)) }
                         .controlSize(.small)
@@ -362,8 +362,8 @@ struct PersonRelated: View {
         let transcripts = model.transcripts(of: key)
         VStack(alignment: .leading, spacing: 8) {
             if model.project.interviewee(key) != nil {
-                SectionHeader(title: "Codebooks")
-                CodebookAssociations(target: key, kind: .interviewees)
+                SectionHeader(title: "Attribute Sheets")
+                AttributeSheetAssociations(target: key, kind: .interviewees)
             }
             SectionHeader(title: "Speaks In", trailing: transcripts.isEmpty ? nil : "\(transcripts.count)")
             if transcripts.isEmpty {

@@ -9,12 +9,13 @@ import SwiftUI
 struct LayersPage: View {
     @Environment(AppModel.self) private var model
     @State private var newName = ""
+    @State private var newKind: LayerKind = .inductive
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Layers").font(.title2.weight(.semibold))
-                Text("Each selection, open code and axial code lives in exactly one layer. Most projects need only one; add layers for different theoretical lenses or researchers. You code in the active layer; other layers can show beside it as underlines.")
+                Text("Each layer is deductive or inductive. Deductive layers apply what was defined beforehand: protocols and a priori codes. Inductive layers hold what emerges from the data: open and axial codes. Every selection lives in exactly one layer. Add layers for other theoretical lenses or other researchers; a layer's kind can change only while nothing is coded in it. You code in the active layer; other layers can show beside it as underlines.")
                     .foregroundStyle(.secondary)
                 ForEach(Array(model.project.layers.enumerated()), id: \.element.key) { i, layer in
                     row(layer, index: i)
@@ -24,6 +25,12 @@ struct LayersPage: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 260)
                         .onSubmit(add)
+                    Picker("Kind", selection: $newKind) {
+                        ForEach(LayerKind.allCases, id: \.self) { k in Text(k.label).tag(k) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                     Button("Add Layer", action: add)
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -39,7 +46,7 @@ struct LayersPage: View {
     func add() {
         let name = newName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        model.addLayer(named: name)
+        model.addLayer(named: name, kind: newKind)
         newName = ""
     }
 
@@ -71,7 +78,17 @@ struct LayersPage: View {
                 }))
                 .textFieldStyle(.roundedBorder)
                 .font(.headline)
-                Text("\(layer.selectionCount) selections · \(layer.codes.values.filter { $0.kind == .open }.count) open · \(layer.codes.values.filter { $0.kind == .axial }.count) axial codes")
+                Picker("Kind", selection: Binding(get: { layer.kind }, set: { k in
+                    model.perform("Change Layer Kind") { p in try p.setLayerKind(layer.key, k) }
+                })) {
+                    ForEach(LayerKind.allCases, id: \.self) { k in Text(k.label).tag(k) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .disabled(!layer.isEmpty)
+                .help(layer.isEmpty ? "Deductive or inductive" : "A layer's kind can't change once something is coded in it")
+                Text(summary(layer))
                     .font(.caption).foregroundStyle(.secondary).fixedSize()
                 Button { model.perform("Move Layer") { p in p.moveLayer(layer.key, to: index - 1) } } label: { Image(systemName: "arrow.up") }
                     .buttonStyle(.borderless).disabled(index == 0)
@@ -79,8 +96,8 @@ struct LayersPage: View {
                     .buttonStyle(.borderless).disabled(index == model.project.layers.count - 1)
                 Button { model.deleteLayer(layer.key) } label: { Image(systemName: "trash") }
                     .buttonStyle(.borderless)
-                    .disabled(model.project.layers.count < 2)
-                    .help("Delete this layer and everything in it")
+                    .disabled(model.project.layers.filter { $0.kind == layer.kind }.count < 2)
+                    .help("Delete this layer and everything in it (a project keeps at least one layer of each kind)")
             }
             HStack {
                 TextField("Description (the lens, or whose reading this is)", text: Binding(get: { layer.description }, set: { v in
@@ -100,6 +117,16 @@ struct LayersPage: View {
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(active ? Color.accentColor.opacity(0.07) : Color.primary.opacity(0.03)))
+    }
+
+    func summary(_ layer: CodingLayer) -> String {
+        if layer.isDeductive {
+            let applied = layer.aprioriEvidence.values.reduce(0) { $0 + $1.count }
+            return "\(layer.selectionCount) selections · \(applied) a priori coding\(applied == 1 ? "" : "s") · \(layer.protocols.count) file\(layer.protocols.count == 1 ? "" : "s") with a protocol"
+        }
+        let open = layer.codes.values.filter { $0.kind == .open }.count
+        let axial = layer.codes.values.filter { $0.kind == .axial }.count
+        return "\(layer.selectionCount) selections · \(open) open · \(axial) axial codes"
     }
 
     var interlocutor: some View {
@@ -203,7 +230,7 @@ struct ProjectPage: View {
         let p = model.project
         let selections = p.layers.reduce(0) { $0 + $1.selectionCount }
         let codes = p.layers.reduce(0) { $0 + $1.codes.count }
-        return Text("\(p.files.count) files · \(p.layers.count) layer\(p.layers.count == 1 ? "" : "s") · \(selections) selections · \(codes) codes · \(p.codebooks.count) codebooks · \(p.responses.count) response sheets")
+        return Text("\(p.files.count) files · \(p.layers.count) layer\(p.layers.count == 1 ? "" : "s") · \(selections) selections · \(codes) codes · \(p.attributeSheets.count) attribute sheets · \(p.responses.count) response sheets")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
@@ -259,5 +286,19 @@ struct RealNamesSettings: View {
             }
             .controlSize(.small)
         }
+    }
+}
+
+// MARK: - Pages still to come
+
+/// A page whose feature arrives in a later update.
+struct ComingSoonPage: View {
+    var title: String
+    var systemImage: String
+    var text: String
+
+    var body: some View {
+        ContentUnavailableView(title, systemImage: systemImage, description: Text(text))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

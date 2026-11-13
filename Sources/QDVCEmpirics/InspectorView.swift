@@ -3,7 +3,7 @@ import EmpiricsCore
 import SwiftUI
 
 /// The inspector follows the page: on a file, its Selection and File tabs;
-/// on a code, the code; on a codebook, where it is used; on a list page,
+/// on a code, the code; on an attribute sheet, where it is used; on a list page,
 /// the row selected in the table.
 struct InspectorView: View {
     @Environment(AppModel.self) private var model
@@ -30,8 +30,8 @@ struct InspectorView: View {
             }
         case .code(let key):
             InspectorScroll { codeEditor(key) }
-        case .codebook(let key):
-            InspectorScroll { CodebookUsage(codebookKey: key) }
+        case .attributeSheet(let key):
+            InspectorScroll { AttributeSheetUsage(attributeSheetKey: key) }
         case .researcher(let key), .interviewee(let key):
             InspectorScroll { PersonRelated(key: key) }
         case .files:
@@ -46,11 +46,11 @@ struct InspectorView: View {
             } else {
                 nothing("Select a code to see and edit it.")
             }
-        case .codebooks:
-            if let key = model.tableSelection, model.project.codebooks[key] != nil {
-                InspectorScroll { CodebookSummary(codebookKey: key) }
+        case .attributeSheets:
+            if let key = model.tableSelection, model.project.attributeSheets[key] != nil {
+                InspectorScroll { AttributeSheetSummary(attributeSheetKey: key) }
             } else {
-                nothing("Select a codebook to see it.")
+                nothing("Select an attribute sheet to see it.")
             }
         case .researchers, .interviewees:
             if let key = model.tableSelection, model.keyExists(key) {
@@ -66,17 +66,17 @@ struct InspectorView: View {
             } else {
                 nothing("Click a file, open code or axial code in the chart to see it here.")
             }
-        case .codebookReport:
+        case .attributeSheetReport:
             if let key = model.tableSelection, model.project.files[key] != nil {
                 InspectorScroll { FileInspector(fileKey: key) }
             } else if let key = model.tableSelection, model.project.code(key) != nil {
                 InspectorScroll { codeEditor(key) }
             } else if let key = model.tableSelection, model.project.interviewee(key) != nil {
                 InspectorScroll { PersonForm(key: key, compact: true) }
-            } else if let cb = model.shownReportCodebook {
-                InspectorScroll { CodebookSummary(codebookKey: cb) }
+            } else if let cb = model.shownReportAttributeSheet {
+                InspectorScroll { AttributeSheetSummary(attributeSheetKey: cb) }
             } else {
-                nothing("Choose a codebook below the report.")
+                nothing("Choose an attribute sheet below the report.")
             }
         default:
             nothing("Nothing to inspect on this page.")
@@ -335,8 +335,8 @@ struct CodeEditor: View {
 
             interrelations(code)
 
-            SectionHeader(title: "Codebooks")
-            CodebookAssociations(target: key, kind: code.kind == .open ? .openCodes : .axialCodes)
+            SectionHeader(title: "Attribute Sheets")
+            AttributeSheetAssociations(target: key, kind: code.kind == .open ? .openCodes : .axialCodes)
 
             Divider()
             HStack {
@@ -615,8 +615,8 @@ struct FileInspector: View {
             fingerprint(key, file)
             stats(key)
 
-            SectionHeader(title: "Codebooks")
-            CodebookAssociations(target: key, kind: .files)
+            SectionHeader(title: "Attribute Sheets")
+            AttributeSheetAssociations(target: key, kind: .files)
 
             if model.project.settings.interlocutorLayer, file.kind.isText {
                 SectionHeader(title: "Speakers")
@@ -701,37 +701,37 @@ struct LabeledField<Content: View>: View {
     }
 }
 
-// MARK: - Codebook associations
+// MARK: - Attribute Sheet associations
 
-/// The codebooks associated with a file or code: this Mac's researcher's
+/// The attribute sheets associated with a file or code: this Mac's researcher's
 /// sheet for each (complete, flagged or not started), who else answered,
-/// and adding or removing codebooks.
-struct CodebookAssociations: View {
+/// and adding or removing attribute sheets.
+struct AttributeSheetAssociations: View {
     @Environment(AppModel.self) private var model
     var target: String
-    var kind: CodebookTarget
+    var kind: AttributeSheetTarget
 
     var body: some View {
-        let books = model.project.codebooks(for: target)
-        let available = model.project.sortedCodebooks.filter { $0.appliesTo.contains(kind) && !books.contains($0) }
+        let books = model.project.attributeSheets(for: target)
+        let available = model.project.sortedAttributeSheets.filter { $0.appliesTo.contains(kind) && !books.contains($0) }
         VStack(alignment: .leading, spacing: 6) {
             if books.isEmpty {
-                Text("No codebooks.").foregroundStyle(.secondary).font(.callout)
+                Text("No attribute sheets.").foregroundStyle(.secondary).font(.callout)
             }
             ForEach(books) { cb in
                 row(cb)
             }
-            Menu("Add Codebook") {
+            Menu("Add Attribute Sheet") {
                 ForEach(available) { cb in
                     Button(model.itemLabel(cb.key)) {
-                        model.perform("Add Codebook") { p in try p.associate(codebook: cb.key, with: target) }
+                        model.perform("Add Attribute Sheet") { p in try p.associate(attributeSheet: cb.key, with: target) }
                     }
                 }
                 if available.isEmpty {
-                    Text("No other codebooks apply to \(kind.label.lowercased())")
+                    Text("No other attribute sheets apply to \(kind.label.lowercased())")
                 }
                 Divider()
-                Button("Edit Codebooks…") { model.sidebar = .codebooks }
+                Button("Edit Attribute Sheets…") { model.sidebar = .attributeSheets }
             }
             .fixedSize()
             .controlSize(.small)
@@ -739,10 +739,10 @@ struct CodebookAssociations: View {
     }
 
     @ViewBuilder
-    func row(_ cb: Codebook) -> some View {
-        let mine = model.responseID(codebook: cb.key, target: target).flatMap { model.project.responses[$0] }
+    func row(_ cb: AttributeSheet) -> some View {
+        let mine = model.responseID(attributeSheet: cb.key, target: target).flatMap { model.project.responses[$0] }
         let completeness = SheetCompleteness.of(mine?.answers ?? [:], against: cb)
-        let others = model.sheets(codebook: cb.key, target: target).filter { $0.id != mine?.id }
+        let others = model.sheets(attributeSheet: cb.key, target: target).filter { $0.id != mine?.id }
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 if mine == nil {
@@ -756,11 +756,11 @@ struct CodebookAssociations: View {
                 Text(cb.title).lineLimit(1)
                 WorkingBadge(text: model.wid(cb.key), color: nil)
                 Spacer()
-                Button(mine == nil ? "Fill In…" : "Edit…") { model.openResponseSheet(codebook: cb.key, target: target) }
+                Button(mine == nil ? "Fill In…" : "Edit…") { model.openResponseSheet(attributeSheet: cb.key, target: target) }
                     .controlSize(.small)
                 Menu {
-                    Button("Remove Codebook") {
-                        model.perform("Remove Codebook") { p in p.dissociate(codebook: cb.key, from: target) }
+                    Button("Remove Attribute Sheet") {
+                        model.perform("Remove Attribute Sheet") { p in p.dissociate(attributeSheet: cb.key, from: target) }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")

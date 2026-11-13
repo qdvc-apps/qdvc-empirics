@@ -203,13 +203,18 @@ extension AppModel {
 
     @discardableResult
     func newCode(kind: CodeKind, name: String, parent: String? = nil, child: String? = nil) -> String? {
-        if let existing = project.code(named: name, inLayer: activeLayerKey) {
+        // The layer of the code it joins, or on the code pages the inductive
+        // layer they show, or the active layer.
+        let onCodePages = sidebar == .openCodes || sidebar == .axialCodes
+        let layer = parent.flatMap { index.layerOf[$0] } ?? child.flatMap { index.layerOf[$0] }
+            ?? (onCodePages ? inductiveLayer?.key : nil) ?? activeLayerKey
+        if let existing = project.code(named: name, inLayer: layer) {
             showProblem(RuleError("This layer already has \(existing.kind == .open ? "an open" : "an axial") code called “\(existing.name)”."))
             return nil
         }
         var made: String?
         perform(kind == .open ? "New Open Code" : "New Axial Code") { p in
-            let c = try p.addCode(layer: activeLayerKey, kind: kind, name: name, by: currentResearcher ?? "")
+            let c = try p.addCode(layer: layer, kind: kind, name: name, by: currentResearcher ?? "")
             if let parent { try p.addEvidence(code: parent, target: c) }
             if let child { try p.addEvidence(code: c, target: child) }
             made = c
@@ -279,9 +284,9 @@ extension AppModel {
         focusedSelection = nil
     }
 
-    func addLayer(named name: String) {
+    func addLayer(named name: String, kind: LayerKind) {
         var key: String?
-        perform("New Layer") { p in key = p.addLayer(name: name, researcher: currentResearcher ?? "") }
+        perform("New Layer") { p in key = p.addLayer(name: name, kind: kind, researcher: currentResearcher ?? "") }
         if let key { setActiveLayer(key) }
     }
 

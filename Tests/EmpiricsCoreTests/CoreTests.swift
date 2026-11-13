@@ -92,7 +92,7 @@ final class RuleTests: XCTestCase {
     func makeProject() -> (Project, layer: String, file: String) {
         var p = Project.new(title: "Test")
         let f = p.addFile(path: "interviews/one.txt", kind: .text)
-        return (p, p.layers[0].key, f)
+        return (p, p.inductiveLayers[0].key, f)
     }
 
     func testIrrelevantNeverEvidence() throws {
@@ -111,7 +111,7 @@ final class RuleTests: XCTestCase {
         // Touching (not overlapping) is fine.
         XCTAssertNoThrow(try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 150, length: 5)]))
         // Another layer has its own rules.
-        let l2 = p.addLayer(name: "Second lens")
+        let l2 = p.addLayer(name: "Second lens", kind: .inductive)
         XCTAssertNoThrow(try p.addSelection(layer: l2, file: f, spans: [TextSpan(start: 140, length: 20)]))
         // An irrelevant selection is never accepted as evidence.
         XCTAssertNotNil(p.evidenceProblem(code: c, target: irr))
@@ -123,8 +123,8 @@ final class RuleTests: XCTestCase {
         let a = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 0, length: 10)], irrelevant: true)
         let b = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 10, length: 5)], irrelevant: true)
         XCTAssertEqual(a, b)
-        XCTAssertEqual(p.layers[0].selections[f]?.count, 1)
-        XCTAssertEqual(p.layers[0].selections[f]?.first?.spans, [TextSpan(start: 0, length: 15)])
+        XCTAssertEqual(p.layer(l)?.selections[f]?.count, 1)
+        XCTAssertEqual(p.layer(l)?.selections[f]?.first?.spans, [TextSpan(start: 0, length: 15)])
     }
 
     func testDuplicateSelectionReused() throws {
@@ -182,7 +182,7 @@ final class RuleTests: XCTestCase {
         XCTAssertEqual(comp.selections, [s1, s2])
         XCTAssertEqual(comp.codes, [c1, c2, ax])
 
-        let l2 = p.addLayer(name: "Other")
+        let l2 = p.addLayer(name: "Other", kind: .inductive)
         try p.move(c1, toLayer: l2)
         XCTAssertEqual(p.layerKey(holding: s2), l2)
         XCTAssertEqual(p.layerKey(holding: ax), l2)
@@ -193,7 +193,7 @@ final class RuleTests: XCTestCase {
     func testMoveRefusedOnIrrelevantClash() throws {
         var (p, l, f) = makeProject()
         let s = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 0, length: 10)])
-        let l2 = p.addLayer(name: "Other")
+        let l2 = p.addLayer(name: "Other", kind: .inductive)
         try p.addSelection(layer: l2, file: f, spans: [TextSpan(start: 5, length: 10)], irrelevant: true)
         XCTAssertThrowsError(try p.move(s, toLayer: l2))
         XCTAssertEqual(p.layerKey(holding: s), l)
@@ -201,42 +201,42 @@ final class RuleTests: XCTestCase {
 
     func testSheetBlocking() throws {
         var (p, _, f) = makeProject()
-        let cb = Codebook(key: "cb-00000001", title: "Interview", appliesTo: [.files], questions: [
-            CodebookQuestion(key: "q-00000001", label: "Setting", type: .chooseOne, options: ["Home", "Work"],
+        let cb = AttributeSheet(key: "ast-00000001", title: "Interview", appliesTo: [.files], questions: [
+            AttributeSheetQuestion(key: "q-00000001", label: "Setting", type: .chooseOne, options: ["Home", "Work"],
                              strict: false, requirement: .blocking),
-            CodebookQuestion(key: "q-00000002", label: "Mood", type: .text, requirement: .flagged),
-            CodebookQuestion(key: "q-00000003", label: "Way too long a label for this", requirement: .optional),
+            AttributeSheetQuestion(key: "q-00000002", label: "Mood", type: .text, requirement: .flagged),
+            AttributeSheetQuestion(key: "q-00000003", label: "Way too long a label for this", requirement: .optional),
         ])
-        XCTAssertEqual(cb.questions[2].label.count, CodebookQuestion.maxLabelLength)
-        p.codebooks[cb.key] = cb
-        try p.associate(codebook: cb.key, with: f)
-        var sheet = ResponseSheet(id: ResponseID(codebook: cb.key, target: f, researcher: "r-00000001"))
+        XCTAssertEqual(cb.questions[2].label.count, AttributeSheetQuestion.maxLabelLength)
+        p.attributeSheets[cb.key] = cb
+        try p.associate(attributeSheet: cb.key, with: f)
+        var sheet = ResponseSheet(id: ResponseID(attributeSheet: cb.key, target: f, researcher: "r-00000001"))
         XCTAssertThrowsError(try p.saveSheet(sheet))
         sheet.answers["q-00000001"] = .one("Café")
         XCTAssertNoThrow(try p.saveSheet(sheet))
         let saved = p.responses[sheet.id]!
-        XCTAssertFalse(SheetCompleteness.of(saved.answers, against: p.codebooks[cb.key]!).isComplete)
-        // Not strict: the new option joins the codebook.
-        XCTAssertEqual(p.codebooks[cb.key]?.questions[0].options, ["Home", "Work", "Café"])
-        // A codebook for codes can't go on a file.
-        p.codebooks["cb-00000002"] = Codebook(key: "cb-00000002", title: "Codes only", appliesTo: [.openCodes])
-        XCTAssertThrowsError(try p.associate(codebook: "cb-00000002", with: f))
+        XCTAssertFalse(SheetCompleteness.of(saved.answers, against: p.attributeSheets[cb.key]!).isComplete)
+        // Not strict: the new option joins the attribute sheet.
+        XCTAssertEqual(p.attributeSheets[cb.key]?.questions[0].options, ["Home", "Work", "Café"])
+        // An attribute sheet for codes can't go on a file.
+        p.attributeSheets["ast-00000002"] = AttributeSheet(key: "ast-00000002", title: "Codes only", appliesTo: [.openCodes])
+        XCTAssertThrowsError(try p.associate(attributeSheet: "ast-00000002", with: f))
     }
 
-    func testCodebooksForInterviewees() throws {
+    func testAttributeSheetsForInterviewees() throws {
         var p = Project.new(title: "People")
         p.interviewees = [Interviewee(key: "i-00000001", firstName: "John", lastName: "Smith")]
-        p.codebooks["cb-00000001"] = Codebook(key: "cb-00000001", title: "Background", appliesTo: [.interviewees])
-        p.codebooks["cb-00000002"] = Codebook(key: "cb-00000002", title: "Files only", appliesTo: [.files])
-        try p.associate(codebook: "cb-00000001", with: "i-00000001")
-        XCTAssertThrowsError(try p.associate(codebook: "cb-00000002", with: "i-00000001"))
-        XCTAssertEqual(p.codebooks(for: "i-00000001").map(\.key), ["cb-00000001"])
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: "i-00000001")))
-        let report = try XCTUnwrap(CodebookReport.make(p, codebook: "cb-00000001", title: { $0 }, person: { $0 }))
+        p.attributeSheets["ast-00000001"] = AttributeSheet(key: "ast-00000001", title: "Background", appliesTo: [.interviewees])
+        p.attributeSheets["ast-00000002"] = AttributeSheet(key: "ast-00000002", title: "Files only", appliesTo: [.files])
+        try p.associate(attributeSheet: "ast-00000001", with: "i-00000001")
+        XCTAssertThrowsError(try p.associate(attributeSheet: "ast-00000002", with: "i-00000001"))
+        XCTAssertEqual(p.attributeSheets(for: "i-00000001").map(\.key), ["ast-00000001"])
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-00000001", target: "i-00000001")))
+        let report = try XCTUnwrap(AttributeSheetReport.make(p, attributeSheet: "ast-00000001", title: { $0 }, person: { $0 }))
         XCTAssertEqual(report.rows.map(\.target), ["i-00000001"])
         var dropped = p
-        dropped.deleteCodebook("cb-00000001")
-        XCTAssertEqual(dropped.interviewees[0].codebooks, [])
+        dropped.deleteAttributeSheet("ast-00000001")
+        XCTAssertEqual(dropped.interviewees[0].attributeSheets, [])
         // Deleting the interviewee deletes the sheets about them.
         p.deleteInterviewee("i-00000001")
         XCTAssertTrue(p.responses.isEmpty)
@@ -247,23 +247,23 @@ final class RuleTests: XCTestCase {
         let f = p.addFile(path: "a.txt", kind: .text)
         p.researchers = [Researcher(key: "r-00000002", firstName: "Zoe", lastName: "Ash"),
                          Researcher(key: "r-00000001", firstName: "Al", lastName: "Bo")]
-        p.codebooks["cb-00000001"] = Codebook(key: "cb-00000001", title: "Sheet", appliesTo: [.files], questions: [
-            CodebookQuestion(key: "q-00000001", label: "Setting", type: .text),
-            CodebookQuestion(key: "q-00000002", label: "Mood", type: .text)])
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: f, researcher: "r-00000001"),
+        p.attributeSheets["ast-00000001"] = AttributeSheet(key: "ast-00000001", title: "Sheet", appliesTo: [.files], questions: [
+            AttributeSheetQuestion(key: "q-00000001", label: "Setting", type: .text),
+            AttributeSheetQuestion(key: "q-00000002", label: "Mood", type: .text)])
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-00000001", target: f, researcher: "r-00000001"),
                                       answers: ["q-00000001": .text("Home")]))
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: f, researcher: "r-00000002"),
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-00000001", target: f, researcher: "r-00000002"),
                                       answers: ["q-00000001": .text("Work"), "q-00000002": .text("Calm")]))
         // In the order of the researchers list; unanswered left out.
-        let setting = p.answers(codebook: "cb-00000001", question: "q-00000001", target: f)
+        let setting = p.answers(attributeSheet: "ast-00000001", question: "q-00000001", target: f)
         XCTAssertEqual(setting.map { $0.researcher }, ["r-00000002", "r-00000001"])
         XCTAssertEqual(setting.map { $0.answer }, [.text("Work"), .text("Home")])
-        XCTAssertEqual(p.answers(codebook: "cb-00000001", question: "q-00000002", target: f).map { $0.researcher }, ["r-00000002"])
+        XCTAssertEqual(p.answers(attributeSheet: "ast-00000001", question: "q-00000002", target: f).map { $0.researcher }, ["r-00000002"])
 
         p.settings.tableColumns = [.files: ["q-00000001", "q-00000002"]]
-        p.deleteQuestion("q-00000002", from: "cb-00000001")
+        p.deleteQuestion("q-00000002", from: "ast-00000001")
         XCTAssertEqual(p.settings.tableColumns[.files], ["q-00000001"])
-        p.deleteCodebook("cb-00000001")
+        p.deleteAttributeSheet("ast-00000001")
         XCTAssertNil(p.settings.tableColumns[.files])
     }
 }
@@ -287,7 +287,7 @@ final class WorkspaceTests: XCTestCase {
         p.files[f]!.customID = "SF-2026-KXV-01"
         p.files[f]!.date = "2026-03-14"
         let pdf = p.addFile(path: "papers/wang 2022.pdf", kind: .pdf)
-        let l = p.layers[0].key
+        let l = p.inductiveLayers[0].key
         let s1 = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 3, length: 12)],
                                     quote: "It's \"great\": really\n#not", by: "r-00000001")
         let s2 = try p.addSelection(layer: l, file: pdf, spans: [TextSpan(page: 0, start: 5, length: 9), TextSpan(page: 1, start: 0, length: 4)],
@@ -304,19 +304,19 @@ final class WorkspaceTests: XCTestCase {
         p.addInterrelation(code: c, type: "Contrast", members: [s1, s2], description: "Home vs office")
         let ax = try p.addCode(layer: l, kind: .axial, name: "Embodiment")
         try p.addEvidence(code: ax, target: c, memo: "")
-        let l2 = p.addLayer(name: "Second coder")
-        p.layers[1].description = "Blind recode"
+        let l2 = p.addLayer(name: "Second coder", kind: .inductive)
+        p.layers[p.layerIndex(l2)!].description = "Blind recode"
         try p.addCode(layer: l2, kind: .open, name: "Empty")
-        p.codebooks["cb-00000001"] = Codebook(key: "cb-00000001", title: "Interview sheet", description: "About the interview",
+        p.attributeSheets["ast-00000001"] = AttributeSheet(key: "ast-00000001", title: "Interview sheet", description: "About the interview",
                                                appliesTo: [.files, .openCodes], questions: [
-            CodebookQuestion(key: "q-00000001", label: "Setting", text: "Where did it happen?", type: .chooseOne,
+            AttributeSheetQuestion(key: "q-00000001", label: "Setting", text: "Where did it happen?", type: .chooseOne,
                              options: ["Home", "Office"], strict: true, requirement: .blocking),
-            CodebookQuestion(key: "q-00000002", label: "Notes", text: "Anything else?", type: .text),
-            CodebookQuestion(key: "q-00000003", label: "Tools", type: .chooseMany, options: ["Zoom", "Teams"]),
+            AttributeSheetQuestion(key: "q-00000002", label: "Notes", text: "Anything else?", type: .text),
+            AttributeSheetQuestion(key: "q-00000003", label: "Tools", type: .chooseMany, options: ["Zoom", "Teams"]),
         ])
-        try p.associate(codebook: "cb-00000001", with: f)
-        try p.associate(codebook: "cb-00000001", with: c)
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000001", target: f, researcher: "r-00000001"),
+        try p.associate(attributeSheet: "ast-00000001", with: f)
+        try p.associate(attributeSheet: "ast-00000001", with: c)
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-00000001", target: f, researcher: "r-00000001"),
                                       answers: ["q-00000001": .one("Home"), "q-00000002": .text("Line one\nLine two"),
                                                 "q-00000003": .many(["Zoom", "Teams"])]))
         p.researchers = [Researcher(key: "r-00000001", firstName: "Alice", lastName: "Bob")]
@@ -324,12 +324,37 @@ final class WorkspaceTests: XCTestCase {
         p.speakerMaps[f] = SpeakerMap(fileKey: f, assignments: [SpeakerAssignment(label: "Alice Bob", person: "r-00000001"),
                                                                   SpeakerAssignment(label: "John Smith", person: "i-00000001")],
                                       ignored: ["okay"])
-        p.codebooks["cb-00000003"] = Codebook(key: "cb-00000003", title: "Interviewee background", appliesTo: [.interviewees],
-                                               questions: [CodebookQuestion(key: "q-00000004", label: "Role", type: .text)])
-        try p.associate(codebook: "cb-00000003", with: "i-00000001")
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-00000003", target: "i-00000001", researcher: "r-00000001"),
+        p.attributeSheets["ast-00000003"] = AttributeSheet(key: "ast-00000003", title: "Interviewee background", appliesTo: [.interviewees],
+                                               questions: [AttributeSheetQuestion(key: "q-00000004", label: "Role", type: .text)])
+        try p.associate(attributeSheet: "ast-00000003", with: "i-00000001")
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-00000003", target: "i-00000001", researcher: "r-00000001"),
                                       answers: ["q-00000004": .text("Nurse")]))
         p.settings.tableColumns = [.files: ["q-00000001", "q-00000003"], .interviewees: ["q-00000004"]]
+
+        // Deductive: a protocol with a prompt and a response segment, an a
+        // priori code with evidence, a link to it and a Framework Matrix cell.
+        let d = p.deductiveLayers[0].key
+        let pr = p.addProtocol(title: "Interview protocol")
+        let q1 = p.addProtocolItem(to: pr, label: "Q1", text: "How do you feel after a long call?")!
+        _ = p.addProtocolItem(to: pr, label: "Q2")
+        try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 0, length: 3)], quote: "It'",
+                           segment: ProtocolSegment(item: q1, part: .prompt))
+        try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 3, length: 12)], quote: "s \"great\": r",
+                           segment: ProtocolSegment(item: q1, part: .response))
+        let apc = try p.addAprioriCode(name: "Technostress")
+        var def = p.aprioriCodes[apc]!
+        def.definition = "Strain from technology use."
+        def.included = "Fatigue, overload"
+        def.excluded = "General work stress"
+        def.example = "My eyes hurt after Zoom."
+        def.counterExample = "I was tired after the commute."
+        def.source = "Tarafdar et al. (2007)"
+        try p.updateAprioriCode(def)
+        let ds = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 20, length: 10)], quote: "evidence!!")
+        try p.addAprioriEvidence(code: apc, selection: ds, memo: "Clear case.")
+        try p.addLink(from: c, to: apc, type: .refines, memo: "Eyes, specifically.")
+        try p.setFrameworkSummary("Strain after calls.\nMostly eyes.", layer: d, row: f, column: apc)
+        try p.setFrameworkSummary("Answered at length.", layer: d, row: "i-00000001", column: q1)
         return p
     }
 
@@ -351,17 +376,18 @@ final class WorkspaceTests: XCTestCase {
         var p = try richProject()
         try Workspace.create(at: dir, project: p)
         let old = p
-        let s = p.layers[0].selections.values.flatMap { $0 }.first { !$0.irrelevant && $0.spans.count == 1 }!
+        let main = p.inductiveLayers[0]
+        let s = main.selections.values.flatMap { $0 }.first { !$0.irrelevant && $0.spans.count == 1 }!
         p.deleteSelection(s.key)
         let parts = Workspace.changedParts(from: old, to: p)
-        XCTAssertTrue(parts.contains(.selections(layer: p.layers[0].key, file: s.fileKey)))
+        XCTAssertTrue(parts.contains(.selections(layer: main.key, file: s.fileKey)))
         XCTAssertFalse(parts.contains(.project))
         try Workspace.save(p, parts: parts, to: dir)
         XCTAssertEqual(try Workspace.load(dir).project, p)
 
         // Deleting a layer removes its folder.
         let old2 = p
-        let l2 = p.layers[1].key
+        let l2 = p.inductiveLayers[1].key
         try p.deleteLayer(l2)
         try Workspace.save(p, parts: Workspace.changedParts(from: old2, to: p), to: dir)
         XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("layers/\(l2)").path))
@@ -372,12 +398,15 @@ final class WorkspaceTests: XCTestCase {
         var p = try richProject()
         try Workspace.create(at: dir, project: p)
         let old = p
-        let code = p.layers[0].codes.values.first { $0.kind == .axial }!
-        try p.move(code.key, toLayer: p.layers[1].key)
+        let from = p.inductiveLayers[0].key
+        let code = p.inductiveLayers[0].codes.values.first { $0.kind == .axial }!
+        try p.move(code.key, toLayer: p.inductiveLayers[1].key)
         try Workspace.save(p, parts: Workspace.changedParts(from: old, to: p), to: dir)
         let reloaded = try Workspace.load(dir).project
         XCTAssertEqual(reloaded, p)
-        XCTAssertNil(reloaded.layers[0].codes[code.key])
+        XCTAssertNil(reloaded.layer(from)?.codes[code.key])
+        // Never to a layer of the other kind.
+        XCTAssertThrowsError(try p.move(code.key, toLayer: p.deductiveLayers[0].key))
     }
 
     func testHandWrittenYAML() throws {
@@ -397,9 +426,14 @@ final class WorkspaceTests: XCTestCase {
         """.write(to: dir.appendingPathComponent("layers/l-0000000a/codes/c-0000000c.yml"), atomically: true, encoding: .utf8)
         let loaded = try Workspace.load(dir)
         XCTAssertEqual(loaded.project.files["f-0000000b"]?.kind, .markdown)
-        XCTAssertEqual(loaded.project.layers.first?.codes["c-0000000c"]?.name, "Hope")
+        // A layer that doesn't give its kind is inductive.
+        let layer = try XCTUnwrap(loaded.project.layer("l-0000000a"))
+        XCTAssertEqual(layer.kind, .inductive)
+        XCTAssertEqual(layer.codes["c-0000000c"]?.name, "Hope")
         // Evidence to a selection that doesn't exist is ignored, with a note.
-        XCTAssertEqual(loaded.project.layers.first?.codes["c-0000000c"]?.evidence, [])
+        XCTAssertEqual(layer.codes["c-0000000c"]?.evidence, [])
+        // A project always has a layer of each kind.
+        XCTAssertEqual(loaded.project.deductiveLayers.count, 1)
         XCTAssertFalse(loaded.notes.isEmpty)
     }
 
@@ -507,7 +541,7 @@ final class WorkingIDTests: XCTestCase {
         var p = Project.new(title: "IDs")
         let b = p.addFile(path: "b.txt", kind: .text, title: "Beta")
         let a = p.addFile(path: "a.txt", kind: .text, title: "alpha")
-        let l = p.layers[0].key
+        let l = p.inductiveLayers[0].key
         let o2 = try p.addCode(layer: l, kind: .open, name: "Zebra")
         let o1 = try p.addCode(layer: l, kind: .open, name: "Apple 10")
         let o3 = try p.addCode(layer: l, kind: .open, name: "Apple 9")
@@ -531,7 +565,7 @@ final class WorkingIDTests: XCTestCase {
 final class ReportTests: XCTestCase {
     func testCodingChartColumnsLevelsAndEdges() throws {
         var p = Project.new(title: "Chart")
-        let l = p.layers[0].key
+        let l = p.inductiveLayers[0].key
         let f1 = p.addFile(path: "a.txt", kind: .text, title: "A")
         let f2 = p.addFile(path: "b.txt", kind: .text, title: "B")
         _ = p.addFile(path: "c.txt", kind: .text, title: "C (not coded)")
@@ -565,19 +599,19 @@ final class ReportTests: XCTestCase {
         XCTAssertEqual(all.columns[0].count, 3)
     }
 
-    func testCodebookReportRowsAndCSV() throws {
+    func testAttributeSheetReportRowsAndCSV() throws {
         var p = Project.new(title: "Report")
         let f1 = p.addFile(path: "a.txt", kind: .text, title: "Alpha")
         let f2 = p.addFile(path: "b.txt", kind: .text, title: "Beta")
-        let cb = p.newKey(Keys.codebook)
-        p.codebooks[cb] = Codebook(key: cb, title: "Context", appliesTo: [.files], questions: [
-            CodebookQuestion(key: "q-1", label: "Setting", type: .chooseOne, options: ["Office", "Home"], requirement: .flagged),
-            CodebookQuestion(key: "q-2", label: "Notes"),
+        let cb = p.newKey(Keys.attributeSheet)
+        p.attributeSheets[cb] = AttributeSheet(key: cb, title: "Context", appliesTo: [.files], questions: [
+            AttributeSheetQuestion(key: "q-1", label: "Setting", type: .chooseOne, options: ["Office", "Home"], requirement: .flagged),
+            AttributeSheetQuestion(key: "q-2", label: "Notes"),
         ])
-        try p.associate(codebook: cb, with: f1)
-        try p.associate(codebook: cb, with: f2)
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: cb, target: f2), answers: ["q-1": .one("Home"), "q-2": .text("Said \"tired\", twice")]))
-        let report = try XCTUnwrap(CodebookReport.make(p, codebook: cb, title: { p.files[$0]?.displayTitle ?? "" }, person: { $0 }))
+        try p.associate(attributeSheet: cb, with: f1)
+        try p.associate(attributeSheet: cb, with: f2)
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: cb, target: f2), answers: ["q-1": .one("Home"), "q-2": .text("Said \"tired\", twice")]))
+        let report = try XCTUnwrap(AttributeSheetReport.make(p, attributeSheet: cb, title: { p.files[$0]?.displayTitle ?? "" }, person: { $0 }))
         XCTAssertEqual(report.rows.map(\.target), [f1, f2])
         XCTAssertEqual(report.rows[0].status, .notStarted)
         XCTAssertEqual(report.rows[1].status, .complete)
@@ -589,6 +623,127 @@ final class ReportTests: XCTestCase {
         EF 2,Beta,Empirical File,,Complete,Home,"Said ""tired"", twice"
 
         """)
+    }
+}
+
+final class DeductiveTests: XCTestCase {
+    func testLayerKinds() throws {
+        var p = Project.new(title: "Kinds")
+        XCTAssertEqual(p.layers.map(\.kind), [.deductive, .inductive])
+        XCTAssertEqual(p.layers.map(\.name), ["Main Deductive", "Main Inductive"])
+        let d = p.deductiveLayers[0].key, i = p.inductiveLayers[0].key
+        // The last layer of each kind stays, and keeps its kind.
+        XCTAssertThrowsError(try p.deleteLayer(d))
+        XCTAssertThrowsError(try p.setLayerKind(i, .deductive))
+        // A new layer can change kind while nothing is coded in it.
+        let extra = p.addLayer(name: "Extra", kind: .inductive)
+        try p.setLayerKind(extra, .deductive)
+        XCTAssertEqual(p.layer(extra)?.kind, .deductive)
+        let f = p.addFile(path: "a.txt", kind: .text)
+        try p.addSelection(layer: extra, file: f, spans: [TextSpan(start: 0, length: 4)])
+        XCTAssertThrowsError(try p.setLayerKind(extra, .inductive))
+        try p.deleteLayer(d)   // another deductive layer remains
+        // Open and axial codes only on inductive layers.
+        XCTAssertThrowsError(try p.addCode(layer: extra, kind: .open, name: "Nope"))
+        XCTAssertNoThrow(try p.addCode(layer: i, kind: .open, name: "Yes"))
+    }
+
+    func testProtocolSegments() throws {
+        var p = Project.new(title: "Protocols")
+        let f = p.addFile(path: "a.txt", kind: .text)
+        let d = p.deductiveLayers[0].key, i = p.inductiveLayers[0].key
+        let pr1 = p.addProtocol(title: "Interview")
+        let q1 = try XCTUnwrap(p.addProtocolItem(to: pr1, label: "Q1"))
+        let pr2 = p.addProtocol(title: "Article")
+        let intro = try XCTUnwrap(p.addProtocolItem(to: pr2, label: "Introduction"))
+        // Not on inductive layers.
+        XCTAssertThrowsError(try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 0, length: 5)],
+                                                segment: ProtocolSegment(item: q1, part: .prompt)))
+        let prompt = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 0, length: 5)],
+                                        segment: ProtocolSegment(item: q1, part: .prompt))
+        XCTAssertEqual(p.layer(d)?.protocols[f], pr1)
+        // One protocol per file per layer.
+        XCTAssertThrowsError(try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 10, length: 5)],
+                                                segment: ProtocolSegment(item: intro, part: .response)))
+        XCTAssertThrowsError(try p.setProtocol(pr2, layer: d, file: f))
+        // A segment is never a priori code evidence, nor irrelevant.
+        let apc = try p.addAprioriCode(name: "Trust")
+        XCTAssertThrowsError(try p.addAprioriEvidence(code: apc, selection: prompt))
+        XCTAssertThrowsError(try p.setIrrelevant(prompt, true))
+        // The same text as a plain selection is a separate selection.
+        let plain = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 0, length: 5)])
+        XCTAssertNotEqual(plain, prompt)
+        // Deleting the item deletes its segments; then the protocol can change.
+        p.deleteProtocolItem(q1)
+        XCTAssertNil(p.selection(prompt))
+        XCTAssertNotNil(p.selection(plain))
+        try p.setProtocol(pr2, layer: d, file: f)
+        XCTAssertEqual(p.layer(d)?.protocols[f], pr2)
+        p.deleteProtocol(pr2)
+        XCTAssertNil(p.layer(d)?.protocols[f])
+    }
+
+    func testAprioriEvidenceLinksAndFramework() throws {
+        var p = Project.new(title: "A priori")
+        let f = p.addFile(path: "a.txt", kind: .text)
+        let d = p.deductiveLayers[0].key, i = p.inductiveLayers[0].key
+        let apc = try p.addAprioriCode(name: "Trust")
+        XCTAssertThrowsError(try p.addAprioriCode(name: "  "))
+        let s = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 0, length: 5)])
+        try p.addAprioriEvidence(code: apc, selection: s, memo: "why")
+        XCTAssertThrowsError(try p.addAprioriEvidence(code: apc, selection: s))   // twice
+        XCTAssertEqual(ProjectIndex(p).aprioriForSelection[s], [apc])
+        XCTAssertThrowsError(try p.setIrrelevant(s, true))
+        // Inductive selections can't be a priori evidence.
+        let si = try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 0, length: 5)])
+        XCTAssertNotNil(p.aprioriEvidenceProblem(code: apc, selection: si))
+        // Links from open and axial codes.
+        let oc = try p.addCode(layer: i, kind: .open, name: "Doubt")
+        try p.addLink(from: oc, to: apc, type: .contradicts)
+        XCTAssertThrowsError(try p.addLink(from: oc, to: apc, type: .confirms))   // already linked
+        var changed = try XCTUnwrap(p.code(oc)?.links.first)
+        changed.type = .extends
+        changed.memo = "Wider."
+        p.updateLink(changed, of: oc)
+        XCTAssertEqual(p.code(oc)?.links.first?.type, .extends)
+        XCTAssertEqual(p.code(oc)?.links.first?.memo, "Wider.")
+        // Framework Matrix: deductive layers only; an empty summary clears.
+        try p.setFrameworkSummary("Strong.", layer: d, row: f, column: apc)
+        XCTAssertEqual(p.layer(d)?.framework[f]?[apc], "Strong.")
+        XCTAssertThrowsError(try p.setFrameworkSummary("No.", layer: i, row: f, column: apc))
+        try p.setFrameworkSummary("", layer: d, row: f, column: apc)
+        XCTAssertNil(p.layer(d)?.framework[f])
+        try p.setFrameworkSummary("Again.", layer: d, row: f, column: apc)
+        // Deleting the code drops its evidence, links and column; the
+        // selection stays.
+        p.deleteAprioriCode(apc)
+        XCTAssertTrue(p.layer(d)!.aprioriEvidence.isEmpty)
+        XCTAssertTrue(p.code(oc)!.links.isEmpty)
+        XCTAssertTrue(p.layer(d)!.framework.isEmpty)
+        XCTAssertNotNil(p.selection(s))
+    }
+
+    func testDeductiveMove() throws {
+        var p = Project.new(title: "Move")
+        let f = p.addFile(path: "a.txt", kind: .text)
+        let d = p.deductiveLayers[0].key
+        let d2 = p.addLayer(name: "Second coder", kind: .deductive)
+        let apc = try p.addAprioriCode(name: "Trust")
+        let s = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 0, length: 5)])
+        try p.addAprioriEvidence(code: apc, selection: s, memo: "m")
+        try p.move(s, toLayer: d2)
+        XCTAssertEqual(p.layerKey(holding: s), d2)
+        XCTAssertNil(p.layer(d)?.aprioriEvidence[apc])
+        XCTAssertEqual(p.layer(d2)?.aprioriEvidence[apc], [Evidence(target: s, memo: "m")])
+    }
+
+    func testWorkingIDs() throws {
+        var p = Project.new(title: "IDs")
+        let pr = p.addProtocol(title: "Interview")
+        let apc = try p.addAprioriCode(name: "Trust")
+        let ids = WorkingIDs.compute(p)
+        XCTAssertEqual(ids[pr], "PR 1")
+        XCTAssertEqual(ids[apc], "APC 1")
     }
 }
 

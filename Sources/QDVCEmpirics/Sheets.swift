@@ -415,7 +415,9 @@ struct MoveToLayerSheet: View {
     var body: some View {
         let component = model.project.component(of: item)
         let from = model.index.layerOf[item]
-        let others = model.project.layers.filter { $0.key != from }
+        let kind = from.flatMap { model.project.layer($0)?.kind }
+        // Coding moves only between layers of the same kind.
+        let others = model.project.layers.filter { $0.key != from && $0.kind == kind }
         VStack(alignment: .leading, spacing: 14) {
             Text("Move to Another Layer").font(.title3.weight(.semibold))
             Text("Selections, open codes and axial codes exist in one layer only, so everything linked to this item moves with it: \(component.selections.count) selection\(component.selections.count == 1 ? "" : "s"), \(model.codeCounts(Array(component.codes))).")

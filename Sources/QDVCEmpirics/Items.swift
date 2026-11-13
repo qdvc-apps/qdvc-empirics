@@ -2,17 +2,19 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-// One way of showing any item (empirical file, codebook, open code, axial
+// One way of showing any item (empirical file, attribute sheet, open code, axial
 // code, researcher, interviewee) on a single line: a neutral icon, its title
 // and its working-identifier badge ("EF 3", "OC 12"…). Used in the Working
-// Area, the Coding Chart, the Codebook Report and the inspector headers.
+// Area, the Coding Chart, the Attribute Sheet Report and the inspector headers.
 
 extension AppModel {
     /// The item's symbol (always drawn in one neutral colour).
     func itemSymbol(_ key: String) -> String {
         if let f = project.files[key] { return f.kind.symbol }
         if let c = project.code(key) { return c.kind.symbol }
-        if project.codebooks[key] != nil { return "text.book.closed" }
+        if project.attributeSheets[key] != nil { return "text.book.closed" }
+        if project.protocols[key] != nil { return "list.bullet.rectangle" }
+        if project.aprioriCodes[key] != nil { return "character.book.closed" }
         if project.researcher(key) != nil { return "graduationcap" }
         if project.interviewee(key) != nil { return "person.bubble" }
         return "questionmark.circle"
@@ -22,7 +24,9 @@ extension AppModel {
     func itemTitle(_ key: String) -> String {
         if let f = project.files[key] { return f.displayTitle }
         if let c = project.code(key) { return c.name.isEmpty ? "Untitled" : c.name }
-        if let cb = project.codebooks[key] { return cb.title.isEmpty ? "Untitled" : cb.title }
+        if let cb = project.attributeSheets[key] { return cb.title.isEmpty ? "Untitled" : cb.title }
+        if let pr = project.protocols[key] { return pr.title.isEmpty ? "Untitled" : pr.title }
+        if let apc = project.aprioriCodes[key] { return apc.name.isEmpty ? "Untitled" : apc.name }
         if let name = personName(key) { return name }
         return ""
     }
@@ -38,7 +42,9 @@ extension AppModel {
     func itemKind(_ key: String) -> String {
         if project.files[key] != nil { return "Empirical File" }
         if let c = project.code(key) { return c.kind == .open ? "Open Code" : "Axial Code" }
-        if project.codebooks[key] != nil { return "Codebook" }
+        if project.attributeSheets[key] != nil { return "Attribute Sheet" }
+        if project.protocols[key] != nil { return "Protocol" }
+        if project.aprioriCodes[key] != nil { return "A Priori Code" }
         if project.researcher(key) != nil { return "Researcher" }
         if project.interviewee(key) != nil { return "Interviewee" }
         return ""
@@ -49,20 +55,21 @@ extension AppModel {
     func itemAccent(_ key: String) -> Color? {
         if let f = project.files[key] { return f.status == .notStarted ? nil : f.status.tint }
         if let c = project.code(key) { return c.color }
+        if let apc = project.aprioriCodes[key] { return apc.color }
         return nil
     }
 
-    /// Titles of the codebooks associated with a file, code or interviewee,
-    /// for the Codebooks columns.
-    func codebookTitles(_ key: String) -> String {
-        project.codebooks(for: key).map(\.title)
+    /// Titles of the attribute sheets associated with a file, code or interviewee,
+    /// for the Attribute Sheets columns.
+    func attributeSheetTitles(_ key: String) -> String {
+        project.attributeSheets(for: key).map(\.title)
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             .joined(separator: ", ")
     }
 
-    /// The codebook the Codebook Report shows: the one chosen, or the first.
-    var shownReportCodebook: String? {
-        reportCodebook.flatMap { project.codebooks[$0] != nil ? $0 : nil } ?? project.sortedCodebooks.first?.key
+    /// The attribute sheet the Attribute Sheet Report shows: the one chosen, or the first.
+    var shownReportAttributeSheet: String? {
+        reportAttributeSheet.flatMap { project.attributeSheets[$0] != nil ? $0 : nil } ?? project.sortedAttributeSheets.first?.key
     }
 
     /// "3 open codes and 1 axial code", for counts in sentences.

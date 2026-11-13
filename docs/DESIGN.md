@@ -35,11 +35,12 @@ Welcome window at launch, as in Xcode and the other QDVC apps. The main
 window is a standard NavigationSplitView (sidebar, detail) with a standard
 inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 
-- **Sidebar.** Four sections, in the spirit of Mail's mailboxes above its
-  smart mailboxes: *Project* (Empirical Files, Researchers, Interviewees,
-  Project Settings), *Analysis* (Codebooks, Open Codes, Axial Codes,
-  Layers), *Reporting* (Coding Chart, Codebook Report), and the *Working
-  Area*: the items being worked on, like open documents, one line each
+- **Sidebar.** Five sections, in the spirit of Mail's mailboxes above its
+  smart mailboxes: *Project* (Empirical Files, Researchers, Layers, Project
+  Settings), *Deductive* (Protocols, Interviewees, Attribute Sheets, A Priori
+  Codes), *Inductive* (Open Codes, Axial Codes), *Reporting* (Coding Chart,
+  Attribute Sheet Report; the Codebook, Coverage Report, Overlap Matrix and
+  Framework Matrix to come), and the *Working Area*: the items being worked on, like open documents, one line each
   (neutral icon, title, working-identifier badge; colour only in the badge). Double-clicking a row in any table opens its page and puts it
   there; it is kept on this Mac (reorder from the context menu). Moving to the
   next file (⌥⌘], ⌥⌘N) swaps the file in its place, so a session of coding
@@ -49,8 +50,8 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   in a bar at the bottom), as in Finder's list view: selecting a row shows
   it in the inspector, double-clicking opens it. Each page starts with its
   table; nothing sits above it (docs/MAINTENANCE.md §Layout). The tables of
-  items codebooks apply to (files, interviewees, open and axial codes) can
-  show codebook questions as columns, chosen by right-clicking a column
+  items attribute sheets apply to (files, interviewees, open and axial codes) can
+  show attribute sheet questions as columns, chosen by right-clicking a column
   heading (SwiftUI column customization, in which only the question columns
   take part, so the menu lists just them; the columns come from
   `TableColumnForEach`, which is why the app needs macOS 14.4). The choice is saved in the
@@ -60,7 +61,7 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   answer with its researchers' initials, in orange, and everyone's answer in
   the tooltip: disagreement between coders is the thing to notice.
 - **Item pages.** An empirical file (the document), a code (its evidence), a
-  codebook (its questions), a person (a card laid out like Contacts, with a
+  attribute sheet (its questions), a person (a card laid out like Contacts, with a
   monogram, labelled fields and the transcripts they speak in).
 - **Back and Forward** in the Go menu (⌃⌘← / ⌃⌘→), as in Finder and
   Safari, since following a code from a quote and back is a common move.
@@ -78,19 +79,19 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   then the text; the coding bar falls back to compact and minimal variants.
   Nothing on any page may ask for more width than the detail column gives
   it, so the sidebar is never pushed off the window.
-- **Working identifiers.** `EF`, `CB`, `OC`, `AC`, `R`, `I` and a number,
+- **Working identifiers.** `EF`, `AST`, `OC`, `AC`, `R`, `I` and a number,
   alphabetical per kind (`WorkingIDs` in the core). Deliberately unstable
   and never stored: they are for talking and thinking ("OC 12 and OC 14
   overlap"), short enough for badges, and keys remain the real identity.
   The UI always says "open code" or "axial code", never just "code".
 - **Reporting.** The Coding Chart (`CodingChart` in the core: columns by
-  level, M:N links, barycentre ordering to reduce crossings) and the Codebook
-  Report (`CodebookReport`: rows per response sheet, CSV with pseudonyms).
+  level, M:N links, barycentre ordering to reduce crossings) and the Attribute Sheet
+  Report (`AttributeSheetReport`: rows per response sheet, CSV with pseudonyms).
 - **Inspector.** Follows the page. On a file: Selection (quote, speaker,
   codes with interpretation memos) and File (title, ID, date, status,
-  location, fingerprint, codebooks, speakers). On a code: the code (name,
+  location, fingerprint, attribute sheets, speakers). On a code: the code (name,
   kind, colour, quick-code slot, description, "evidence for", comments,
-  questions, interrelations, codebooks). On a codebook: where it is used and
+  questions, interrelations, attribute sheets). On an attribute sheet: where it is used and
   how complete your sheets are. On a person: what they are linked to. On a
   list page: the selected row.
 
@@ -168,17 +169,49 @@ file, if its fingerprint still matches); otherwise they keep their positions,
 unchecked. Confirm: keep what wasn't found (flagged) or delete it, with a
 reminder to commit the workspace to Git first so the diff can be read and
 the previous version restored. Nothing changes before Confirm; the update is
-one step of Edit › Undo. The file keeps its key, so its codebooks, response
+one step of Edit › Undo. The file keeps its key, so its attribute sheets, response
 sheets, speakers, title, ID, date and status all stay.
+
+## Deductive and inductive
+
+The app supports deductive and inductive approaches side by side, and works
+towards abductive ones: abduction is not a third kind of coding but what
+happens when the two are juxtaposed (Timmermans & Tavory, 2012), so it is
+served by putting deductive and inductive layers next to each other and by
+**links** from open and axial codes to a priori codes (confirms, refines,
+extends, contradicts, not covered).
+
+- **Deductive** (defined upfront, with consequences for the result):
+  protocols, interviewees, attribute sheets and a priori codes. Protocols
+  and a priori codes are project-wide: two coders apply the *same*
+  instrument, each on their own deductive layer.
+- **Inductive** (emerging from the data): open and axial codes, per
+  inductive layer, since emergent codes belong to a coder's reading.
+
+A **protocol** marks *where in the text* something occurs (structural
+coding: Saldaña; MacQueen et al., 2008): an item's prompt and its response
+are separate selections on a deductive layer, drawn in the margin like
+speaker turns, never a priori evidence. An **attribute sheet** records *what
+the researcher concludes about* an item. An **a priori code** carries its
+codebook entry (MacQueen et al., 1998; Boyatzis, 1998): definition, what is
+included and excluded, an ideal example, a counter-example and its source.
+
+Open and axial codes keep their Straussian names for now (Glaser's and
+Charmaz's alternatives are a debate for later).
 
 ## Layers
 
-A selection or code exists in one layer. Evidence, interrelations and
-irrelevance are per layer, so two researchers (or two lenses) can read the
-same transcript differently. Moving anything to another layer moves its
-connected component (selections ↔ open codes ↔ axial codes), with a sheet
-saying how much will move; it is refused if a moved selection would overlap
-text of the other kind (irrelevant or not) in the target layer.
+Each layer is deductive or inductive. A project starts with Main Deductive
+and Main Inductive and always keeps one of each; a layer's kind can change
+only while nothing is coded in it. A selection or code exists in one layer.
+Evidence, interrelations and irrelevance are per layer, so two researchers
+(or two lenses) can read the same transcript differently. Moving anything
+to another layer (of the same kind) moves its connected component
+(selections ↔ open codes ↔ axial codes; on deductive layers, a selection
+with its a priori evidence), with a sheet saying how much will move; it is
+refused if a moved selection would overlap text of the other kind
+(irrelevant or not) in the target layer, or if its protocol segments would
+land on a file following another protocol there.
 
 The Interlocutor layer is not a coding layer: it is derived from the text
 (speaker header lines) plus a per-file mapping of labels to people.
@@ -193,11 +226,14 @@ The Interlocutor layer is not a coding layer: it is derived from the text
 - Irrelevant selections that touch or overlap merge into one.
 - New codes take the least-used colour of the palette.
 - Response sheets are per researcher when the project lists researchers;
-  otherwise there is one sheet per codebook and item.
+  otherwise there is one sheet per attribute sheet and item.
 - Removing a file from the project removes its selections in every layer;
   the full-text is untouched.
 - Researchers' pages are reachable by double-click like the others, though
   the specification listed double-click for interviewees only.
+- A file follows at most one protocol per deductive layer.
+- A priori codes are a flat list, as are protocol items.
+- A link joins one open or axial code to one a priori code, once.
 - Opening a code from a chip or a quote puts it in the Working Area, like a
   double-click: the page needs a sidebar row to come back to.
 - ⌘N makes an item of the kind the current list page shows (Add Files on
@@ -205,5 +241,5 @@ The Interlocutor layer is not a coding layer: it is derived from the text
 - Updating a file keeps selections it can't find (flagged) unless asked to
   delete them; a speaker label missing from the new version is only
   reported, its mapping is kept.
-- Codebooks apply to interviewees but not to researchers (researchers are
+- Attribute Sheets apply to interviewees but not to researchers (researchers are
   the ones answering).

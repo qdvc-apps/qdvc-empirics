@@ -3,56 +3,56 @@ import EmpiricsCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Reporting › Codebook Report: every response to one codebook, as a table
+/// Reporting › Attribute Sheet Report: every response to one attribute sheet, as a table
 /// (one row per response sheet, plus the associated items nobody has
-/// answered yet; one column per question). The codebook is chosen in the
+/// answered yet; one column per question). The attribute sheet is chosen in the
 /// bar below the report: like every page, it starts with its scrolling
 /// content at the top (docs/MAINTENANCE.md §Layout).
-struct CodebookReportPage: View {
+struct AttributeSheetReportPage: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let books = model.project.sortedCodebooks
-        let key = model.shownReportCodebook
+        let books = model.project.sortedAttributeSheets
+        let key = model.shownReportAttributeSheet
         let report = key.flatMap { k in
-            CodebookReport.make(model.project, codebook: k, title: { model.itemTitle($0) },
+            AttributeSheetReport.make(model.project, attributeSheet: k, title: { model.itemTitle($0) },
                                 person: { model.personName($0) ?? "" })
         }
         VStack(spacing: 0) {
             if let report {
                 if report.rows.isEmpty {
                     ContentUnavailableView("No Responses Yet", systemImage: "tablecells",
-                                           description: Text("“\(report.codebook.title)” isn't associated with any empirical file, interviewee, open code or axial code yet. Add it from their inspectors."))
+                                           description: Text("“\(report.attributeSheet.title)” isn't associated with any empirical file, interviewee, open code or axial code yet. Add it from their inspectors."))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ReportTable(model: model, report: report)
                 }
             } else {
-                ContentUnavailableView("No Codebooks", systemImage: "text.book.closed",
-                                       description: Text("Make a codebook on the Codebooks page first."))
+                ContentUnavailableView("No Attribute Sheets", systemImage: "text.book.closed",
+                                       description: Text("Make an attribute sheet on the Attribute Sheets page first."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             footer(books: books, key: key, report: report)
         }
     }
 
-    func footer(books: [Codebook], key: String?, report: CodebookReport?) -> some View {
+    func footer(books: [AttributeSheet], key: String?, report: AttributeSheetReport?) -> some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 10) {
-                Picker("Codebook", selection: Binding(
+                Picker("Attribute Sheet", selection: Binding(
                     get: { key ?? "" },
                     set: { v in
-                        model.reportCodebook = v.isEmpty ? nil : v
+                        model.reportAttributeSheet = v.isEmpty ? nil : v
                         model.tableSelection = nil
                     }
                 )) {
-                    if books.isEmpty { Text("No codebooks").tag("") }
+                    if books.isEmpty { Text("No attribute sheets").tag("") }
                     ForEach(books) { cb in Text(model.itemLabel(cb.key)).tag(cb.key) }
                 }
                 .fixedSize()
                 if let key {
-                    Button("Edit Codebook") { model.show(.codebook(key)) }
+                    Button("Edit Attribute Sheet") { model.show(.attributeSheet(key)) }
                 }
                 Spacer(minLength: 8)
                 if let report {
@@ -68,7 +68,7 @@ struct CodebookReportPage: View {
         }
     }
 
-    func summary(_ r: CodebookReport) -> String {
+    func summary(_ r: AttributeSheetReport) -> String {
         let complete = r.rows.filter { $0.status == .complete }.count
         let flagged = r.rows.filter { $0.status == .flagged }.count
         let open = r.rows.filter { $0.status == .notStarted }.count
@@ -76,24 +76,24 @@ struct CodebookReportPage: View {
     }
 
     /// CSV with pseudonyms only, whatever View › Show Real Names says.
-    func csv(_ r: CodebookReport) -> String {
+    func csv(_ r: AttributeSheetReport) -> String {
         r.csv(workingIDs: model.index.workingID,
               title: { model.pseudonymousTitle($0) },
               kind: { model.itemKind($0) },
               person: { model.project.personName($0) ?? "" })
     }
 
-    func copyCSV(_ r: CodebookReport) {
+    func copyCSV(_ r: AttributeSheetReport) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(csv(r), forType: .string)
-        model.notice = Notice(text: "Copied the report for “\(r.codebook.title)” as CSV (\(r.rows.count) row\(r.rows.count == 1 ? "" : "s")).")
+        model.notice = Notice(text: "Copied the report for “\(r.attributeSheet.title)” as CSV (\(r.rows.count) row\(r.rows.count == 1 ? "" : "s")).")
     }
 
-    func saveCSV(_ r: CodebookReport) {
+    func saveCSV(_ r: AttributeSheetReport) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.nameFieldStringValue = (r.codebook.title.isEmpty ? "Codebook" : r.codebook.title) + " report.csv"
-        panel.message = "Save the codebook report as CSV. Names are pseudonyms."
+        panel.nameFieldStringValue = (r.attributeSheet.title.isEmpty ? "Attribute Sheet" : r.attributeSheet.title) + " report.csv"
+        panel.message = "Save the attribute sheet report as CSV. Names are pseudonyms."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try Data(csv(r).utf8).write(to: url, options: .atomic)
@@ -109,13 +109,13 @@ struct CodebookReportPage: View {
 /// context menus.)
 struct ReportTable: View {
     let model: AppModel
-    let report: CodebookReport
+    let report: AttributeSheetReport
 
     static let itemWidth: CGFloat = 250
     static let researcherWidth: CGFloat = 130
     static let statusWidth: CGFloat = 110
 
-    static func width(_ q: CodebookQuestion) -> CGFloat {
+    static func width(_ q: AttributeSheetQuestion) -> CGFloat {
         q.type == .text ? 240 : 170
     }
 
@@ -141,7 +141,7 @@ struct ReportTable: View {
             headCell("Item", width: Self.itemWidth)
             if showResearcher { headCell("Researcher", width: Self.researcherWidth) }
             headCell("Status", width: Self.statusWidth)
-            ForEach(report.codebook.questions) { q in
+            ForEach(report.attributeSheet.questions) { q in
                 HStack(spacing: 3) {
                     Text(q.label).lineLimit(1)
                     RequirementMark(requirement: q.requirement)
@@ -167,7 +167,7 @@ struct ReportTable: View {
             .frame(width: width, alignment: .leading)
     }
 
-    func rowView(_ row: CodebookReport.Row, index: Int, showResearcher: Bool) -> some View {
+    func rowView(_ row: AttributeSheetReport.Row, index: Int, showResearcher: Bool) -> some View {
         let selected = model.tableSelection == row.target
         return HStack(alignment: .top, spacing: 0) {
             ItemLine(model: model, key: row.target, iconWidth: 16)
@@ -186,7 +186,7 @@ struct ReportTable: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .frame(width: Self.statusWidth, alignment: .leading)
-            ForEach(report.codebook.questions) { q in
+            ForEach(report.attributeSheet.questions) { q in
                 answer(row, q)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
@@ -205,12 +205,12 @@ struct ReportTable: View {
 
     /// Double-click: the response sheet (this Mac's researcher's own, or
     /// theirs to fill in).
-    func open(_ row: CodebookReport.Row) {
-        model.openResponseSheet(codebook: report.codebook.key, target: row.target)
+    func open(_ row: AttributeSheetReport.Row) {
+        model.openResponseSheet(attributeSheet: report.attributeSheet.key, target: row.target)
     }
 
     @ViewBuilder
-    func status(_ row: CodebookReport.Row) -> some View {
+    func status(_ row: AttributeSheetReport.Row) -> some View {
         switch row.status {
         case .notStarted:
             Label("Not started", systemImage: "circle.dashed").foregroundStyle(.secondary)
@@ -223,7 +223,7 @@ struct ReportTable: View {
     }
 
     @ViewBuilder
-    func answer(_ row: CodebookReport.Row, _ q: CodebookQuestion) -> some View {
+    func answer(_ row: AttributeSheetReport.Row, _ q: AttributeSheetQuestion) -> some View {
         let values = row.answer(q.key)?.values ?? []
         if !values.isEmpty {
             let text = values.joined(separator: q.type == .chooseMany ? ", " : "")

@@ -70,22 +70,24 @@ changes nothing unless the generator changed.
 | File | Responsibility |
 | --- | --- |
 | `YAML.swift` | the YAML subset (from QDVC Response Letter): `YAMLNode`, parser with line numbers, emitter |
-| `Model.swift` | `Keys`, `Stamp`, `EmpiricalFile`, `TextSpan`, `CodeSelection`, `QDACode`, `Evidence`, `Interrelation`, `CodingLayer`, `Codebook`, `CodebookQuestion`, `ResponseSheet`, `SheetCompleteness`, people, `SpeakerMap`, `Project` |
-| `Editing.swift` | every change and its rules (`RuleError`): selections, irrelevance, codes, evidence, cycles, layer moves (`component`, `move`), codebooks, sheets; `ProjectIndex` |
-| `Workspace.swift` | loading (with repairs and notes), saving by `WorkspacePart`, `changedParts`, `signature` |
+| `Model.swift` | `Keys`, `Stamp`, `EmpiricalFile`, `TextSpan`, `CodeSelection` (with `ProtocolSegment`), `QDACode` (with `CodeLink`), `Evidence`, `Interrelation`, `LayerKind`, `CodingLayer`, `StudyProtocol`, `ProtocolItem`, `AprioriCode`, `AttributeSheet`, `AttributeSheetQuestion`, `ResponseSheet`, `SheetCompleteness`, people, `SpeakerMap`, `Project` |
+| `Editing.swift` | every change and its rules (`RuleError`): layers and their kinds, selections, irrelevance, codes, evidence, cycles, layer moves (`component`, `move`), attribute sheets, sheets; `ProjectIndex`, `WorkingIDs` |
+| `Deductive.swift` | changes to what is defined beforehand and applied on deductive layers: protocols and segments, a priori codes and their evidence, links from open and axial codes, Framework Matrix summaries |
+| `Workspace.swift` | loading (with repairs and notes, `repairKinds` for the deductive/inductive rules), saving by `WorkspacePart`, `changedParts`, `signature` |
 | `Encoding.swift` | each file's YAML, both ways |
 | `Interlocutors.swift` | `TurnDetector`: speaker candidates, turns, name suggestions |
 | `FullTexts.swift` | read-only `FullTexts`, `TextNormaliser`, `Anchoring` (re-finding selections) |
 | `SHA256.swift` | fingerprints |
 | `RealNames.swift` | `CSV` reader and writer; `RealNames` (mapping files, templates) |
-| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `CodebookReport` (rows, CSV) |
+| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `AttributeSheetReport` (rows, CSV) |
 
 `WorkingIDs` (in `Editing.swift`) numbers items alphabetically per kind;
 `ProjectIndex.workingID` holds them, `AppModel.wid(_:)` reads them.
 
 Core type names avoid SwiftUI, AppKit and Foundation names (QDVC Progress hit
 `GridRow`, Response Letter `Section`): hence `QDACode`, `CodingLayer`,
-`CodeSelection`, `TextSpan`. Check new public names.
+`CodeSelection`, `TextSpan`, and `StudyProtocol` (Objective-C has a
+`Protocol` class). Check new public names.
 
 The app (`QDVCEmpirics`): `EmpiricsApp` (scenes, delegate, menus),
 `Welcome`, `AppModel` (state, opening, saving, undo, navigation and the
@@ -95,14 +97,15 @@ layers), `DeviceStore` (UserDefaults and security-scoped bookmarks),
 `ContentView` (split view, sidebar and Working Area, toolbar, document page),
 `Items` (one-line items: `ItemLine`, `WorkingBadge`, `InspectorTitle`, item
 titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
-`ItemPages` (code, codebook and person pages), `CodingChart` and
-`CodebookReport` (the Reporting pages),
+`ItemPages` (code, attribute sheet and person pages), `CodingChart` and
+`AttributeSheetReport` (the Reporting pages),
 `TextCodingView` (text view, decorations, margins, keys), `PDFCodingView`,
 `CodingBar` (coding bar, quick codes, code palette), `InspectorView` (routed
-by page), `EvidencePane`, `CodebooksPage` (the codebook editor and the
-response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
+by page), `EvidencePane`, `AttributeSheetsPage` (the attribute sheet editor and the
+response sheet), `Pages` (Layers, Project Settings, real names, pages still
+to come), `Sheets`,
 `UpdateFileSheet` (updating a file from a new version of its full-text),
-`QuestionColumns` (codebook questions as table columns: the cells, the
+`QuestionColumns` (attribute sheet questions as table columns: the cells, the
 sort comparator and the column-customization binding that saves the
 choice in the workspace),
 `SettingsView`, `Style`.
@@ -250,15 +253,29 @@ Nothing may touch the network:
   irrelevant text through the old version, keeps what it can't check, and
   applying it deletes lost selections only when asked.
 - Answers to a question come back in researcher order; deleting a question
-  or codebook stops showing it as a table column; `table_columns` survives
+  or attribute sheet stops showing it as a table column; `table_columns` survives
   the round trip.
-- Codebooks can be associated with interviewees (only when they apply to
+- Attribute sheets can be associated with interviewees (only when they apply to
   them); deleting the interviewee deletes the sheets about them.
+- New projects have Main Deductive and Main Inductive; the last layer of
+  each kind can't be deleted or change kind; a layer's kind is fixed once it
+  has coding; open and axial codes only in inductive layers; coding moves
+  only between layers of the same kind (a deductive selection takes its a
+  priori evidence along).
+- Protocol segments only on deductive layers, one protocol per file per
+  layer, never a priori evidence or irrelevant; deleting an item deletes its
+  segments; deleting a protocol frees its files.
+- A priori evidence only from deductive, relevant, non-segment selections;
+  links can't repeat; Framework Matrix summaries only on deductive layers,
+  an empty summary clears the cell; deleting an a priori code drops its
+  evidence, links and column but keeps the selections.
+- A layer without a kind loads as inductive, and a project missing a kind of
+  layer gets one (with a note).
 - The sample builds, saves and loads back unchanged.
 - Working identifiers are alphabetical per kind (natural number order) and
   renumber when an item is added.
 - The Coding Chart puts axial codes by level, links files to open codes and
   codes to the axial codes they are evidence for (also across columns),
-  leaves out unlinked items unless asked; the Codebook Report lists sheets
+  leaves out unlinked items unless asked; the Attribute Sheet Report lists sheets
   and unanswered items, and its CSV quotes fields properly.
 - No networking API in the sources, no dependencies.

@@ -48,7 +48,7 @@ extension Workspace {
             names.add("interviewees", s.intervieweeNamesFile)
             m.add("real_names", names.node)
         }
-        let tables = CodebookTarget.allCases.filter { !(s.tableColumns[$0] ?? []).isEmpty }
+        let tables = AttributeSheetTarget.allCases.filter { !(s.tableColumns[$0] ?? []).isEmpty }
         if !tables.isEmpty {
             var columns = Pairs()
             for t in tables { columns.add(t.rawValue, list: s.tableColumns[t] ?? []) }
@@ -59,9 +59,9 @@ extension Workspace {
     }
 
     static func decodeSettings(_ n: YAMLNode) -> ProjectSettings {
-        var columns: [CodebookTarget: [String]] = [:]
+        var columns: [AttributeSheetTarget: [String]] = [:]
         for pair in n["table_columns"]?.pairs ?? [] {
-            guard let target = CodebookTarget(rawValue: pair.key) else { continue }
+            guard let target = AttributeSheetTarget(rawValue: pair.key) else { continue }
             let keys = pair.value.strings
             if !keys.isEmpty { columns[target] = keys }
         }
@@ -90,7 +90,7 @@ extension Workspace {
         m.add("id", f.customID)
         m.add("status", str(f.status.rawValue))
         m.add("fingerprint", f.fingerprint)
-        m.add("codebooks", list: f.codebooks)
+        m.add("attribute_sheets", list: f.attributeSheets)
         m.add("added", f.added)
         return m.node
     }
@@ -106,19 +106,19 @@ extension Workspace {
             customID: n["id"]?.string ?? "",
             status: n["status"]?.string.flatMap(CodingStatus.init(rawValue:)) ?? .notStarted,
             fingerprint: n["fingerprint"]?.string ?? "",
-            codebooks: n["codebooks"]?.strings ?? [],
+            attributeSheets: n["attribute_sheets"]?.strings ?? [],
             added: n["added"]?.string ?? ""
         )
     }
 
-    // MARK: codebooks/<key>.yml
+    // MARK: attribute sheets/<key>.yml
 
-    static func encodeCodebook(_ cb: Codebook) -> YAMLNode {
+    static func encodeAttributeSheet(_ cb: AttributeSheet) -> YAMLNode {
         var m = Pairs()
         m.add("key", str(cb.key))
         m.add("title", cb.title, ifEmpty: true)
         m.add("description", cb.description)
-        m.add("applies_to", list(CodebookTarget.allCases.filter { cb.appliesTo.contains($0) }.map(\.rawValue)))
+        m.add("applies_to", list(AttributeSheetTarget.allCases.filter { cb.appliesTo.contains($0) }.map(\.rawValue)))
         m.add("questions", .sequence(cb.questions.map { q in
             var qm = Pairs()
             qm.add("key", str(q.key))
@@ -135,14 +135,14 @@ extension Workspace {
         return m.node
     }
 
-    static func decodeCodebook(key: String, _ n: YAMLNode) -> Codebook {
-        let targets = Set((n["applies_to"]?.strings ?? ["files"]).compactMap(CodebookTarget.init(rawValue:)))
+    static func decodeAttributeSheet(key: String, _ n: YAMLNode) -> AttributeSheet {
+        let targets = Set((n["applies_to"]?.strings ?? ["files"]).compactMap(AttributeSheetTarget.init(rawValue:)))
         var seen = Set<String>()
-        let questions: [CodebookQuestion] = (n["questions"]?.items ?? []).compactMap { q in
+        let questions: [AttributeSheetQuestion] = (n["questions"]?.items ?? []).compactMap { q in
             var k = q["key"]?.string ?? ""
             if k.isEmpty || seen.contains(k) { k = Keys.make(Keys.question, avoiding: seen) }
             seen.insert(k)
-            return CodebookQuestion(
+            return AttributeSheetQuestion(
                 key: k,
                 label: q["label"]?.string ?? "",
                 text: q["text"]?.string ?? "",
@@ -152,27 +152,27 @@ extension Workspace {
                 requirement: q["requirement"]?.string.flatMap(Requirement.init(rawValue:)) ?? .optional
             )
         }
-        return Codebook(key: key, title: n["title"]?.string ?? "Untitled Codebook",
+        return AttributeSheet(key: key, title: n["title"]?.string ?? "Untitled Attribute Sheet",
                         description: n["description"]?.string ?? "", appliesTo: targets, questions: questions)
     }
 
     // MARK: responses/<cb>/<target>[--<researcher>].yml
 
-    static func encodeResponse(_ s: ResponseSheet, codebook: Codebook?) -> YAMLNode {
+    static func encodeResponse(_ s: ResponseSheet, attributeSheet: AttributeSheet?) -> YAMLNode {
         var m = Pairs()
-        m.add("codebook", str(s.id.codebook))
+        m.add("attribute_sheet", str(s.id.attributeSheet))
         m.add("target", str(s.id.target))
         m.add("researcher", s.id.researcher)
         m.add("updated", s.updated)
-        // In the codebook's question order; answers to unknown questions last.
-        let order = (codebook?.questions.map(\.key) ?? []) + s.answers.keys.sorted()
+        // In the attribute sheet's question order; answers to unknown questions last.
+        let order = (attributeSheet?.questions.map(\.key) ?? []) + s.answers.keys.sorted()
         var done = Set<String>()
         var items: [YAMLNode] = []
         for k in order where done.insert(k).inserted {
             guard let a = s.answers[k] else { continue }
             var am = Pairs()
             am.add("question", str(k))
-            if let label = codebook?.question(k)?.label, !label.isEmpty { am.add("label", str(label)) }
+            if let label = attributeSheet?.question(k)?.label, !label.isEmpty { am.add("label", str(label)) }
             switch a {
             case .text(let t): am.add("text", str(t))
             case .one(let v): am.add("answer", str(v))
@@ -204,6 +204,7 @@ extension Workspace {
     static func encodeLayer(_ l: CodingLayer) -> YAMLNode {
         var m = Pairs()
         m.add("key", str(l.key))
+        m.add("kind", str(l.kind.rawValue))
         m.add("name", l.name, ifEmpty: true)
         m.add("description", l.description)
         m.add("researcher", l.researcher)
@@ -212,13 +213,18 @@ extension Workspace {
 
     // MARK: layers/<key>/selections/<file>.yml
 
-    static func encodeSelections(file: String, _ list: [CodeSelection]) -> YAMLNode {
+    static func encodeSelections(file: String, _ list: [CodeSelection], protocolKey: String?) -> YAMLNode {
         var m = Pairs()
         m.add("file", str(file))
+        m.add("protocol", protocolKey ?? "")
         m.add("selections", .sequence(list.map { s in
             var sm = Pairs()
             sm.add("key", str(s.key))
             if s.irrelevant { sm.add("irrelevant", flag(true)) }
+            if let seg = s.segment {
+                sm.add("item", str(seg.item))
+                sm.add("part", str(seg.part.rawValue))
+            }
             if s.spans.count == 1 {
                 encodeSpan(s.spans[0], into: &sm)
             } else {
@@ -257,9 +263,13 @@ extension Workspace {
                 spans = decodeSpan(item).map { [$0] } ?? []
             }
             guard !spans.isEmpty else { return nil }
+            var segment: ProtocolSegment?
+            if let pi = item["item"]?.string, !pi.isEmpty {
+                segment = ProtocolSegment(item: pi, part: item["part"]?.string.flatMap(ProtocolPart.init(rawValue:)) ?? .response)
+            }
             return CodeSelection(key: key, fileKey: fileKey, spans: spans, quote: item["quote"]?.string ?? "",
-                                 irrelevant: item["irrelevant"]?.bool ?? false, by: item["by"]?.string ?? "",
-                                 created: item["created"]?.string ?? "")
+                                 irrelevant: item["irrelevant"]?.bool ?? false, segment: segment,
+                                 by: item["by"]?.string ?? "", created: item["created"]?.string ?? "")
         }
     }
 
@@ -291,7 +301,17 @@ extension Workspace {
                 return xm.node
             }))
         }
-        m.add("codebooks", list: c.codebooks)
+        if !c.links.isEmpty {
+            m.add("links", .sequence(c.links.map { l in
+                var lm = Pairs()
+                lm.add("key", str(l.key))
+                lm.add("apriori_code", str(l.aprioriCode))
+                lm.add("type", str(l.type.rawValue))
+                lm.add("memo", l.memo)
+                return lm.node
+            }))
+        }
+        m.add("attribute_sheets", list: c.attributeSheets)
         m.add("by", c.by)
         m.add("created", c.created)
         return m.node
@@ -312,6 +332,16 @@ extension Workspace {
             return Interrelation(key: k, type: x["type"]?.string ?? "", members: x["members"]?.strings ?? [],
                                  description: x["description"]?.string ?? "")
         }
+        var seenLinks = Set<String>()
+        let links: [CodeLink] = (n["links"]?.items ?? []).compactMap { l in
+            guard let apc = l["apriori_code"]?.string, !apc.isEmpty else { return nil }
+            var k = l["key"]?.string ?? ""
+            if k.isEmpty || seenLinks.contains(k) { k = Keys.make(Keys.link, avoiding: seenLinks) }
+            seenLinks.insert(k)
+            return CodeLink(key: k, aprioriCode: apc,
+                            type: l["type"]?.string.flatMap(LinkType.init(rawValue:)) ?? .confirms,
+                            memo: l["memo"]?.string ?? "")
+        }
         var unique = Set<String>()
         return QDACode(
             key: key,
@@ -323,10 +353,120 @@ extension Workspace {
             comments: n["comments"]?.strings ?? [],
             questions: n["questions"]?.strings ?? [],
             interrelations: interrelations,
-            codebooks: n["codebooks"]?.strings ?? [],
+            links: links,
+            attributeSheets: n["attribute_sheets"]?.strings ?? [],
             by: n["by"]?.string ?? "",
             created: n["created"]?.string ?? ""
         )
+    }
+
+    // MARK: protocols/<key>.yml
+
+    static func encodeProtocol(_ pr: StudyProtocol) -> YAMLNode {
+        var m = Pairs()
+        m.add("key", str(pr.key))
+        m.add("title", pr.title, ifEmpty: true)
+        m.add("description", pr.description)
+        m.add("items", .sequence(pr.items.map { item in
+            var im = Pairs()
+            im.add("key", str(item.key))
+            im.add("label", item.label, ifEmpty: true)
+            im.add("text", item.text)
+            return im.node
+        }))
+        return m.node
+    }
+
+    static func decodeProtocol(key: String, _ n: YAMLNode) -> StudyProtocol {
+        var seen = Set<String>()
+        let items: [ProtocolItem] = (n["items"]?.items ?? []).map { item in
+            var k = item["key"]?.string ?? ""
+            if k.isEmpty || seen.contains(k) { k = Keys.make(Keys.protocolItem, avoiding: seen) }
+            seen.insert(k)
+            return ProtocolItem(key: k, label: item["label"]?.string ?? "", text: item["text"]?.string ?? "")
+        }
+        return StudyProtocol(key: key, title: n["title"]?.string ?? "Untitled Protocol",
+                             description: n["description"]?.string ?? "", items: items)
+    }
+
+    // MARK: apriori-codes/<key>.yml
+
+    static func encodeAprioriCode(_ c: AprioriCode) -> YAMLNode {
+        var m = Pairs()
+        m.add("key", str(c.key))
+        m.add("name", c.name, ifEmpty: true)
+        m.add("colour", c.colour)
+        m.add("definition", c.definition)
+        m.add("included", c.included)
+        m.add("excluded", c.excluded)
+        m.add("example", c.example)
+        m.add("counter_example", c.counterExample)
+        m.add("source", c.source)
+        m.add("by", c.by)
+        m.add("created", c.created)
+        return m.node
+    }
+
+    static func decodeAprioriCode(key: String, _ n: YAMLNode) -> AprioriCode {
+        AprioriCode(key: key,
+                    name: n["name"]?.string ?? "Untitled Code",
+                    colour: n["colour"]?.string ?? n["color"]?.string ?? "",
+                    definition: n["definition"]?.string ?? "",
+                    included: n["included"]?.string ?? "",
+                    excluded: n["excluded"]?.string ?? "",
+                    example: n["example"]?.string ?? "",
+                    counterExample: n["counter_example"]?.string ?? "",
+                    source: n["source"]?.string ?? "",
+                    by: n["by"]?.string ?? "",
+                    created: n["created"]?.string ?? "")
+    }
+
+    // MARK: layers/<key>/apriori/<apc-key>.yml
+
+    static func encodeAprioriEvidence(code: String, _ evidence: [Evidence]) -> YAMLNode {
+        var m = Pairs()
+        m.add("apriori_code", str(code))
+        m.add("evidence", .sequence(evidence.map { e in
+            var em = Pairs()
+            em.add("selection", str(e.target))
+            em.add("memo", e.memo)
+            return em.node
+        }))
+        return m.node
+    }
+
+    static func decodeAprioriEvidence(_ n: YAMLNode) -> [Evidence] {
+        var unique = Set<String>()
+        let evidence: [Evidence] = (n["evidence"]?.items ?? []).compactMap { e in
+            if let t = e.string { return Evidence(target: t) }   // "- s-1234abcd" shorthand
+            guard let t = e["selection"]?.string else { return nil }
+            return Evidence(target: t, memo: e["memo"]?.string ?? "")
+        }
+        return evidence.filter { unique.insert($0.target).inserted }
+    }
+
+    // MARK: layers/<key>/framework/<row>.yml
+
+    static func encodeFrameworkRow(row: String, _ cells: [String: String]) -> YAMLNode {
+        var m = Pairs()
+        m.add("row", str(row))
+        m.add("cells", .sequence(cells.keys.sorted().map { column in
+            var cm = Pairs()
+            cm.add("column", str(column))
+            cm.add("summary", str(cells[column] ?? ""))
+            return cm.node
+        }))
+        return m.node
+    }
+
+    static func decodeFrameworkRow(_ n: YAMLNode) -> [String: String] {
+        var cells: [String: String] = [:]
+        for c in n["cells"]?.items ?? [] {
+            guard let column = c["column"]?.string, let summary = c["summary"]?.string,
+                  !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            cells[column] = summary
+        }
+        return cells
     }
 
     // MARK: people
@@ -350,14 +490,14 @@ extension Workspace {
         m.add("first", i.firstName, ifEmpty: true)
         m.add("last", i.lastName, ifEmpty: true)
         m.add("consent_form", i.consentForm)
-        m.add("codebooks", list: i.codebooks)
+        m.add("attribute_sheets", list: i.attributeSheets)
         return m.node
     }
 
     static func decodeInterviewee(_ n: YAMLNode) -> Interviewee? {
         guard let key = n["key"]?.string else { return nil }
         return Interviewee(key: key, firstName: n["first"]?.string ?? "", lastName: n["last"]?.string ?? "",
-                           consentForm: n["consent_form"]?.string ?? "", codebooks: n["codebooks"]?.strings ?? [])
+                           consentForm: n["consent_form"]?.string ?? "", attributeSheets: n["attribute_sheets"]?.strings ?? [])
     }
 
     // MARK: interlocutors/<file>.yml

@@ -2,12 +2,19 @@ import Foundation
 
 // The project model. Every entity has a stable key (a prefix, a hyphen and
 // eight hex digits) that never changes, so renaming anything touches one
-// file, and cross-links (evidence, interrelations, codebooks) survive.
+// file, and cross-links (evidence, interrelations, attribute sheets) survive.
 // See docs/FILE_FORMAT.md for how each type is written.
+//
+// A project's layers are each deductive or inductive. Protocols and a priori
+// codes are defined once for the project and applied on deductive layers
+// (protocol segments; a priori code evidence; Framework Matrix summaries);
+// open and axial codes live in an inductive layer. Interviewees and
+// attribute sheets belong to the project.
 //
 // Names are chosen not to clash with SwiftUI, AppKit or Foundation (the app
 // imports all of them): `EmpiricalFile`, `CodingLayer`, `TextSpan`,
-// `CodeSelection`, `QDACode`, `Codebook`, `CodebookQuestion`.
+// `CodeSelection`, `QDACode`, `AttributeSheet`, `AttributeSheetQuestion`,
+// `StudyProtocol` (Objective-C has a `Protocol` class), `AprioriCode`.
 
 public enum Keys {
     /// A new key such as "s-1a2b3c4d", not in `existing`.
@@ -33,8 +40,12 @@ public enum Keys {
     public static let layer = "l"
     public static let selection = "s"
     public static let code = "c"
-    public static let codebook = "cb"
+    public static let attributeSheet = "ast"
     public static let question = "q"
+    public static let studyProtocol = "pr"
+    public static let protocolItem = "pi"
+    public static let aprioriCode = "apc"
+    public static let link = "ln"
     public static let interrelation = "x"
     public static let researcher = "r"
     public static let interviewee = "i"
@@ -133,15 +144,15 @@ public struct EmpiricalFile: Identifiable, Equatable {
     public var status: CodingStatus
     /// "sha256:<hex>" of the file's bytes when it was last checked.
     public var fingerprint: String
-    /// Codebooks associated with this file.
-    public var codebooks: [String]
+    /// Attribute sheets associated with this file.
+    public var attributeSheets: [String]
     public var added: String
 
     public var id: String { key }
 
     public init(key: String, path: String, kind: FileKind, title: String = "", date: String = "",
                 customID: String = "", status: CodingStatus = .notStarted, fingerprint: String = "",
-                codebooks: [String] = [], added: String = "") {
+                attributeSheets: [String] = [], added: String = "") {
         self.key = key
         self.path = path
         self.kind = kind
@@ -150,7 +161,7 @@ public struct EmpiricalFile: Identifiable, Equatable {
         self.customID = customID
         self.status = status
         self.fingerprint = fingerprint
-        self.codebooks = codebooks
+        self.attributeSheets = attributeSheets
         self.added = added
     }
 
@@ -217,8 +228,33 @@ public struct TextSpan: Equatable, Hashable, Comparable {
     }
 }
 
-/// A highlighted portion of a file, in one layer. It may be evidence for
-/// open codes, or marked irrelevant (never both).
+/// Which part of a protocol item a protocol segment is: where the item's
+/// prompt (the question asked, the heading) is in the text, or where its
+/// response is.
+public enum ProtocolPart: String, CaseIterable, Codable {
+    case prompt
+    case response
+
+    public var label: String { self == .prompt ? "Prompt" : "Response" }
+}
+
+/// Marks a selection on a deductive layer as a protocol segment: the prompt
+/// or the response of one item of the file's protocol in that layer.
+public struct ProtocolSegment: Equatable, Hashable {
+    /// A protocol item key.
+    public var item: String
+    public var part: ProtocolPart
+
+    public init(item: String, part: ProtocolPart) {
+        self.item = item
+        self.part = part
+    }
+}
+
+/// A highlighted portion of a file, in one layer. On an inductive layer it
+/// may be evidence for open codes; on a deductive layer, evidence for a
+/// priori codes, or a protocol segment (never both); on either, it may be
+/// marked irrelevant instead.
 public struct CodeSelection: Identifiable, Equatable {
     public var key: String
     public var fileKey: String
@@ -229,6 +265,8 @@ public struct CodeSelection: Identifiable, Equatable {
     /// selection again if the full-text changes.
     public var quote: String
     public var irrelevant: Bool
+    /// Set for a protocol segment (deductive layers only).
+    public var segment: ProtocolSegment?
     /// The researcher who made it (a researcher key), if known.
     public var by: String
     public var created: String
@@ -236,12 +274,13 @@ public struct CodeSelection: Identifiable, Equatable {
     public var id: String { key }
 
     public init(key: String, fileKey: String, spans: [TextSpan], quote: String = "", irrelevant: Bool = false,
-                by: String = "", created: String = "") {
+                segment: ProtocolSegment? = nil, by: String = "", created: String = "") {
         self.key = key
         self.fileKey = fileKey
         self.spans = spans.sorted()
         self.quote = quote
         self.irrelevant = irrelevant
+        self.segment = segment
         self.by = by
         self.created = created
     }
@@ -319,7 +358,9 @@ public struct QDACode: Identifiable, Equatable {
     /// Unresolved matters, from an interpretive point of view.
     public var questions: [String]
     public var interrelations: [Interrelation]
-    public var codebooks: [String]
+    /// Links to a priori codes.
+    public var links: [CodeLink]
+    public var attributeSheets: [String]
     public var by: String
     public var created: String
 
@@ -327,7 +368,8 @@ public struct QDACode: Identifiable, Equatable {
 
     public init(key: String, kind: CodeKind, name: String, description: String = "", colour: String = "",
                 evidence: [Evidence] = [], comments: [String] = [], questions: [String] = [],
-                interrelations: [Interrelation] = [], codebooks: [String] = [], by: String = "", created: String = "") {
+                interrelations: [Interrelation] = [], links: [CodeLink] = [], attributeSheets: [String] = [],
+                by: String = "", created: String = "") {
         self.key = key
         self.kind = kind
         self.name = name
@@ -337,7 +379,8 @@ public struct QDACode: Identifiable, Equatable {
         self.comments = comments
         self.questions = questions
         self.interrelations = interrelations
-        self.codebooks = codebooks
+        self.links = links
+        self.attributeSheets = attributeSheets
         self.by = by
         self.created = created
     }
@@ -345,6 +388,45 @@ public struct QDACode: Identifiable, Equatable {
     public func hasEvidence(_ target: String) -> Bool { evidence.contains { $0.target == target } }
 
     public func memo(for target: String) -> String { evidence.first { $0.target == target }?.memo ?? "" }
+}
+
+/// How an open or axial code bears on an a priori code: where what emerged
+/// from the data meets what was defined beforehand.
+public enum LinkType: String, CaseIterable, Codable {
+    case confirms
+    case refines
+    case extends
+    case contradicts
+    case notCovered = "not-covered"
+
+    public var label: String {
+        switch self {
+        case .confirms: return "Confirms"
+        case .refines: return "Refines"
+        case .extends: return "Extends"
+        case .contradicts: return "Contradicts"
+        case .notCovered: return "Not Covered"
+        }
+    }
+}
+
+/// A link from an open or axial code to an a priori code, with the
+/// researcher's memo on it.
+public struct CodeLink: Identifiable, Equatable {
+    public var key: String
+    /// An a priori code key.
+    public var aprioriCode: String
+    public var type: LinkType
+    public var memo: String
+
+    public var id: String { key }
+
+    public init(key: String, aprioriCode: String, type: LinkType, memo: String = "") {
+        self.key = key
+        self.aprioriCode = aprioriCode
+        self.type = type
+        self.memo = memo
+    }
 }
 
 /// Highlight colours offered for codes, in the order new codes take them.
@@ -364,33 +446,67 @@ public enum CodePalette {
 
 // MARK: - Layers
 
+/// Deductive layers apply what was defined beforehand (protocols, a priori
+/// codes); inductive layers hold what emerges from the data (open and axial
+/// codes).
+public enum LayerKind: String, CaseIterable, Codable {
+    case deductive
+    case inductive
+
+    public var label: String { self == .deductive ? "Deductive" : "Inductive" }
+}
+
 /// A layer of interpretation (a theoretical lens, one researcher's reading):
-/// its selections and codes exist in it alone.
+/// its selections, and what they are evidence for, exist in it alone.
 public struct CodingLayer: Identifiable, Equatable {
     public var key: String
+    public var kind: LayerKind
     public var name: String
     public var description: String
     /// The researcher whose interpretation this is, if any.
     public var researcher: String
     /// Selections by file key, each list sorted by position.
     public var selections: [String: [CodeSelection]]
+    /// Inductive layers: open and axial codes.
     public var codes: [String: QDACode]
+    /// Deductive layers: evidence (selections of this layer) for each a
+    /// priori code, by a priori code key.
+    public var aprioriEvidence: [String: [Evidence]]
+    /// Deductive layers: the protocol each file follows here, by file key.
+    public var protocols: [String: String]
+    /// Deductive layers: Framework Matrix summaries, by row (a file or
+    /// interviewee key), then column (an a priori code or protocol item key).
+    public var framework: [String: [String: String]]
 
     public var id: String { key }
 
-    public init(key: String, name: String, description: String = "", researcher: String = "",
-                selections: [String: [CodeSelection]] = [:], codes: [String: QDACode] = [:]) {
+    public init(key: String, kind: LayerKind, name: String, description: String = "", researcher: String = "",
+                selections: [String: [CodeSelection]] = [:], codes: [String: QDACode] = [:],
+                aprioriEvidence: [String: [Evidence]] = [:], protocols: [String: String] = [:],
+                framework: [String: [String: String]] = [:]) {
         self.key = key
+        self.kind = kind
         self.name = name
         self.description = description
         self.researcher = researcher
         self.selections = selections
         self.codes = codes
+        self.aprioriEvidence = aprioriEvidence
+        self.protocols = protocols
+        self.framework = framework
     }
+
+    public var isDeductive: Bool { kind == .deductive }
+    public var isInductive: Bool { kind == .inductive }
 
     /// The layer's own fields, without its contents (layer.yml).
     public var meta: CodingLayer {
-        CodingLayer(key: key, name: name, description: description, researcher: researcher)
+        CodingLayer(key: key, kind: kind, name: name, description: description, researcher: researcher)
+    }
+
+    /// True if nothing has been coded in it (so its kind can still change).
+    public var isEmpty: Bool {
+        selections.isEmpty && codes.isEmpty && aprioriEvidence.isEmpty && protocols.isEmpty && framework.isEmpty
     }
 
     public var allSelections: [CodeSelection] {
@@ -405,9 +521,100 @@ public struct CodingLayer: Identifiable, Equatable {
     }
 
     public var selectionCount: Int { selections.values.reduce(0) { $0 + $1.count } }
+
+    /// A priori codes a selection is evidence for, in this layer (by key).
+    public func aprioriCodes(for selection: String) -> [String] {
+        aprioriEvidence.filter { entry in entry.value.contains { $0.target == selection } }.map(\.key).sorted()
+    }
 }
 
-// MARK: - Codebooks
+// MARK: - Protocols
+
+/// One item of a protocol: a question of an interview protocol, a section of
+/// an article's structure. In a file it may have a prompt segment and a
+/// response segment.
+public struct ProtocolItem: Identifiable, Equatable {
+    public var key: String
+    /// Short, as shown in margins and column headings ("Q3", "Findings").
+    public var label: String
+    /// The full wording, if any.
+    public var text: String
+
+    public var id: String { key }
+
+    public init(key: String, label: String, text: String = "") {
+        self.key = key
+        self.label = label
+        self.text = text
+    }
+}
+
+/// A predefined set of items (questions and answers, or more generally keys
+/// and values) expected to occur, in part or in whole, in each empirical
+/// file that follows it: an interview protocol, the structure of a research
+/// article. On each deductive layer a file follows at most one protocol.
+public struct StudyProtocol: Identifiable, Equatable {
+    public var key: String
+    public var title: String
+    public var description: String
+    /// A flat list, in order.
+    public var items: [ProtocolItem]
+
+    public var id: String { key }
+
+    public init(key: String, title: String, description: String = "", items: [ProtocolItem] = []) {
+        self.key = key
+        self.title = title
+        self.description = description
+        self.items = items
+    }
+
+    public func item(_ key: String) -> ProtocolItem? { items.first { $0.key == key } }
+}
+
+// MARK: - A priori codes
+
+/// A code defined before coding (from theory, literature or the research
+/// questions), with its codebook entry, and applied on deductive layers.
+public struct AprioriCode: Identifiable, Equatable {
+    public var key: String
+    public var name: String
+    /// "#RRGGBB".
+    public var colour: String
+    public var definition: String
+    /// What is included: when to use it.
+    public var included: String
+    /// What is excluded: when not to use it.
+    public var excluded: String
+    /// An ideal example.
+    public var example: String
+    /// A near miss: text that looks as if it fits but doesn't.
+    public var counterExample: String
+    /// Where the code comes from (theory, literature).
+    public var source: String
+    public var by: String
+    public var created: String
+
+    public var id: String { key }
+
+    public init(key: String, name: String, colour: String = "", definition: String = "", included: String = "",
+                excluded: String = "", example: String = "", counterExample: String = "", source: String = "",
+                by: String = "", created: String = "") {
+        self.key = key
+        self.name = name
+        self.colour = colour
+        self.definition = definition
+        self.included = included
+        self.excluded = excluded
+        self.example = example
+        self.counterExample = counterExample
+        self.source = source
+        self.by = by
+        self.created = created
+    }
+}
+
+// MARK: - Attribute Sheets
 
 public enum QuestionType: String, CaseIterable, Codable {
     case text
@@ -441,7 +648,7 @@ public enum Requirement: String, CaseIterable, Codable {
     }
 }
 
-public struct CodebookQuestion: Identifiable, Equatable {
+public struct AttributeSheetQuestion: Identifiable, Equatable {
     public static let maxLabelLength = 16
 
     public var key: String
@@ -468,8 +675,8 @@ public struct CodebookQuestion: Identifiable, Equatable {
     }
 }
 
-/// What a codebook can be associated with.
-public enum CodebookTarget: String, CaseIterable, Codable, Hashable {
+/// What an attribute sheet can be associated with.
+public enum AttributeSheetTarget: String, CaseIterable, Codable, Hashable {
     case files
     case interviewees
     case openCodes = "open-codes"
@@ -485,17 +692,17 @@ public enum CodebookTarget: String, CaseIterable, Codable, Hashable {
     }
 }
 
-public struct Codebook: Identifiable, Equatable {
+public struct AttributeSheet: Identifiable, Equatable {
     public var key: String
     public var title: String
     public var description: String
-    public var appliesTo: Set<CodebookTarget>
-    public var questions: [CodebookQuestion]
+    public var appliesTo: Set<AttributeSheetTarget>
+    public var questions: [AttributeSheetQuestion]
 
     public var id: String { key }
 
-    public init(key: String, title: String, description: String = "", appliesTo: Set<CodebookTarget> = [.files],
-                questions: [CodebookQuestion] = []) {
+    public init(key: String, title: String, description: String = "", appliesTo: Set<AttributeSheetTarget> = [.files],
+                questions: [AttributeSheetQuestion] = []) {
         self.key = key
         self.title = title
         self.description = description
@@ -503,7 +710,7 @@ public struct Codebook: Identifiable, Equatable {
         self.questions = questions
     }
 
-    public func question(_ key: String) -> CodebookQuestion? { questions.first { $0.key == key } }
+    public func question(_ key: String) -> AttributeSheetQuestion? { questions.first { $0.key == key } }
 }
 
 public enum Answer: Equatable {
@@ -528,27 +735,27 @@ public enum Answer: Equatable {
     public var summary: String { values.joined(separator: ", ") }
 }
 
-/// Identifies a codebook response sheet: a codebook, what it is about (a
+/// Identifies an attribute sheet response sheet: an attribute sheet, what it is about (a
 /// file, code or interviewee key) and, when the project lists researchers, whose answers
 /// these are.
 public struct ResponseID: Hashable, Comparable {
-    public var codebook: String
+    public var attributeSheet: String
     public var target: String
     public var researcher: String
 
-    public init(codebook: String, target: String, researcher: String = "") {
-        self.codebook = codebook
+    public init(attributeSheet: String, target: String, researcher: String = "") {
+        self.attributeSheet = attributeSheet
         self.target = target
         self.researcher = researcher
     }
 
-    /// responses/<codebook>/<target>[--<researcher>].yml
+    /// responses/<attribute sheet>/<target>[--<researcher>].yml
     public var path: String {
-        "\(Workspace.responsesFolder)/\(codebook)/\(target)" + (researcher.isEmpty ? "" : "--\(researcher)") + ".yml"
+        "\(Workspace.responsesFolder)/\(attributeSheet)/\(target)" + (researcher.isEmpty ? "" : "--\(researcher)") + ".yml"
     }
 
     public static func < (a: ResponseID, b: ResponseID) -> Bool {
-        (a.codebook, a.target, a.researcher) < (b.codebook, b.target, b.researcher)
+        (a.attributeSheet, a.target, a.researcher) < (b.attributeSheet, b.target, b.researcher)
     }
 }
 
@@ -565,24 +772,24 @@ public struct ResponseSheet: Equatable {
     }
 }
 
-/// How complete a response sheet is against its codebook.
+/// How complete a response sheet is against its attribute sheet.
 public struct SheetCompleteness: Equatable {
     /// Mandatory, blocking questions without an answer: the sheet can't be
     /// saved.
-    public var missingBlocking: [CodebookQuestion]
+    public var missingBlocking: [AttributeSheetQuestion]
     /// Mandatory, non-blocking questions without an answer: flagged.
-    public var missingFlagged: [CodebookQuestion]
+    public var missingFlagged: [AttributeSheetQuestion]
     public var answered: Int
     public var total: Int
 
     public var canSave: Bool { missingBlocking.isEmpty }
     public var isComplete: Bool { missingBlocking.isEmpty && missingFlagged.isEmpty }
 
-    public static func of(_ answers: [String: Answer], against codebook: Codebook) -> SheetCompleteness {
-        var blocking: [CodebookQuestion] = []
-        var flagged: [CodebookQuestion] = []
+    public static func of(_ answers: [String: Answer], against attributeSheet: AttributeSheet) -> SheetCompleteness {
+        var blocking: [AttributeSheetQuestion] = []
+        var flagged: [AttributeSheetQuestion] = []
         var answered = 0
-        for q in codebook.questions {
+        for q in attributeSheet.questions {
             let empty = answers[q.key]?.isEmpty ?? true
             if !empty { answered += 1 }
             guard empty else { continue }
@@ -593,7 +800,7 @@ public struct SheetCompleteness: Equatable {
             }
         }
         return SheetCompleteness(missingBlocking: blocking, missingFlagged: flagged, answered: answered,
-                                 total: codebook.questions.count)
+                                 total: attributeSheet.questions.count)
     }
 }
 
@@ -626,17 +833,17 @@ public struct Interviewee: Identifiable, Equatable {
     public var lastName: String
     /// Relative to the full-texts folder, or empty.
     public var consentForm: String
-    /// Codebooks associated with this interviewee.
-    public var codebooks: [String]
+    /// Attribute sheets associated with this interviewee.
+    public var attributeSheets: [String]
 
     public var id: String { key }
 
-    public init(key: String, firstName: String, lastName: String, consentForm: String = "", codebooks: [String] = []) {
+    public init(key: String, firstName: String, lastName: String, consentForm: String = "", attributeSheets: [String] = []) {
         self.key = key
         self.firstName = firstName
         self.lastName = lastName
         self.consentForm = consentForm
-        self.codebooks = codebooks
+        self.attributeSheets = attributeSheets
     }
 
     public var fullName: String { [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ") }
@@ -693,16 +900,16 @@ public struct ProjectSettings: Equatable {
     /// holds only pseudonyms; real names never leave the full-texts folder.
     public var researcherNamesFile: String
     public var intervieweeNamesFile: String
-    /// Codebook questions shown as columns in the tables of empirical files,
+    /// Attribute Sheet questions shown as columns in the tables of empirical files,
     /// interviewees, open codes and axial codes: question keys, per table.
-    public var tableColumns: [CodebookTarget: [String]]
+    public var tableColumns: [AttributeSheetTarget: [String]]
 
     public static let defaultInterrelationTypes = ["Compare", "Contrast"]
 
     public init(key: String, title: String, description: String = "", storeQuotes: Bool = true,
                 interlocutorLayer: Bool = false, interrelationTypes: [String] = ProjectSettings.defaultInterrelationTypes,
                 researcherNamesFile: String = "", intervieweeNamesFile: String = "",
-                tableColumns: [CodebookTarget: [String]] = [:]) {
+                tableColumns: [AttributeSheetTarget: [String]] = [:]) {
         self.key = key
         self.title = title
         self.description = description
@@ -721,30 +928,41 @@ public struct Project: Equatable {
     public var files: [String: EmpiricalFile]
     /// In display order (project.yml lists the order).
     public var layers: [CodingLayer]
-    public var codebooks: [String: Codebook]
+    public var protocols: [String: StudyProtocol]
+    public var aprioriCodes: [String: AprioriCode]
+    public var attributeSheets: [String: AttributeSheet]
     public var responses: [ResponseID: ResponseSheet]
     public var researchers: [Researcher]
     public var interviewees: [Interviewee]
     public var speakerMaps: [String: SpeakerMap]
 
     public init(settings: ProjectSettings, files: [String: EmpiricalFile] = [:], layers: [CodingLayer] = [],
-                codebooks: [String: Codebook] = [:], responses: [ResponseID: ResponseSheet] = [:],
+                protocols: [String: StudyProtocol] = [:], aprioriCodes: [String: AprioriCode] = [:],
+                attributeSheets: [String: AttributeSheet] = [:], responses: [ResponseID: ResponseSheet] = [:],
                 researchers: [Researcher] = [], interviewees: [Interviewee] = [],
                 speakerMaps: [String: SpeakerMap] = [:]) {
         self.settings = settings
         self.files = files
         self.layers = layers
-        self.codebooks = codebooks
+        self.protocols = protocols
+        self.aprioriCodes = aprioriCodes
+        self.attributeSheets = attributeSheets
         self.responses = responses
         self.researchers = researchers
         self.interviewees = interviewees
         self.speakerMaps = speakerMaps
     }
 
-    /// A new project with one layer.
-    public static func new(title: String, firstLayer: String = "Main") -> Project {
+    public static let mainDeductiveName = "Main Deductive"
+    public static let mainInductiveName = "Main Inductive"
+
+    /// A new project, with a deductive and an inductive layer.
+    public static func new(title: String) -> Project {
         let settings = ProjectSettings(key: Keys.make(Keys.project), title: title)
-        return Project(settings: settings, layers: [CodingLayer(key: Keys.make(Keys.layer), name: firstLayer)])
+        let d = Keys.make(Keys.layer)
+        let i = Keys.make(Keys.layer, avoiding: [d])
+        return Project(settings: settings, layers: [CodingLayer(key: d, kind: .deductive, name: mainDeductiveName),
+                                                    CodingLayer(key: i, kind: .inductive, name: mainInductiveName)])
     }
 
     // MARK: Lookups
@@ -752,6 +970,25 @@ public struct Project: Equatable {
     public func layerIndex(_ key: String) -> Int? { layers.firstIndex { $0.key == key } }
 
     public func layer(_ key: String) -> CodingLayer? { layers.first { $0.key == key } }
+
+    public var deductiveLayers: [CodingLayer] { layers.filter(\.isDeductive) }
+    public var inductiveLayers: [CodingLayer] { layers.filter(\.isInductive) }
+
+    /// The protocol item with this key, and its protocol's key.
+    public func protocolItem(_ key: String) -> (protocolKey: String, item: ProtocolItem)? {
+        for pr in protocols.values {
+            if let item = pr.item(key) { return (pr.key, item) }
+        }
+        return nil
+    }
+
+    public var sortedProtocols: [StudyProtocol] {
+        protocols.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    public var sortedAprioriCodes: [AprioriCode] {
+        aprioriCodes.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
 
     /// The layer holding a selection or code.
     public func layerKey(holding key: String) -> String? {
@@ -780,8 +1017,8 @@ public struct Project: Equatable {
         }
     }
 
-    public var sortedCodebooks: [Codebook] {
-        codebooks.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    public var sortedAttributeSheets: [AttributeSheet] {
+        attributeSheets.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     public func researcher(_ key: String) -> Researcher? { researchers.first { $0.key == key } }
@@ -801,11 +1038,17 @@ public struct Project: Equatable {
         for layer in layers {
             keys.insert(layer.key)
             keys.formUnion(layer.codes.keys)
-            for c in layer.codes.values { keys.formUnion(c.interrelations.map(\.key)) }
+            for c in layer.codes.values {
+                keys.formUnion(c.interrelations.map(\.key))
+                keys.formUnion(c.links.map(\.key))
+            }
             for list in layer.selections.values { keys.formUnion(list.map(\.key)) }
         }
-        keys.formUnion(codebooks.keys)
-        for cb in codebooks.values { keys.formUnion(cb.questions.map(\.key)) }
+        keys.formUnion(protocols.keys)
+        for pr in protocols.values { keys.formUnion(pr.items.map(\.key)) }
+        keys.formUnion(aprioriCodes.keys)
+        keys.formUnion(attributeSheets.keys)
+        for cb in attributeSheets.values { keys.formUnion(cb.questions.map(\.key)) }
         keys.formUnion(researchers.map(\.key))
         keys.formUnion(interviewees.map(\.key))
         return keys

@@ -5,7 +5,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 // Updating an empirical file in place (File › Update Empirical File…): the
-// file keeps its key, coding, codebooks, response sheets and speakers, and
+// file keeps its key, coding, attribute sheets, response sheets and speakers, and
 // is pointed at a new version of its full-text (a corrected transcript, a
 // re-exported PDF) in the full-texts folder, with its selections found again
 // in the new text. The full-texts folder is only read, as always: the old
@@ -290,7 +290,7 @@ struct UpdateFileSheet: View {
 
     func chooseStage(_ file: EmpiricalFile) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Point this file at a new version of its full-text, such as a corrected transcript or a re-exported PDF. The file keeps its title, ID, date, status, coding, codebooks, response sheets and speakers; its selections are looked for in the new version in the next step.")
+            Text("Point this file at a new version of its full-text, such as a corrected transcript or a re-exported PDF. The file keeps its title, ID, date, status, coding, attribute sheets, response sheets and speakers; its selections are looked for in the new version in the next step.")
                 .fixedSize(horizontal: false, vertical: true)
             Text("The new version must be in the full-texts folder. Nothing there is changed: the current version stays where it is.")
                 .font(.callout).foregroundStyle(.secondary)
@@ -401,7 +401,7 @@ struct UpdateFileSheet: View {
                                 .font(.callout)
                             }
                         }
-                        Text("Codebooks, response sheets, the title, ID, date and status stay with the file whatever happens.")
+                        Text("Attribute Sheets, response sheets, the title, ID, date and status stay with the file whatever happens.")
                             .font(.caption).foregroundStyle(.secondary)
                             .padding(.top, 8)
                     }

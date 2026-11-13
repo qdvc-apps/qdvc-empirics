@@ -2,7 +2,7 @@
 
 Qualitative data analysis of interview transcripts, field notes and
 articles: highlight selections, code them to open codes, build axial codes
-from those, write down why each piece of evidence counts, answer codebooks
+from those, write down why each piece of evidence counts, answer attribute sheets
 about files and codes, and keep it all in a folder of plain YAML files that
 diffs cleanly in Git.
 
@@ -17,7 +17,7 @@ based on the YAML workflow for qualitative data analysis in Wang (2022),
 Every project has two folders:
 
 - The **workspace**: the analysis, as small YAML files (one per code, one per
-  file's selections in each layer, one per codebook response sheet…), meant
+  file's selections in each layer, one per attribute sheet response sheet…), meant
   to be tracked in Git and shared with co-authors. The format is documented
   in [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md).
 - The **full-texts folder**: the transcripts, PDFs and signed consent forms.
@@ -44,22 +44,24 @@ At launch a welcome window, as in Xcode and the other QDVC apps, offers to
 create or open a project and lists recent ones.
 
 The main window has a **sidebar**, the page in the middle, and an
-**inspector** on the right (⌥⌘I) that follows the page. The sidebar has four
+**inspector** on the right (⌥⌘I) that follows the page. The sidebar has five
 sections:
 
-- **Project:** Empirical Files, Researchers, Interviewees, Project Settings.
-- **Analysis:** Codebooks, Open Codes, Axial Codes, Layers.
-- **Reporting:** Coding Chart, Codebook Report.
-- **Working Area:** the files, open codes, axial codes, codebooks and people
+- **Project:** Empirical Files, Researchers, Layers, Project Settings.
+- **Deductive** (defined upfront): Protocols, Interviewees, Attribute
+  Sheets, A Priori Codes.
+- **Inductive** (emerging from the data): Open Codes, Axial Codes.
+- **Reporting:** Coding Chart, Attribute Sheet Report.
+- **Working Area:** the files, open codes, axial codes, attribute sheets and people
   you are working on, one line each: an icon, the title and the working
   identifier (coloured like the code, or orange or green for a file in
   progress or coded). Double-click a row in any table to open its page and
   put it here; right-click to move it up or down, or to remove it (or the
   others). It is remembered on this Mac.
 
-**Working identifiers.** Every empirical file, codebook, open code, axial
+**Working identifiers.** Every empirical file, attribute sheet, open code, axial
 code, researcher and interviewee has a short identifier to talk about it
-while working: `EF 31`, `CB 4`, `OC 23`, `AC 12`, `R 5`, `I 17`. They number
+while working: `EF 31`, `AST 4`, `OC 23`, `AC 12`, `R 5`, `I 17`. They number
 each kind alphabetically (by title or pseudonym), so they are **not stable**:
 adding, renaming or removing an item renumbers the ones after it. They are
 shown in the tables (the No. column), the Working Area, the inspectors, the
@@ -69,9 +71,9 @@ never stored.
 The list pages are plain tables (click a column heading to sort, filter at
 the bottom): selecting a row shows its details in the inspector,
 double-clicking opens its page, and ⌘N makes a new one (on Empirical Files,
-it adds files). Tables of items that codebooks can be associated with
-(empirical files, interviewees, open codes, axial codes) have a Codebooks
-column, and can show any question of the codebooks that apply to them as a
+it adds files). Tables of items that attribute sheets can be associated with
+(empirical files, interviewees, open codes, axial codes) have an Attribute Sheets
+column, and can show any question of the attribute sheets that apply to them as a
 column of its own: right-click a column heading and tick the questions.
 Where researchers' answers differ, the cell shows each answer with their
 initials, in orange ("Yes (AB) · No (CD)"); hover for everyone's answer.
@@ -82,9 +84,9 @@ retrace your steps. The pages of single items are:
 - an **empirical file**: the document, coded as below, with the inspector's
   Selection and File tabs;
 - an **open or axial code**: its evidence, with the code itself (name,
-  colour, description, comments, questions, interrelations, codebooks) in
+  colour, description, comments, questions, interrelations, attribute sheets) in
   the inspector;
-- a **codebook**: its questions;
+- a **attribute sheet**: its questions;
 - a **researcher** or **interviewee**: a card as in Contacts, with the
   transcripts they speak in.
 
@@ -125,11 +127,11 @@ retrace your steps. The pages of single items are:
   inspector): choose the new version in the full-texts folder, see which
   selections (in every layer) and speakers can be found in it, then confirm,
   keeping or deleting what wasn't found. The file keeps its coding,
-  codebooks and response sheets; the old version is left untouched. Commit
+  attribute sheets and response sheets; the old version is left untouched. Commit
   the workspace to Git first, and the diff shows exactly what moved.
 
-**Open Codes** and **Axial Codes** (⌃⌘6, ⌃⌘7): the codes of the active
-layer. A code's page shows its **evidence**: every quote, grouped by file,
+**Open Codes** and **Axial Codes** (⌃⌘9, ⌃⌘0): the codes of an inductive
+layer (the active layer, or the first inductive one). A code's page shows its **evidence**: every quote, grouped by file,
 with speaker, other codes and memo, and Show in File; for an axial code, the
 codes it is built from and their quotes. Open codes have selections as
 evidence; axial codes have open codes and other axial codes (cycles are
@@ -138,17 +140,17 @@ refused). Each code has a name, colour, description, **comments** and
 two or more pieces of its evidence relate, typed Compare, Contrast or your
 own types.
 
-**Codebooks** (⌃⌘5): ordered questions, each with a short label (16
+**Attribute Sheets** (⌃⌘7): ordered questions, each with a short label (16
 characters at most), the full question, and an answer type: free text,
 choose one or choose any from a list. A list can be strictly predefined, or
-open to options added while coding (they join the codebook). Each question is
+open to options added while coding (they join the attribute sheet). Each question is
 *mandatory, blocking* (the response sheet can't be saved without it),
-*mandatory, non-blocking* (flagged until answered) or *optional*. A codebook
+*mandatory, non-blocking* (flagged until answered) or *optional*. An attribute sheet
 applies to empirical files, interviewees, open codes and/or axial codes, and
 is associated with any of them from the inspector, where each researcher fills in their own
 **response sheet**.
 
-**Researchers** and **Interviewees** (⌃⌘2, ⌃⌘3): everyone is known by a
+**Researchers** and **Interviewees** (⌃⌘2, ⌃⌘6): everyone is known by a
 **pseudonym**; the pages say so plainly. Interviewees link to their consent
 form in the full-texts folder, viewable read-only inside the app. On
 Researchers, choose *This Mac's researcher* so selections and answers are
@@ -162,10 +164,15 @@ Real Names (⇧⌘R, or the eye in the toolbar) swaps pseudonyms for real names
 everywhere they are shown; it is off at every launch, so a shared screen
 never shows them by surprise.
 
-**Layers** (⌃⌘8): selections and codes live in exactly one layer (a
-theoretical lens, one researcher's reading). Code in the active layer (the
-toolbar's layer menu); other layers can show as underlines. Moving a
-selection or code to another layer moves everything linked to it. The
+**Layers** (⌃⌘3): each layer is **deductive** (it applies what was defined
+beforehand: protocols and a priori codes) or **inductive** (it holds what
+emerges from the data: open and axial codes). A project starts with Main
+Deductive and Main Inductive, and always keeps at least one of each; a
+layer's kind can change only while nothing is coded in it. Selections and
+codes live in exactly one layer (a theoretical lens, one researcher's
+reading). Code in the active layer (the toolbar's layer menu); other layers
+can show as underlines. Moving a selection or code to another layer (of the
+same kind) moves everything linked to it. The
 **Interlocutor layer** finds conversational turns from speaker header lines,
 forgiving inconsistent capitals, colons, line breaks, timestamps and
 Markdown emphasis, and maps each speaker to a researcher or interviewee
@@ -173,10 +180,25 @@ Markdown emphasis, and maps each speaker to a researcher or interviewee
 greyscale so they never compete with code colours: interviewees dark,
 interviewers a lighter grey.
 
+**Protocols** and **A Priori Codes** are defined once for the project and
+applied on deductive layers. A **protocol** is a predefined set of items
+(the questions of an interview protocol, the sections of an article) that
+each file follows in part or in whole; in a file, an item's *prompt* and
+*response* are marked as protocol segments, shown in the margin like
+speakers. An **a priori code** is defined before coding, with its codebook
+entry: name, definition, what is included and excluded, an ideal example, a
+counter-example (a near miss) and its source. Open and axial codes can be
+**linked** to a priori codes (confirms, refines, extends, contradicts, not
+covered), which is where theory and data meet. *This update brings the
+model and workspace format for all of this; the Protocols and A Priori Codes
+pages, deductive coding, side-by-side layers and the Codebook, Coverage
+Report, Overlap Matrix and Framework Matrix follow in the next updates.*
+
 **Project Settings** (⌃⌘4): title, description, the two folders, real-name
 mapping files, quote storage and interrelation types.
 
-**Coding Chart** (⌃⌘9): the active layer at a glance. Empirical files on the
+**Coding Chart** (Go menu): an inductive layer at a glance (the
+active layer, or the first inductive one). Empirical files on the
 left, linked to the open codes with evidence in them, linked to the axial
 codes they are evidence for; axial codes built on other axial codes sit
 further right. Each item is one line (icon, title, working identifier).
@@ -184,7 +206,7 @@ Click one to light up everything it is linked to and see it in the
 inspector; double-click to open it. Items nothing links to are left out
 unless you ask for them.
 
-**Codebook Report** (⌃⌘0): choose a codebook in the bar below and see every
+**Attribute Sheet Report** (Go menu): choose an attribute sheet in the bar below and see every
 response to it in one table: a row per response sheet (and per associated
 item nobody has answered yet), a column per question, with flagged
 mandatory questions marked. Double-click a row for its response sheet; copy
@@ -240,9 +262,12 @@ A ready-made sample is included: open `sample-workspace/` (File › Open
 Project…) and, when asked, choose `sample-full-texts/` as its full-texts
 folder. It has two interviews (one with exactly the messy speaker headers the
 Interlocutor layer is built for), field notes in Markdown and a two-page PDF;
-two layers, open and axial codes with memos, comments, questions and
-interrelations, irrelevant text, two codebooks and response sheets, and
-real-name mapping files (all names in it are invented).
+a deductive layer with an interview protocol (prompts and responses marked)
+and a priori codes from the Technology Acceptance Model with evidence and
+Framework Matrix summaries; two inductive layers with open and axial codes,
+memos, comments, questions, interrelations and links to the a priori codes;
+irrelevant text, two attribute sheets and response sheets, and real-name
+mapping files (all names in it are invented).
 Regenerate it with `MAKE_SAMPLE=$PWD swift test --filter MakeSampleTests`.
 
 ## Signing without a paid account
@@ -285,7 +310,7 @@ icon template, built like the other QDVC apps' icons. It appears in the
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘N | New item on the current page (file, researcher, interviewee, codebook, open or axial code) |
+| ⌘N | New item on the current page (file, researcher, interviewee, attribute sheet, open or axial code) |
 | ⇧⌘N / ⌘O | New / open project |
 | ⇧⌘A | Add files from the full-texts folder |
 | Return, K, ⌘K | Code the selection (code palette) |
@@ -298,7 +323,7 @@ icon template, built like the other QDVC apps' icons. It appears in the
 | ⌥⌘] / ⌥⌘[ | Next / previous file |
 | ⌥⌘N | Next file not yet coded |
 | ⌃⌘C | Mark the file as coded |
-| ⌃⌘1 … ⌃⌘9, ⌃⌘0 | Empirical Files, Researchers, Interviewees, Project Settings, Codebooks, Open Codes, Axial Codes, Layers, Coding Chart, Codebook Report |
+| ⌃⌘1 … ⌃⌘9, ⌃⌘0 | Empirical Files, Researchers, Layers, Project Settings, Protocols, Interviewees, Attribute Sheets, A Priori Codes, Open Codes, Axial Codes (the Reporting pages are in the Go menu) |
 | ⌃⌘← / ⌃⌘→ | Back / forward |
 | ⇧⌘R | Show real names |
 | ⌃⌘I | Show or hide interlocutors |

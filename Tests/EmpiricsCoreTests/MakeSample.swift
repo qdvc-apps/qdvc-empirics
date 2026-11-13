@@ -206,9 +206,12 @@ final class MakeSampleTests: XCTestCase {
                                                   interlocutorLayer: true,
                                                   researcherNamesFile: "private/researchers-real-names.csv",
                                                   intervieweeNamesFile: "private/interviewees-real-names.csv"))
-        p.layers = [CodingLayer(key: "l-0a1b2c3d", name: "Main", description: "First reading", researcher: "r-a11ce000"),
-                    CodingLayer(key: "l-4e5f6a7b", name: "Affordances lens", description: "Rereading with an affordances lens",
-                                researcher: "r-a11ce000")]
+        p.layers = [CodingLayer(key: "l-dedc0001", kind: .deductive, name: "Main Deductive",
+                                description: "The interview protocol and the Technology Acceptance Model", researcher: "r-a11ce000"),
+                    CodingLayer(key: "l-0a1b2c3d", kind: .inductive, name: "Main Inductive", description: "First reading",
+                                researcher: "r-a11ce000"),
+                    CodingLayer(key: "l-4e5f6a7b", kind: .inductive, name: "Affordances lens",
+                                description: "Rereading with an affordances lens", researcher: "r-a11ce000")]
         p.researchers = [Researcher(key: "r-a11ce000", firstName: "Alice", lastName: "Bob")]
         p.interviewees = [Interviewee(key: "i-05a17400", firstName: "John", lastName: "Smith", consentForm: "consent/john-smith.pdf"),
                           Interviewee(key: "i-0c0ffee0", firstName: "Priya", lastName: "Natarajan", consentForm: "consent/priya-natarajan.pdf")]
@@ -238,10 +241,12 @@ final class MakeSampleTests: XCTestCase {
         let main = "l-0a1b2c3d"
         let lens = "l-4e5f6a7b"
 
-        func sel(_ layer: String, _ file: String, _ text: String, _ needle: String, irrelevant: Bool = false) throws -> String {
+        @discardableResult
+        func sel(_ layer: String, _ file: String, _ text: String, _ needle: String, irrelevant: Bool = false,
+                 segment: ProtocolSegment? = nil) throws -> String {
             let spans = try span(needle, in: text)
             return try p.addSelection(layer: layer, file: file, spans: spans, quote: TextNormaliser.quote(spans, pages: [text]),
-                                      irrelevant: irrelevant, by: "r-a11ce000")
+                                      irrelevant: irrelevant, segment: segment, by: "r-a11ce000")
         }
 
         // Main layer.
@@ -313,30 +318,98 @@ final class MakeSampleTests: XCTestCase {
         let keyboard = try code(lens, .open, "Keyboard affords flow", "The keyboard as what lets coding continue uninterrupted.", "#58B368")
         try p.addEvidence(code: keyboard, target: s12, memo: "Fewer interruptions: the tool recedes.")
 
-        // A codebook for files, answered for the first interview.
-        p.codebooks["cb-c0debee1"] = Codebook(key: "cb-c0debee1", title: "Interview context",
+        // Deductive: an interview protocol, with its prompts and responses
+        // marked in both interviews.
+        let deductive = "l-dedc0001"
+        p.protocols["pr-1a7e0001"] = StudyProtocol(key: "pr-1a7e0001", title: "Interview protocol",
+                                                   description: "The questions planned for every interview.", items: [
+            ProtocolItem(key: "pi-0a000001", label: "Interface", text: "Do you think the user interface is user friendly?"),
+            ProtocolItem(key: "pi-0a000002", label: "Long sessions", text: "How do you find working with it over a long session?"),
+            ProtocolItem(key: "pi-0a000003", label: "Worries", text: "Is there anything that worries you about it?"),
+            ProtocolItem(key: "pi-0a000004", label: "Earlier practice", text: "How did you analyse your interviews before?"),
+        ])
+        func segment(_ item: String, _ part: ProtocolPart) -> ProtocolSegment { ProtocolSegment(item: item, part: part) }
+        try sel(deductive, "f-1e7e0001", t1, "Can you hear me okay? Sorry, my microphone was muted.", irrelevant: true)
+        try sel(deductive, "f-1e7e0001", t1, "I now like to ask you a little bit about the user interface for QDVC Empirics. Do you think it's user friendly?",
+                segment: segment("pi-0a000001", .prompt))
+        try sel(deductive, "f-1e7e0001", t1, "Well, it's certainly an improvement over alternatives. The existing crop of QDA software is very limited. But I'm still getting used to the user interface of QDVC Empirics, to be honest.",
+                segment: segment("pi-0a000001", .response))
+        try sel(deductive, "f-1e7e0001", t1, "And how do you find working with it over a long session?",
+                segment: segment("pi-0a000002", .prompt))
+        try sel(deductive, "f-1e7e0001", t1, "Much better than I expected. After three or four hours of coding my eyes usually give up, but the serif text and the wide margins help. The numbers for quick codes save a lot of clicking. I barely touch the mouse now.",
+                segment: segment("pi-0a000002", .response))
+        try sel(deductive, "f-1e7e0001", t1, "Is there anything that worries you about it?", segment: segment("pi-0a000003", .prompt))
+        try sel(deductive, "f-1e7e0001", t1, "Only that I need to show my reviewers where each claim comes from.",
+                segment: segment("pi-0a000003", .response))
+        try sel(deductive, "f-1e7e0002", t2, "How did you analyse your interviews before?", segment: segment("pi-0a000004", .prompt))
+        try sel(deductive, "f-1e7e0002", t2, "Highlighters and a printout, honestly, then a spreadsheet. It was slow, and I lost track of why I had put a quote under a theme. I had the quotes but not my reasons.",
+                segment: segment("pi-0a000004", .response))
+
+        // A priori codes from the Technology Acceptance Model, with evidence.
+        p.aprioriCodes["apc-7a0e0001"] = AprioriCode(
+            key: "apc-7a0e0001", name: "Perceived ease of use", colour: "#F78FB3",
+            definition: "The degree to which a researcher believes that using the tool would be free of effort.",
+            included: "Learning the tool, effort, friction, fluency, speed of use.",
+            excluded: "Whether the tool makes the research better (see Perceived usefulness).",
+            example: "I barely touch the mouse now.",
+            counterExample: "It's certainly an improvement over alternatives. (A judgement of value, not of effort.)",
+            source: "Davis, F. D. (1989). Perceived usefulness, perceived ease of use, and user acceptance of information technology. MIS Quarterly, 13(3), 319–340.",
+            by: "r-a11ce000", created: "2026-11-01T09:00:00Z")
+        p.aprioriCodes["apc-7a0e0002"] = AprioriCode(
+            key: "apc-7a0e0002", name: "Perceived usefulness", colour: "#C3A46C",
+            definition: "The degree to which a researcher believes that using the tool would improve their research.",
+            included: "Gains in the quality, rigour, transparency or speed of analysis and writing.",
+            excluded: "How easy the tool is to use (see Perceived ease of use).",
+            example: "Writing the memo forces me to think.",
+            counterExample: "The files are just text. (A property of the tool, not a gain for the research.)",
+            source: "Davis, F. D. (1989). MIS Quarterly, 13(3), 319–340.",
+            by: "r-a11ce000", created: "2026-11-01T09:00:00Z")
+        let d1 = try sel(deductive, "f-1e7e0001", t1, "But I'm still getting used to the user interface of QDVC Empirics, to be honest.")
+        let d2 = try sel(deductive, "f-1e7e0001", t1, "The numbers for quick codes save a lot of clicking. I barely touch the mouse now.")
+        let d3 = try sel(deductive, "f-1e7e0001", t1, "If I can point them to the Git history of the YAML files")
+        let d4 = try sel(deductive, "f-1e7e0002", t2, "Writing the memo forces me to think.")
+        try p.addAprioriEvidence(code: "apc-7a0e0001", selection: d1, memo: "Ease of use is still being earned.")
+        try p.addAprioriEvidence(code: "apc-7a0e0001", selection: d2, memo: "Effort falls with the shortcuts.")
+        try p.addAprioriEvidence(code: "apc-7a0e0002", selection: d3, memo: "Useful to reviewers, not only to him.")
+        try p.addAprioriEvidence(code: "apc-7a0e0002", selection: d4, memo: "The tool changes how she thinks.")
+
+        // Where what emerged meets what was defined beforehand.
+        try p.addLink(from: learning, to: "apc-7a0e0001", type: .refines,
+                      memo: "Ease of use is learnt over time, not a fixed perception.")
+        try p.addLink(from: transparency, to: "apc-7a0e0002", type: .extends,
+                      memo: "Usefulness to others (reviewers), which the model doesn't name.")
+        try p.addLink(from: keyboard, to: "apc-7a0e0001", type: .confirms)
+
+        // Framework Matrix summaries.
+        try p.setFrameworkSummary("Still learning the interface; the shortcuts make long sessions easier.",
+                                  layer: deductive, row: "f-1e7e0001", column: "apc-7a0e0001")
+        try p.setFrameworkSummary("Memos make her think; the argument is ready when she writes up.",
+                                  layer: deductive, row: "i-0c0ffee0", column: "apc-7a0e0002")
+
+        // An attribute sheet for files, answered for the first interview.
+        p.attributeSheets["ast-c0debee1"] = AttributeSheet(key: "ast-c0debee1", title: "Interview context",
                                                description: "Answer once per interview.", appliesTo: [.files], questions: [
-            CodebookQuestion(key: "q-5e771460", label: "Setting", text: "How was the interview conducted?", type: .chooseOne,
+            AttributeSheetQuestion(key: "q-5e771460", label: "Setting", text: "How was the interview conducted?", type: .chooseOne,
                              options: ["In person", "Video call", "Phone"], strict: true, requirement: .blocking),
-            CodebookQuestion(key: "q-d0a7104e", label: "Duration", text: "About how long did it last?", type: .text,
+            AttributeSheetQuestion(key: "q-d0a7104e", label: "Duration", text: "About how long did it last?", type: .text,
                              requirement: .flagged),
-            CodebookQuestion(key: "q-70b1c500", label: "Topics", text: "Which topics came up?", type: .chooseMany,
+            AttributeSheetQuestion(key: "q-70b1c500", label: "Topics", text: "Which topics came up?", type: .chooseMany,
                              options: ["Interface", "Ethics", "Fatigue", "Collaboration"], strict: false, requirement: .optional),
-            CodebookQuestion(key: "q-a07e5000", label: "Notes", text: "Anything that might colour the interview (interruptions, mood)?",
+            AttributeSheetQuestion(key: "q-a07e5000", label: "Notes", text: "Anything that might colour the interview (interruptions, mood)?",
                              type: .text, requirement: .optional),
         ])
-        p.codebooks["cb-c0debee2"] = Codebook(key: "cb-c0debee2", title: "Code quality", description: "A check on each axial code.",
+        p.attributeSheets["ast-c0debee2"] = AttributeSheet(key: "ast-c0debee2", title: "Code quality", description: "A check on each axial code.",
                                                appliesTo: [.axialCodes], questions: [
-            CodebookQuestion(key: "q-9a110001", label: "Saturated", text: "Do new quotes still change this code's meaning?",
+            AttributeSheetQuestion(key: "q-9a110001", label: "Saturated", text: "Do new quotes still change this code's meaning?",
                              type: .chooseOne, options: ["Yes", "No", "Unsure"], strict: true, requirement: .flagged),
-            CodebookQuestion(key: "q-9a110002", label: "Counter-evidence", text: "What evidence speaks against it?", type: .text),
+            AttributeSheetQuestion(key: "q-9a110002", label: "Counter-evidence", text: "What evidence speaks against it?", type: .text),
         ])
-        for file in ["f-1e7e0001", "f-1e7e0002"] { try p.associate(codebook: "cb-c0debee1", with: file) }
-        try p.associate(codebook: "cb-c0debee2", with: adoption)
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-c0debee1", target: "f-1e7e0001", researcher: "r-a11ce000"),
+        for file in ["f-1e7e0001", "f-1e7e0002"] { try p.associate(attributeSheet: "ast-c0debee1", with: file) }
+        try p.associate(attributeSheet: "ast-c0debee2", with: adoption)
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-c0debee1", target: "f-1e7e0001", researcher: "r-a11ce000"),
                                       answers: ["q-5e771460": .one("Video call"), "q-d0a7104e": .text("About 40 minutes"),
                                                 "q-70b1c500": .many(["Interface", "Fatigue", "Transparency"])]))
-        try p.saveSheet(ResponseSheet(id: ResponseID(codebook: "cb-c0debee1", target: "f-1e7e0002", researcher: "r-a11ce000"),
+        try p.saveSheet(ResponseSheet(id: ResponseID(attributeSheet: "ast-c0debee1", target: "f-1e7e0002", researcher: "r-a11ce000"),
                                       answers: ["q-5e771460": .one("Video call")]))
 
         // Fixed timestamps, so regenerating the sample changes nothing.

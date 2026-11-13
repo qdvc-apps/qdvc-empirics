@@ -86,7 +86,7 @@ struct EmpiricsCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             // ⌘N makes an item of the kind the current list page shows
-            // (a file, researcher, interviewee, codebook, open or axial code).
+            // (a file, researcher, interviewee, attribute sheet, open or axial code).
             Button(model.newItemTitle ?? "New Item") { model.newItem() }
                 .keyboardShortcut("n")
                 .disabled(model.newItemTitle == nil)
@@ -217,14 +217,16 @@ struct EmpiricsCommands: Commands {
                 .disabled(!model.canGoForward)
             Divider()
             let pages: [(String, SidebarItem)] = [("Empirical Files", .files), ("Researchers", .researchers),
-                                                  ("Interviewees", .interviewees), ("Project Settings", .settings),
-                                                  ("Codebooks", .codebooks), ("Open Codes", .openCodes),
-                                                  ("Axial Codes", .axialCodes), ("Layers", .layers),
-                                                  ("Coding Chart", .codingChart), ("Codebook Report", .codebookReport)]
-            // ⌃⌘1 … ⌃⌘9, then ⌃⌘0 for the tenth.
+                                                  ("Layers", .layers), ("Project Settings", .settings),
+                                                  ("Protocols", .protocols), ("Interviewees", .interviewees),
+                                                  ("Attribute Sheets", .attributeSheets), ("A Priori Codes", .aprioriCodes),
+                                                  ("Open Codes", .openCodes), ("Axial Codes", .axialCodes),
+                                                  ("Coding Chart", .codingChart), ("Attribute Sheet Report", .attributeSheetReport)]
+            // ⌃⌘1 … ⌃⌘9, then ⌃⌘0 for the tenth; the rest have none.
             ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
                 Button(page.0) { model.sidebar = page.1 }
-                    .keyboardShortcut(KeyEquivalent(Character(String((i + 1) % 10))), modifiers: [.command, .control])
+                    .keyboardShortcut(i < 10 ? KeyboardShortcut(KeyEquivalent(Character(String((i + 1) % 10))),
+                                                                modifiers: [.command, .control]) : nil)
                     .disabled(!model.isOpen)
             }
             Divider()

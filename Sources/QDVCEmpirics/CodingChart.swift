@@ -23,13 +23,13 @@ struct CodingChartPage: View {
     static let margin: CGFloat = 20
 
     var body: some View {
-        let chart = CodingChart.make(model.project, layer: model.activeLayerKey, includeUnlinked: includeUnlinked)
+        let chart = CodingChart.make(model.project, layer: model.inductiveLayer?.key ?? "", includeUnlinked: includeUnlinked)
         VStack(spacing: 0) {
             if chart.columns.allSatisfy(\.isEmpty) {
                 ContentUnavailableView("Nothing to Chart Yet", systemImage: "point.3.connected.trianglepath.dotted",
                                        description: Text(chart.unlinked > 0
-                                           ? "Nothing in \(model.activeLayer?.name ?? "this layer") is linked yet. Apply open codes to text, and build axial codes from them."
-                                           : "Apply open codes to text in \(model.activeLayer?.name ?? "this layer"), and build axial codes from them."))
+                                           ? "Nothing in \(model.inductiveLayer?.name ?? "this layer") is linked yet. Apply open codes to text, and build axial codes from them."
+                                           : "Apply open codes to text in \(model.inductiveLayer?.name ?? "this layer"), and build axial codes from them."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ChartCanvas(model: model, chart: chart)

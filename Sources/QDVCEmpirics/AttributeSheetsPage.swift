@@ -2,37 +2,37 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// A codebook's own page: its title, what it applies to, and its
+/// An attribute sheet's own page: its title, what it applies to, and its
 /// questions, each with a short label, the full question, the kind of
 /// answer, and whether it is mandatory.
-struct CodebookEditor: View {
+struct AttributeSheetEditor: View {
     @Environment(AppModel.self) private var model
-    var codebook: Codebook
+    var attributeSheet: AttributeSheet
     var delete: () -> Void
 
     var body: some View {
-        let key = codebook.key
+        let key = attributeSheet.key
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 8) {
-                    TextField("Title", text: Binding(get: { model.project.codebooks[key]?.title ?? "" },
-                                                     set: { v in model.edit { $0.codebooks[key]?.title = v } }))
+                    TextField("Title", text: Binding(get: { model.project.attributeSheets[key]?.title ?? "" },
+                                                     set: { v in model.edit { $0.attributeSheets[key]?.title = v } }))
                         .textFieldStyle(.roundedBorder)
                         .font(.title2)
                     WorkingBadge(text: model.wid(key), color: nil)
                 }
-                TextField("Description (what this codebook is for)", text: Binding(
-                    get: { model.project.codebooks[key]?.description ?? "" },
-                    set: { v in model.edit { $0.codebooks[key]?.description = v } }
+                TextField("Description (what this attribute sheet is for)", text: Binding(
+                    get: { model.project.attributeSheets[key]?.description ?? "" },
+                    set: { v in model.edit { $0.attributeSheets[key]?.description = v } }
                 ), axis: .vertical)
                 .lineLimit(2...6)
                 .textFieldStyle(.roundedBorder)
                 HStack(spacing: 16) {
                     Text("Applies to").foregroundStyle(.secondary)
-                    ForEach(CodebookTarget.allCases, id: \.self) { t in
-                        Toggle(t.label, isOn: Binding(get: { codebook.appliesTo.contains(t) }, set: { on in
-                            model.perform("Change Codebook") { p in
-                                if on { p.codebooks[key]?.appliesTo.insert(t) } else { p.codebooks[key]?.appliesTo.remove(t) }
+                    ForEach(AttributeSheetTarget.allCases, id: \.self) { t in
+                        Toggle(t.label, isOn: Binding(get: { attributeSheet.appliesTo.contains(t) }, set: { on in
+                            model.perform("Change Attribute Sheet") { p in
+                                if on { p.attributeSheets[key]?.appliesTo.insert(t) } else { p.attributeSheets[key]?.appliesTo.remove(t) }
                             }
                         }))
                         .toggleStyle(.checkbox)
@@ -50,16 +50,16 @@ struct CodebookEditor: View {
                         Text("flagged").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                if codebook.questions.isEmpty {
+                if attributeSheet.questions.isEmpty {
                     Text("No questions yet.").foregroundStyle(.secondary)
                 }
-                ForEach(Array(codebook.questions.enumerated()), id: \.element.key) { i, q in
-                    QuestionEditor(codebook: key, question: q, index: i, count: codebook.questions.count)
+                ForEach(Array(attributeSheet.questions.enumerated()), id: \.element.key) { i, q in
+                    QuestionEditor(attributeSheet: key, question: q, index: i, count: attributeSheet.questions.count)
                 }
                 Button {
                     model.perform("Add Question") { p in
-                        let q = CodebookQuestion(key: p.newKey(Keys.question), label: "Question \((p.codebooks[key]?.questions.count ?? 0) + 1)")
-                        p.codebooks[key]?.questions.append(q)
+                        let q = AttributeSheetQuestion(key: p.newKey(Keys.question), label: "Question \((p.attributeSheets[key]?.questions.count ?? 0) + 1)")
+                        p.attributeSheets[key]?.questions.append(q)
                     }
                 } label: {
                     Label("Add Question", systemImage: "plus")
@@ -67,7 +67,7 @@ struct CodebookEditor: View {
                 Divider()
                 HStack {
                     Spacer()
-                    Button(role: .destructive, action: delete) { Label("Delete Codebook…", systemImage: "trash") }
+                    Button(role: .destructive, action: delete) { Label("Delete Attribute Sheet…", systemImage: "trash") }
                         .controlSize(.small)
                 }
             }
@@ -79,10 +79,10 @@ struct CodebookEditor: View {
 
     @ViewBuilder
     var usage: some View {
-        let files = model.project.files.values.filter { $0.codebooks.contains(codebook.key) }.count
-        let codes = model.project.layers.flatMap { $0.codes.values }.filter { $0.codebooks.contains(codebook.key) }.count
-        let sheets = model.project.responses.values.filter { $0.id.codebook == codebook.key }
-        let complete = sheets.filter { SheetCompleteness.of($0.answers, against: codebook).isComplete }.count
+        let files = model.project.files.values.filter { $0.attributeSheets.contains(attributeSheet.key) }.count
+        let codes = model.project.layers.flatMap { $0.codes.values }.filter { $0.attributeSheets.contains(attributeSheet.key) }.count
+        let sheets = model.project.responses.values.filter { $0.id.attributeSheet == attributeSheet.key }
+        let complete = sheets.filter { SheetCompleteness.of($0.answers, against: attributeSheet).isComplete }.count
         Text("Associated with \(files) file\(files == 1 ? "" : "s") and \(codes) code\(codes == 1 ? "" : "s") · \(sheets.count) response sheet\(sheets.count == 1 ? "" : "s"), \(complete) complete")
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -91,16 +91,16 @@ struct CodebookEditor: View {
 
 struct QuestionEditor: View {
     @Environment(AppModel.self) private var model
-    var codebook: String
-    var question: CodebookQuestion
+    var attributeSheet: String
+    var question: AttributeSheetQuestion
     var index: Int
     var count: Int
 
-    private func update(_ change: @escaping (inout CodebookQuestion) -> Void) {
+    private func update(_ change: @escaping (inout AttributeSheetQuestion) -> Void) {
         let qk = question.key
         model.edit { p in
-            guard let i = p.codebooks[codebook]?.questions.firstIndex(where: { $0.key == qk }) else { return }
-            change(&p.codebooks[codebook]!.questions[i])
+            guard let i = p.attributeSheets[attributeSheet]?.questions.firstIndex(where: { $0.key == qk }) else { return }
+            change(&p.attributeSheets[attributeSheet]!.questions[i])
         }
     }
 
@@ -110,19 +110,19 @@ struct QuestionEditor: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(index + 1).").font(.headline).monospacedDigit().foregroundStyle(.secondary)
                 TextField("Label", text: Binding(get: { q.label }, set: { v in
-                    update { $0.label = String(v.prefix(CodebookQuestion.maxLabelLength)) }
+                    update { $0.label = String(v.prefix(AttributeSheetQuestion.maxLabelLength)) }
                 }))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 170)
-                Text("\(q.label.count)/\(CodebookQuestion.maxLabelLength)")
+                Text("\(q.label.count)/\(AttributeSheetQuestion.maxLabelLength)")
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(q.label.count >= CodebookQuestion.maxLabelLength ? Color.orange : Color.secondary)
+                    .foregroundStyle(q.label.count >= AttributeSheetQuestion.maxLabelLength ? Color.orange : Color.secondary)
                 RequirementMark(requirement: q.requirement)
                 Spacer()
                 Button {
                     model.perform("Move Question") { p in
                         guard index > 0 else { return }
-                        p.codebooks[codebook]?.questions.swapAt(index, index - 1)
+                        p.attributeSheets[attributeSheet]?.questions.swapAt(index, index - 1)
                     }
                 } label: { Image(systemName: "arrow.up") }
                 .disabled(index == 0)
@@ -130,13 +130,13 @@ struct QuestionEditor: View {
                 Button {
                     model.perform("Move Question") { p in
                         guard index < count - 1 else { return }
-                        p.codebooks[codebook]?.questions.swapAt(index, index + 1)
+                        p.attributeSheets[attributeSheet]?.questions.swapAt(index, index + 1)
                     }
                 } label: { Image(systemName: "arrow.down") }
                 .disabled(index >= count - 1)
                 .help("Move down")
                 Button {
-                    model.perform("Delete Question") { p in p.deleteQuestion(q.key, from: codebook) }
+                    model.perform("Delete Question") { p in p.deleteQuestion(q.key, from: attributeSheet) }
                 } label: { Image(systemName: "trash") }
                 .help("Delete the question (and its answers)")
             }
@@ -147,8 +147,8 @@ struct QuestionEditor: View {
             HStack(spacing: 16) {
                 Picker("Answer", selection: Binding(get: { q.type }, set: { v in
                     model.perform("Change Answer Type") { p in
-                        guard let i = p.codebooks[codebook]?.questions.firstIndex(where: { $0.key == q.key }) else { return }
-                        p.codebooks[codebook]!.questions[i].type = v
+                        guard let i = p.attributeSheets[attributeSheet]?.questions.firstIndex(where: { $0.key == q.key }) else { return }
+                        p.attributeSheets[attributeSheet]!.questions[i].type = v
                     }
                 })) {
                     ForEach(QuestionType.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -156,8 +156,8 @@ struct QuestionEditor: View {
                 .fixedSize()
                 Picker("Requirement", selection: Binding(get: { q.requirement }, set: { v in
                     model.perform("Change Requirement") { p in
-                        guard let i = p.codebooks[codebook]?.questions.firstIndex(where: { $0.key == q.key }) else { return }
-                        p.codebooks[codebook]!.questions[i].requirement = v
+                        guard let i = p.attributeSheets[attributeSheet]?.questions.firstIndex(where: { $0.key == q.key }) else { return }
+                        p.attributeSheets[attributeSheet]!.questions[i].requirement = v
                     }
                 })) {
                     ForEach(Requirement.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -175,8 +175,8 @@ struct QuestionEditor: View {
                     .frame(maxWidth: 360, alignment: .leading)
                     Toggle("Strictly predefined", isOn: Binding(get: { q.strict }, set: { v in
                         model.perform(v ? "Make List Strict" : "Allow New Options") { p in
-                            guard let i = p.codebooks[codebook]?.questions.firstIndex(where: { $0.key == q.key }) else { return }
-                            p.codebooks[codebook]!.questions[i].strict = v
+                            guard let i = p.attributeSheets[attributeSheet]?.questions.firstIndex(where: { $0.key == q.key }) else { return }
+                            p.attributeSheets[attributeSheet]!.questions[i].strict = v
                         }
                     }))
                     .toggleStyle(.checkbox)
@@ -192,7 +192,7 @@ struct QuestionEditor: View {
 
 // MARK: - Response sheet
 
-/// Answering a codebook about one file or code. Mandatory, blocking
+/// Answering an attribute sheet about one file or code. Mandatory, blocking
 /// questions must be answered before the sheet can be saved; mandatory,
 /// non-blocking ones are flagged but don't stop it.
 struct ResponseSheetView: View {
@@ -204,19 +204,19 @@ struct ResponseSheetView: View {
     @State private var loaded = false
 
     var body: some View {
-        let codebook = model.project.codebooks[id.codebook]
+        let attributeSheet = model.project.attributeSheets[id.attributeSheet]
         VStack(spacing: 0) {
-            if let codebook {
-                let completeness = SheetCompleteness.of(answers, against: codebook)
+            if let attributeSheet {
+                let completeness = SheetCompleteness.of(answers, against: attributeSheet)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(codebook.title).font(.title2.weight(.semibold))
+                    Text(attributeSheet.title).font(.title2.weight(.semibold))
                     Text(targetTitle).foregroundStyle(.secondary)
                     if !id.researcher.isEmpty {
                         Text("Answers by \(model.personName(id.researcher) ?? "unknown researcher")")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    if !codebook.description.isEmpty {
-                        Text(codebook.description).font(.callout).padding(.top, 4)
+                    if !attributeSheet.description.isEmpty {
+                        Text(attributeSheet.description).font(.callout).padding(.top, 4)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -224,12 +224,12 @@ struct ResponseSheetView: View {
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        ForEach(codebook.questions) { q in
+                        ForEach(attributeSheet.questions) { q in
                             questionView(q, flagged: completeness.missingFlagged.contains(q),
                                          blocking: completeness.missingBlocking.contains(q))
                         }
-                        if codebook.questions.isEmpty {
-                            Text("This codebook has no questions yet.").foregroundStyle(.secondary)
+                        if attributeSheet.questions.isEmpty {
+                            Text("This attribute sheet has no questions yet.").foregroundStyle(.secondary)
                         }
                     }
                     .padding(20)
@@ -263,7 +263,7 @@ struct ResponseSheetView: View {
                 }
                 .padding(16)
             } else {
-                Text("This codebook no longer exists.").padding(40)
+                Text("This attribute sheet no longer exists.").padding(40)
                 Button("Close") { dismiss() }.padding(.bottom, 20)
             }
         }
@@ -283,7 +283,7 @@ struct ResponseSheetView: View {
     }
 
     @ViewBuilder
-    func questionView(_ q: CodebookQuestion, flagged: Bool, blocking: Bool) -> some View {
+    func questionView(_ q: AttributeSheetQuestion, flagged: Bool, blocking: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(q.label).font(.headline)
@@ -332,9 +332,9 @@ struct ResponseSheetView: View {
     }
 
     /// For lists that aren't strictly predefined: a new option, chosen at
-    /// once (and added to the codebook when the sheet is saved).
+    /// once (and added to the attribute sheet when the sheet is saved).
     @ViewBuilder
-    func newOption(_ q: CodebookQuestion) -> some View {
+    func newOption(_ q: AttributeSheetQuestion) -> some View {
         HStack {
             TextField("Another option…", text: Binding(get: { newOptions[q.key] ?? "" }, set: { newOptions[q.key] = $0 }))
                 .textFieldStyle(.roundedBorder)
@@ -346,7 +346,7 @@ struct ResponseSheetView: View {
         .controlSize(.small)
     }
 
-    func addOption(_ q: CodebookQuestion) {
+    func addOption(_ q: AttributeSheetQuestion) {
         let v = (newOptions[q.key] ?? "").trimmingCharacters(in: .whitespaces)
         guard !v.isEmpty else { return }
         if q.type == .chooseOne {

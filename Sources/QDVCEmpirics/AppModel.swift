@@ -6,32 +6,35 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// What the sidebar shows in the detail area: a list page, or one item's
-/// page (an empirical file, code, codebook or person).
+/// page (an empirical file, code, attribute sheet or person).
 enum SidebarItem: Hashable {
     // Project
     case files
     case researchers
-    case interviewees
+    case layers
     case settings
-    // Analysis
-    case codebooks
+    // Deductive
+    case protocols
+    case interviewees
+    case attributeSheets
+    case aprioriCodes
+    // Inductive
     case openCodes
     case axialCodes
-    case layers
     // Reporting
     case codingChart
-    case codebookReport
+    case attributeSheetReport
     // Pages of single items (in the Working Area)
     case file(String)
     case code(String)
-    case codebook(String)
+    case attributeSheet(String)
     case researcher(String)
     case interviewee(String)
 
     /// The item's key, for the pages of single items.
     var key: String? {
         switch self {
-        case .file(let k), .code(let k), .codebook(let k), .researcher(let k), .interviewee(let k): return k
+        case .file(let k), .code(let k), .attributeSheet(let k), .researcher(let k), .interviewee(let k): return k
         default: return nil
         }
     }
@@ -41,17 +44,19 @@ enum SidebarItem: Hashable {
         switch self {
         case .files: return "files"
         case .researchers: return "researchers"
-        case .interviewees: return "interviewees"
+        case .layers: return "layers"
         case .settings: return "settings"
-        case .codebooks: return "codebooks"
+        case .protocols: return "protocols"
+        case .interviewees: return "interviewees"
+        case .attributeSheets: return "attributeSheets"
+        case .aprioriCodes: return "aprioriCodes"
         case .openCodes: return "openCodes"
         case .axialCodes: return "axialCodes"
-        case .layers: return "layers"
         case .codingChart: return "codingChart"
-        case .codebookReport: return "codebookReport"
+        case .attributeSheetReport: return "attributeSheetReport"
         case .file(let k): return "file:" + k
         case .code(let k): return "code:" + k
-        case .codebook(let k): return "codebook:" + k
+        case .attributeSheet(let k): return "attributeSheet:" + k
         case .researcher(let k): return "researcher:" + k
         case .interviewee(let k): return "interviewee:" + k
         }
@@ -62,17 +67,19 @@ enum SidebarItem: Hashable {
         switch (parts.first ?? "", parts.count > 1 ? parts[1] : "") {
         case ("files", _): self = .files
         case ("researchers", _): self = .researchers
-        case ("interviewees", _): self = .interviewees
+        case ("layers", _): self = .layers
         case ("settings", _): self = .settings
-        case ("codebooks", _): self = .codebooks
+        case ("protocols", _): self = .protocols
+        case ("interviewees", _): self = .interviewees
+        case ("attributeSheets", _): self = .attributeSheets
+        case ("aprioriCodes", _): self = .aprioriCodes
         case ("openCodes", _): self = .openCodes
         case ("axialCodes", _): self = .axialCodes
-        case ("layers", _): self = .layers
         case ("codingChart", _): self = .codingChart
-        case ("codebookReport", _): self = .codebookReport
+        case ("attributeSheetReport", _): self = .attributeSheetReport
         case ("file", let k) where !k.isEmpty: self = .file(k)
         case ("code", let k) where !k.isEmpty: self = .code(k)
-        case ("codebook", let k) where !k.isEmpty: self = .codebook(k)
+        case ("attributeSheet", let k) where !k.isEmpty: self = .attributeSheet(k)
         case ("researcher", let k) where !k.isEmpty: self = .researcher(k)
         case ("interviewee", let k) where !k.isEmpty: self = .interviewee(k)
         default: return nil
@@ -217,10 +224,10 @@ final class AppModel {
     private(set) var currentResearcher: String?
     var focusedSelection: String?
     /// The row selected in the table of the current list page (also the
-    /// item selected in the Coding Chart and the Codebook Report).
+    /// item selected in the Coding Chart and the Attribute Sheet Report).
     var tableSelection: String?
-    /// The codebook shown in the Codebook Report.
-    var reportCodebook: String?
+    /// The attribute sheet shown in the Attribute Sheet Report.
+    var reportAttributeSheet: String?
     /// Items being worked on, in the sidebar's Working Area (this Mac).
     private(set) var workingArea: [SidebarItem] = []
     @ObservationIgnored private var backStack: [SidebarItem] = []
@@ -403,7 +410,7 @@ final class AppModel {
         let r = DeviceStore.researcher(project: key)
         currentResearcher = r.flatMap { project.researcher($0) != nil ? $0 : nil }
         let active = DeviceStore.string("activeLayer", project: key)
-        activeLayerKey = active.flatMap { project.layer($0) != nil ? $0 : nil } ?? project.layers.first?.key ?? ""
+        activeLayerKey = active.flatMap { project.layer($0) != nil ? $0 : nil } ?? defaultLayerKey
         hiddenLayers = Set(DeviceStore.strings("hiddenLayers", project: key))
         showSpeakers = DeviceStore.string("showSpeakers", project: key) != "no"
         positions = DeviceStore.positions(project: key)
@@ -425,7 +432,7 @@ final class AppModel {
         sidebar = nil
         focusedSelection = nil
         tableSelection = nil
-        reportCodebook = nil
+        reportAttributeSheet = nil
         workingArea = []
         backStack = []
         forwardStack = []
@@ -461,7 +468,7 @@ final class AppModel {
             let key = p.newKey(Keys.researcher)
             p.researchers.append(Researcher(key: key, firstName: firstName.trimmingCharacters(in: .whitespaces),
                                             lastName: lastName.trimmingCharacters(in: .whitespaces)))
-            p.layers[0].researcher = key
+            for i in p.layers.indices { p.layers[i].researcher = key }
             me = key
         }
         do {
@@ -579,8 +586,8 @@ final class AppModel {
     private func validateState() {
         if let s = focusedSelection, project.selection(s) == nil { focusedSelection = nil }
         if let t = tableSelection, !keyExists(t) { tableSelection = nil }
-        if let c = reportCodebook, project.codebooks[c] == nil { reportCodebook = nil }
-        if project.layer(activeLayerKey) == nil { activeLayerKey = project.layers.first?.key ?? "" }
+        if let c = reportAttributeSheet, project.attributeSheets[c] == nil { reportAttributeSheet = nil }
+        if project.layer(activeLayerKey) == nil { activeLayerKey = defaultLayerKey }
         if let item = sidebar, !exists(item) { sidebar = listPage(for: item) }
         if let r = currentResearcher, project.researcher(r) == nil { currentResearcher = nil }
         let kept = workingArea.filter(exists)
@@ -677,6 +684,19 @@ final class AppModel {
 
     var activeLayer: CodingLayer? { project.layer(activeLayerKey) }
 
+    /// The layer to code in when none is chosen: the first inductive layer
+    /// (open coding works there today; deductive coding comes next).
+    var defaultLayerKey: String {
+        project.inductiveLayers.first?.key ?? project.layers.first?.key ?? ""
+    }
+
+    /// The inductive layer the Open Codes, Axial Codes and Coding Chart pages
+    /// show: the active layer if it is inductive, else the first inductive one.
+    var inductiveLayer: CodingLayer? {
+        if let l = activeLayer, l.isInductive { return l }
+        return project.inductiveLayers.first
+    }
+
     // MARK: Quick codes
 
     private func loadQuickCodes() {
@@ -733,24 +753,24 @@ final class AppModel {
         switch item {
         case .file(let k): return project.files[k] != nil
         case .code(let k): return project.code(k) != nil
-        case .codebook(let k): return project.codebooks[k] != nil
+        case .attributeSheet(let k): return project.attributeSheets[k] != nil
         case .researcher(let k): return project.researcher(k) != nil
         case .interviewee(let k): return project.interviewee(k) != nil
         default: return true
         }
     }
 
-    /// The working identifier of a file, codebook, code or person ("EF 3",
+    /// The working identifier of a file, attribute sheet, code or person ("EF 3",
     /// "OC 12"…): alphabetical, so it changes as items come and go.
     func wid(_ key: String) -> String { index.workingID[key] ?? "" }
 
     func keyExists(_ key: String) -> Bool { item(forKey: key).map(exists) ?? false }
 
-    /// The page of a file, code, codebook or person, by key.
+    /// The page of a file, code, attribute sheet or person, by key.
     func item(forKey key: String) -> SidebarItem? {
         if project.files[key] != nil { return .file(key) }
         if project.code(key) != nil { return .code(key) }
-        if project.codebooks[key] != nil { return .codebook(key) }
+        if project.attributeSheets[key] != nil { return .attributeSheet(key) }
         if project.researcher(key) != nil { return .researcher(key) }
         if project.interviewee(key) != nil { return .interviewee(key) }
         return nil
@@ -761,7 +781,7 @@ final class AppModel {
         switch item {
         case .file: return .files
         case .code(let k): return project.code(k)?.kind == .axial ? .axialCodes : .openCodes
-        case .codebook: return .codebooks
+        case .attributeSheet: return .attributeSheets
         case .researcher: return .researchers
         case .interviewee: return .interviewees
         default: return item
@@ -775,7 +795,7 @@ final class AppModel {
         sidebar = item
     }
 
-    /// Opens the page of a file, code, codebook or person by key.
+    /// Opens the page of a file, code, attribute sheet or person by key.
     func openKey(_ key: String) {
         if let item = item(forKey: key) { show(item) }
     }
@@ -1079,14 +1099,14 @@ final class AppModel {
 
     /// The response sheet this Mac's researcher fills in, or nil if the
     /// project lists researchers and none is chosen here yet.
-    func responseID(codebook: String, target: String) -> ResponseID? {
-        if project.researchers.isEmpty { return ResponseID(codebook: codebook, target: target) }
+    func responseID(attributeSheet: String, target: String) -> ResponseID? {
+        if project.researchers.isEmpty { return ResponseID(attributeSheet: attributeSheet, target: target) }
         guard let r = currentResearcher else { return nil }
-        return ResponseID(codebook: codebook, target: target, researcher: r)
+        return ResponseID(attributeSheet: attributeSheet, target: target, researcher: r)
     }
 
-    func openResponseSheet(codebook: String, target: String) {
-        guard let id = responseID(codebook: codebook, target: target) else {
+    func openResponseSheet(attributeSheet: String, target: String) {
+        guard let id = responseID(attributeSheet: attributeSheet, target: target) else {
             notice = Notice(text: "Choose who you are on this Mac first (Researchers › This Mac's Researcher), so your answers are filed under your name.",
                             isWarning: true, action: NoticeAction(title: "Go to Researchers") { [weak self] in self?.sidebar = .researchers })
             return
@@ -1094,9 +1114,9 @@ final class AppModel {
         sheet = .response(id)
     }
 
-    /// Every response sheet for a codebook and target (all researchers).
-    func sheets(codebook: String, target: String) -> [ResponseSheet] {
-        project.responses.values.filter { $0.id.codebook == codebook && $0.id.target == target }.sorted { $0.id < $1.id }
+    /// Every response sheet for an attribute sheet and target (all researchers).
+    func sheets(attributeSheet: String, target: String) -> [ResponseSheet] {
+        project.responses.values.filter { $0.id.attributeSheet == attributeSheet && $0.id.target == target }.sorted { $0.id < $1.id }
     }
 
     // MARK: - Names

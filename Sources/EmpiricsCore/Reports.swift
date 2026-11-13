@@ -1,7 +1,7 @@
 import Foundation
 
 // The data behind the Reporting pages: the Coding Chart (files → open codes
-// → axial codes) and the Codebook Report (every response to a codebook).
+// → axial codes) and the Attribute Sheet Report (every response to an attribute sheet).
 // Worked out here, without any interface, so they can be tested.
 
 // MARK: - Coding Chart
@@ -180,12 +180,12 @@ public struct CodingChart: Equatable {
     }
 }
 
-// MARK: - Codebook Report
+// MARK: - Attribute Sheet Report
 
-/// Every response to a codebook, one row per response sheet (an item and,
+/// Every response to an attribute sheet, one row per response sheet (an item and,
 /// when the project lists researchers, whose answers), plus a row for each
 /// associated item nobody has answered yet.
-public struct CodebookReport: Equatable {
+public struct AttributeSheetReport: Equatable {
     public struct Row: Equatable, Identifiable {
         /// The file, code or interviewee the answers are about.
         public var target: String
@@ -207,23 +207,23 @@ public struct CodebookReport: Equatable {
         public func answer(_ question: String) -> Answer? { sheet?.answers[question] }
     }
 
-    public var codebook: Codebook
+    public var attributeSheet: AttributeSheet
     public var rows: [Row]
 
-    public static func make(_ p: Project, codebook key: String, title: (String) -> String,
-                            person: (String) -> String) -> CodebookReport? {
-        guard let cb = p.codebooks[key] else { return nil }
+    public static func make(_ p: Project, attributeSheet key: String, title: (String) -> String,
+                            person: (String) -> String) -> AttributeSheetReport? {
+        guard let cb = p.attributeSheets[key] else { return nil }
         var rows: [Row] = []
         var answered = Set<String>()
-        for sheet in p.responses.values where sheet.id.codebook == key {
+        for sheet in p.responses.values where sheet.id.attributeSheet == key {
             answered.insert(sheet.id.target)
             rows.append(Row(target: sheet.id.target, researcher: sheet.id.researcher, sheet: sheet,
                             completeness: SheetCompleteness.of(sheet.answers, against: cb)))
         }
-        var targets = p.files.values.filter { $0.codebooks.contains(key) }.map(\.key)
-        targets += p.interviewees.filter { $0.codebooks.contains(key) }.map(\.key)
+        var targets = p.files.values.filter { $0.attributeSheets.contains(key) }.map(\.key)
+        targets += p.interviewees.filter { $0.attributeSheets.contains(key) }.map(\.key)
         for layer in p.layers {
-            targets += layer.codes.values.filter { $0.codebooks.contains(key) }.map(\.key)
+            targets += layer.codes.values.filter { $0.attributeSheets.contains(key) }.map(\.key)
         }
         for t in targets where !answered.contains(t) {
             rows.append(Row(target: t, researcher: "", sheet: nil, completeness: SheetCompleteness.of([:], against: cb)))
@@ -243,18 +243,18 @@ public struct CodebookReport: Equatable {
             if a.target != b.target { return a.target < b.target }
             return person(a.researcher).localizedStandardCompare(person(b.researcher)) == .orderedAscending
         }
-        return CodebookReport(codebook: cb, rows: rows)
+        return AttributeSheetReport(attributeSheet: cb, rows: rows)
     }
 
     /// The report as CSV: working identifier, item, kind, researcher,
     /// status, then one column per question (labelled by its label).
     public func csv(workingIDs: [String: String], title: (String) -> String, kind: (String) -> String,
                     person: (String) -> String) -> String {
-        var lines = [CSV.line(["No.", "Item", "Kind", "Researcher", "Status"] + codebook.questions.map(\.label))]
+        var lines = [CSV.line(["No.", "Item", "Kind", "Researcher", "Status"] + attributeSheet.questions.map(\.label))]
         for r in rows {
             var fields = [workingIDs[r.target] ?? "", title(r.target), kind(r.target),
                           r.researcher.isEmpty ? "" : person(r.researcher), r.status.rawValue]
-            fields += codebook.questions.map { q in r.answer(q.key)?.values.joined(separator: "; ") ?? "" }
+            fields += attributeSheet.questions.map { q in r.answer(q.key)?.values.joined(separator: "; ") ?? "" }
             lines.append(CSV.line(fields))
         }
         return lines.joined(separator: "\n") + "\n"

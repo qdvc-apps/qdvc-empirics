@@ -26,6 +26,11 @@ extension QDACode {
     var color: Color { Color(nsColor: nsColor) }
 }
 
+extension AprioriCode {
+    var nsColor: NSColor { NSColor.hex(colour) ?? .systemPink }
+    var color: Color { Color(nsColor: nsColor) }
+}
+
 extension CodingStatus {
     var symbol: String {
         switch self {
@@ -99,7 +104,7 @@ struct CodeChip: View {
     }
 }
 
-/// A requirement marker for codebook questions: red for blocking, orange
+/// A requirement marker for attribute sheet questions: red for blocking, orange
 /// for flagged.
 struct RequirementMark: View {
     var requirement: Requirement

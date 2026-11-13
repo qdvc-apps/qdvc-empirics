@@ -52,13 +52,15 @@ struct ContentView: View {
         case .researchers: return "Researchers"
         case .interviewees: return "Interviewees"
         case .settings: return "Project Settings"
-        case .codebooks: return "Codebooks"
+        case .protocols: return "Protocols"
+        case .aprioriCodes: return "A Priori Codes"
+        case .attributeSheets: return "Attribute Sheets"
         case .openCodes: return "Open Codes"
         case .axialCodes: return "Axial Codes"
         case .layers: return "Layers"
         case .codingChart: return "Coding Chart"
-        case .codebookReport: return "Codebook Report"
-        case .file(let k), .code(let k), .codebook(let k), .researcher(let k), .interviewee(let k):
+        case .attributeSheetReport: return "Attribute Sheet Report"
+        case .file(let k), .code(let k), .attributeSheet(let k), .researcher(let k), .interviewee(let k):
             return model.itemLabel(k)
         case nil: return ""
         }
@@ -113,15 +115,19 @@ struct DetailView: View {
         case .researchers: ResearchersTable()
         case .interviewees: IntervieweesTable()
         case .settings: ProjectPage()
-        case .codebooks: CodebooksTable()
+        case .protocols: ComingSoonPage(title: "Protocols", systemImage: "list.bullet.rectangle",
+                                        text: "Protocols (interview protocols, article structures…) arrive in the next update.")
+        case .aprioriCodes: ComingSoonPage(title: "A Priori Codes", systemImage: "character.book.closed",
+                                           text: "A priori codes, with their codebook definitions, arrive in the next update.")
+        case .attributeSheets: AttributeSheetsTable()
         case .openCodes: CodesTable(kind: .open).id("open")
         case .axialCodes: CodesTable(kind: .axial).id("axial")
         case .layers: LayersPage()
         case .codingChart: CodingChartPage()
-        case .codebookReport: CodebookReportPage()
+        case .attributeSheetReport: AttributeSheetReportPage()
         case .file(let k): DocumentPage(fileKey: k)
         case .code(let k): CodePage(codeKey: k)
-        case .codebook(let k): CodebookPage(codebookKey: k).id(k)
+        case .attributeSheet(let k): AttributeSheetPage(attributeSheetKey: k).id(k)
         case .researcher(let k), .interviewee(let k): PersonPage(key: k).id(k)
         case nil:
             ContentUnavailableView("Nothing Selected", systemImage: "sidebar.left",
@@ -188,15 +194,17 @@ struct LayerMenu: View {
 
     var body: some View {
         Menu {
-            Section("Code in") {
-                ForEach(model.project.layers) { layer in
-                    Button {
-                        model.setActiveLayer(layer.key)
-                    } label: {
-                        if layer.key == model.activeLayerKey {
-                            Label(layer.name, systemImage: "checkmark")
-                        } else {
-                            Text(layer.name)
+            ForEach(LayerKind.allCases, id: \.self) { kind in
+                Section("Code in (\(kind.label.lowercased()))") {
+                    ForEach(model.project.layers.filter { $0.kind == kind }) { layer in
+                        Button {
+                            model.setActiveLayer(layer.key)
+                        } label: {
+                            if layer.key == model.activeLayerKey {
+                                Label(layer.name, systemImage: "checkmark")
+                            } else {
+                                Text(layer.name)
+                            }
                         }
                     }
                 }
@@ -284,26 +292,32 @@ struct Sidebar: View {
                     .tag(SidebarItem.files)
                 Label("Researchers", systemImage: "graduationcap")
                     .tag(SidebarItem.researchers)
-                Label("Interviewees", systemImage: "person.bubble")
-                    .tag(SidebarItem.interviewees)
+                Label("Layers", systemImage: "square.3.layers.3d")
+                    .tag(SidebarItem.layers)
                 Label("Project Settings", systemImage: "gearshape")
                     .tag(SidebarItem.settings)
             }
-            Section("Analysis") {
-                Label("Codebooks", systemImage: "text.book.closed")
-                    .tag(SidebarItem.codebooks)
+            Section("Deductive") {
+                Label("Protocols", systemImage: "list.bullet.rectangle")
+                    .tag(SidebarItem.protocols)
+                Label("Interviewees", systemImage: "person.bubble")
+                    .tag(SidebarItem.interviewees)
+                Label("Attribute Sheets", systemImage: "text.book.closed")
+                    .tag(SidebarItem.attributeSheets)
+                Label("A Priori Codes", systemImage: "character.book.closed")
+                    .tag(SidebarItem.aprioriCodes)
+            }
+            Section("Inductive") {
                 Label("Open Codes", systemImage: "tag")
                     .tag(SidebarItem.openCodes)
                 Label("Axial Codes", systemImage: "tray.full")
                     .tag(SidebarItem.axialCodes)
-                Label("Layers", systemImage: "square.3.layers.3d")
-                    .tag(SidebarItem.layers)
             }
             Section("Reporting") {
                 Label("Coding Chart", systemImage: "point.3.connected.trianglepath.dotted")
                     .tag(SidebarItem.codingChart)
-                Label("Codebook Report", systemImage: "tablecells")
-                    .tag(SidebarItem.codebookReport)
+                Label("Attribute Sheet Report", systemImage: "tablecells")
+                    .tag(SidebarItem.attributeSheetReport)
             }
             // Every sidebar row is a single line of fixed height. A wrapping
             // hint row here ("Double-click a file…") was measured at the wrong
