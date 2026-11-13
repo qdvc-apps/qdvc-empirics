@@ -107,8 +107,8 @@ titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
 `ItemPages` (code, attribute sheet and person pages), `DeductivePages`
 (Protocols and A Priori Codes: tables, pages, inspectors), `CodingChart`,
 `AttributeSheetReport` and `ProtocolReport` (the Reports pages),
-`TextCodingView` (text view, decorations, margins: the sliding speaker
-badges, protocol segments with their summary bubbles, stripes and labels;
+`TextCodingView` (text view, decorations, margins: the speaker names that
+stay in view, protocol segments with their summary bubbles, stripes and labels;
 keys), `PDFCodingView` (with `PDFStripeOverlay`, the stripes beside the
 pages, and page turns), `EditTextSheet` (editing a text file in place),
 `CodingBar` (coding bar, quick codes, code palette, protocol palette), `InspectorView` (routed

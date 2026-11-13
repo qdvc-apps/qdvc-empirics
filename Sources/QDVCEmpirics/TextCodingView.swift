@@ -122,8 +122,8 @@ struct ColumnLayout: Equatable {
 
     static let stripeWidth: CGFloat = 56
     /// Speaker names run up the margin (SpeakerMargin), so it is narrow.
-    static let speakerWidth: CGFloat = 34
-    static let minSpeakerWidth: CGFloat = 34
+    static let speakerWidth: CGFloat = 32
+    static let minSpeakerWidth: CGFloat = 32
     static let maxLabelWidth: CGFloat = 200
     static let minLabelWidth: CGFloat = 110
 
@@ -641,36 +641,42 @@ struct CodeNameMargin: View {
     }
 }
 
-/// The Interlocutor layer's margin: a rail down each speaker's turn, and on
-/// it the speaker's name as a badge (a capsule, in capitals) running up the
-/// margin, turned a quarter to the left so the margin can stay narrow. On a
-/// long turn the badge slides down its rail as the text scrolls, so who is
-/// speaking stays in view (like a frozen table heading), until the turn's
-/// end pushes it along. Greyscale (see AppModel.speakerColor).
+/// The Interlocutor layer's margin: a line down each speaker's turn, with
+/// the speaker's name beside it on the right, turned a quarter to the left
+/// (reading upwards) so the margin can stay narrow. The name is centred on
+/// the part of the line that is on screen, so on a long turn it moves as the
+/// text scrolls and who is speaking stays in view, never leaving its turn.
+/// Greyscale (see AppModel.speakerColor).
 struct SpeakerMargin: View {
     var marks: [PlacedMark]
     var width: CGFloat
 
-    /// The badge's thickness across the margin, and its longest length.
-    static let thickness: CGFloat = 17
-    static let maxLength: CGFloat = 240
-    static let kerning: CGFloat = 0.6
-    static let font = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
-    /// Room kept above a sliding badge, at the top of the visible text.
-    static let inset: CGFloat = 8
+    /// The name's thickness across the margin, and its longest length.
+    static let thickness: CGFloat = 14
+    static let maxLength: CGFloat = 260
+    static let kerning: CGFloat = 0.5
+    static let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+    /// Where the line runs, from the margin's left edge; the name sits just
+    /// right of it.
+    static let lineX: CGFloat = 9
+    static let gap: CGFloat = 4
 
-    /// A badge's length along the rail (its name, capitals and padding).
+    /// A name's length along the line (in capitals).
     static func length(_ name: String) -> CGFloat {
         let w = (name.uppercased() as NSString).size(withAttributes: [.font: font, .kern: kerning]).width
-        return min(maxLength, ceil(w) + 18)
+        return min(maxLength, ceil(w) + 2)
     }
 
-    /// Where a badge goes on its turn's rail: level with the top of the
-    /// visible text while the turn runs past it, but never above the turn's
-    /// start nor past its end.
-    static func badgeY(_ m: PlacedMark, length: CGFloat, visibleTop: CGFloat) -> CGFloat {
-        let lowest = max(m.y, m.y + m.height - length)
-        return min(max(visibleTop + inset, m.y), lowest)
+    /// Where the middle of a name goes: the middle of the part of its turn's
+    /// line that is on screen (`visible`), kept inside the turn so the whole
+    /// name stays beside its own line.
+    static func centreY(_ m: PlacedMark, length: CGFloat, visible: ClosedRange<CGFloat>) -> CGFloat {
+        let top = max(m.y, visible.lowerBound)
+        let bottom = min(m.y + m.height, visible.upperBound)
+        let middle = bottom > top ? (top + bottom) / 2 : m.y + m.height / 2
+        let half = length / 2
+        guard m.height > length else { return m.y + m.height / 2 }
+        return min(max(middle, m.y + half), m.y + m.height - half)
     }
 
     var body: some View {
@@ -678,22 +684,25 @@ struct SpeakerMargin: View {
         // the GeometryReader's content runs again as the text scrolls).
         var lengths: [String: CGFloat] = [:]
         for m in marks { lengths[m.id] = min(Self.length(m.text), max(Self.thickness, m.height)) }
-        let rail = width - 14
         return GeometryReader { geo in
-            // The top of the visible text, in this margin's coordinates.
-            let visibleTop = max(0, -geo.frame(in: NamedCoordinateSpace.named(ScrollSpace.document)).minY)
+            // The part of the document on screen, in this margin's
+            // coordinates (from FillingScroll's coordinate space).
+            let space = NamedCoordinateSpace.named(ScrollSpace.document)
+            let viewport = geo.bounds(of: space)
+            let top = viewport?.minY ?? max(0, -geo.frame(in: space).minY)
+            let visible = top...max(top, viewport?.maxY ?? (top + 10_000))
             ZStack(alignment: .topLeading) {
                 Color.clear
                 ForEach(marks) { m in
                     let color = Color(nsColor: m.color)
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(color.opacity(0.3))
+                        .fill(color.opacity(0.45))
                         .frame(width: 2, height: max(8, m.height))
-                        .offset(x: rail - 1, y: m.y)
+                        .offset(x: Self.lineX - 1, y: m.y)
                     let length = lengths[m.id] ?? Self.thickness
-                    SpeakerBadge(name: m.text, color: color, length: length)
-                        .offset(x: rail - Self.thickness / 2,
-                                y: Self.badgeY(m, length: length, visibleTop: visibleTop))
+                    SpeakerLabel(name: m.text, color: color, length: length)
+                        .offset(x: Self.lineX + Self.gap,
+                                y: Self.centreY(m, length: length, visible: visible) - length / 2)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -701,9 +710,9 @@ struct SpeakerMargin: View {
     }
 }
 
-/// A speaker's name as a capsule badge in capitals, reading upwards (turned
-/// 90° anticlockwise).
-struct SpeakerBadge: View {
+/// A speaker's name in capitals, reading upwards (turned 90° anticlockwise),
+/// for the right of a turn's line.
+struct SpeakerLabel: View {
     var name: String
     var color: Color
     var length: CGFloat
@@ -711,21 +720,15 @@ struct SpeakerBadge: View {
     var body: some View {
         let t = SpeakerMargin.thickness
         Text(name.uppercased())
-            .font(.system(size: 9.5, weight: .semibold))
+            .font(.system(size: 10, weight: .semibold))
             .kerning(SpeakerMargin.kerning)
             .foregroundStyle(color)
             .lineLimit(1)
             .truncationMode(.tail)
-            .padding(.horizontal, 7)
             .frame(width: length, height: t)
-            .background(
-                Capsule()
-                    .fill(Color(nsColor: .textBackgroundColor))
-                    .overlay(Capsule().fill(color.opacity(0.10)))
-            )
-            .overlay(Capsule().strokeBorder(color.opacity(0.5), lineWidth: 1))
             .rotationEffect(.degrees(-90))
             .frame(width: t, height: length)
+            .contentShape(Rectangle())
             .help(name)
     }
 }

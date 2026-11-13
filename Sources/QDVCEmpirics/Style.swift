@@ -306,8 +306,8 @@ struct FillingScroll<Content: View>: View {
                     .frame(minHeight: geo.size.height, alignment: .top)
                     .padding(.horizontal, padding)
             }
-            // So content can tell how far it has scrolled (the speaker
-            // badges that stay in view, SpeakerMargin).
+            // So content can tell which part of it is on screen (the
+            // speaker names that stay in view, SpeakerMargin).
             .coordinateSpace(NamedCoordinateSpace.named(ScrollSpace.document))
         }
     }

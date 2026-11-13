@@ -115,10 +115,11 @@ retrace your steps. The pages of single items are:
   left or right (a table printed sideways, say): the turn is saved in the
   workspace, so everyone sees the page that way; the PDF itself isn't
   changed.
-- On the Interlocutor layer, each speaker's turn has a rail in the narrow
-  left margin, with the speaker's name on it as a **badge** in capitals,
-  running up the margin. On a long turn the badge slides down its rail as
-  you scroll, so who is speaking stays in view.
+- On the Interlocutor layer, each speaker's turn has a line in the narrow
+  left margin, with the speaker's name in capitals on its right, running up
+  the margin. The name is centred on the part of the line that is on
+  screen, so on a long turn it moves as you scroll and who is speaking stays
+  in view.
 - Select text, then press **Return** (or ⌘K) to open the **code palette**:
   type a few letters, Return applies the code; a name that isn't a code yet
   creates it (⌘Return always creates). On an inductive layer the palette
@@ -238,8 +239,8 @@ same kind) moves everything linked to it. The
 **Interlocutor layer** finds conversational turns from speaker header lines,
 forgiving inconsistent capitals, colons, line breaks, timestamps and
 Markdown emphasis, and maps each speaker to a researcher or interviewee
-(File inspector › Speakers…); names then show in the left margin as badges
-running up each turn's rail (see Coding a file), in greyscale so they never
+(File inspector › Speakers…); names then show in the left margin, running
+up beside each turn's line (see Coding a file), in greyscale so they never
 compete with code colours: interviewees dark, interviewers a lighter grey.
 
 **Protocols** (⌃⌘5) and **A Priori Codes** (⌃⌘8) are defined once for the

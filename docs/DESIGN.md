@@ -74,10 +74,10 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   Safari, since following a code from a quote and back is a common move.
 - **Document.** Text in a readable column, the Interlocutor layer's speaker
   names in a narrow left margin (greyscale: interviewees dark, interviewers
-  lighter) as capsule badges in capitals turned to run up each turn's rail,
-  which slide down the rail as a long turn scrolls past so the speaker stays
-  in view (a frozen heading, per turn; the margin reads the scroll offset
-  from FillingScroll's named coordinate space),
+  lighter): a line down each turn, the name in capitals beside it on the
+  right, turned to read upwards and centred on the part of the line on
+  screen, so on a long turn the speaker stays in view (the margin reads
+  the visible area from FillingScroll's named coordinate space),
   coding stripes in a right margin (dashed grey for irrelevant text), open
   code labels beside them when there is room (in the stripe's colour: the
   working identifiers on the first line, then the names in bold, wrapped so
