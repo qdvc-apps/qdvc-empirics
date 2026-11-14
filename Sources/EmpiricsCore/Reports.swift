@@ -1,10 +1,10 @@
 import Foundation
 
-// The data behind the Reports pages: the Coding Chart (files → open codes
+// The data behind the Reports pages: the Inductive Coding Chart (files → open codes
 // → theorising codes) and the Attribute Sheet Report (every response to an attribute sheet).
 // Worked out here, without any interface, so they can be tested.
 
-// MARK: - Coding Chart
+// MARK: - Inductive Coding Chart
 
 /// Columns of a layer's coding, left to right: empirical files, open codes,
 /// then theorising codes by level (a theorising code built only from open codes is
@@ -261,14 +261,14 @@ public struct AttributeSheetReport: Equatable {
     }
 }
 
-// MARK: - Protocol Report
+// MARK: - Protocol Responses
 
 /// A protocol across the empirical files that follow it in a deductive
 /// layer: a row per file, a column per protocol item, and in each cell the
 /// researcher's summary of what the file says for that item (the layer's
 /// Framework Matrix cell for the file and item), with the item's prompt and
 /// response segments there, to read the full answer.
-public struct ProtocolReport: Equatable {
+public struct ProtocolResponses: Equatable {
     public struct Cell: Equatable {
         public var summary: String = ""
         /// Selection keys of the item's segments in the file, in text order.
@@ -301,7 +301,7 @@ public struct ProtocolReport: Equatable {
 
     /// The report for a protocol in a deductive layer: the files following
     /// it there, in the Empirical Files order.
-    public static func make(_ p: Project, protocol key: String, layer layerKey: String) -> ProtocolReport? {
+    public static func make(_ p: Project, protocol key: String, layer layerKey: String) -> ProtocolResponses? {
         guard let pr = p.protocols[key], let layer = p.layer(layerKey), layer.isDeductive else { return nil }
         let items = Set(pr.items.map(\.key))
         var rows: [Row] = []
@@ -320,7 +320,7 @@ public struct ProtocolReport: Equatable {
             }
             rows.append(Row(file: f.key, cells: cells))
         }
-        return ProtocolReport(studyProtocol: pr, layer: layerKey, rows: rows)
+        return ProtocolResponses(studyProtocol: pr, layer: layerKey, rows: rows)
     }
 
     /// The report as CSV: working identifier and file, then one column per
@@ -330,6 +330,158 @@ public struct ProtocolReport: Equatable {
         var lines = [CSV.line(["No.", "File"] + headings)]
         for r in rows {
             lines.append(CSV.line([workingIDs[r.file] ?? "", title(r.file)] + studyProtocol.items.map { r.cell($0.key).summary }))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+}
+
+// MARK: - Protocol Outcomes
+
+/// Which codes the Protocol Outcomes report counts.
+public enum OutcomeCoding: String, CaseIterable, Codable {
+    case apriori
+    case open
+    case theorising
+
+    public var label: String {
+        switch self {
+        case .apriori: return "A Priori Codes"
+        case .open: return "Open Codes"
+        case .theorising: return "Theorising Codes"
+        }
+    }
+
+    /// The kind of layer the codes are in.
+    public var layerKind: LayerKind { self == .apriori ? .deductive : .inductive }
+}
+
+/// Where codes are grounded, protocol-wise: for each code of one kind (a
+/// priori, open or theorising), how many of its instances (the selections
+/// it is evidence for; for a theorising code, those of the codes it is
+/// built from, all the way down) lie in text marked as each part (prompt,
+/// response) of each item of a protocol, in a deductive layer. An instance
+/// counts for every segment it overlaps; one overlapping none is counted as
+/// elsewhere. Selections and segments may be in different layers: they are
+/// compared by where they are in the file's text.
+public struct ProtocolOutcomes: Equatable {
+    public struct Column: Equatable, Hashable {
+        public var item: String
+        public var part: ProtocolPart
+
+        public init(item: String, part: ProtocolPart) {
+            self.item = item
+            self.part = part
+        }
+    }
+
+    public struct Row: Equatable, Identifiable {
+        public var code: String
+        /// Instances (selection keys) per column.
+        public var cells: [Column: [String]]
+        /// Instances outside every segment of the protocol.
+        public var elsewhere: [String]
+        /// Every instance, once.
+        public var instances: [String]
+
+        public var id: String { code }
+
+        public func count(_ c: Column) -> Int { cells[c]?.count ?? 0 }
+    }
+
+    public var studyProtocol: StudyProtocol
+    /// The deductive layer whose segments are counted, and the layer whose
+    /// codes are.
+    public var segmentLayer: String
+    public var codeLayer: String
+    public var coding: OutcomeCoding
+    /// Every item's prompt, then its response, in protocol order.
+    public var columns: [Column]
+    public var rows: [Row]
+
+    /// The largest count in a cell (for shading).
+    public var maxCount: Int { rows.flatMap { r in columns.map { r.count($0) } + [r.elsewhere.count] }.max() ?? 0 }
+
+    public static func make(_ p: Project, protocol key: String, segmentLayer: String, coding: OutcomeCoding,
+                            codeLayer: String) -> ProtocolOutcomes? {
+        guard let pr = p.protocols[key], let seg = p.layer(segmentLayer), seg.isDeductive,
+              let codes = p.layer(codeLayer), codes.kind == coding.layerKind else { return nil }
+        let columns = pr.items.flatMap { [Column(item: $0.key, part: .prompt), Column(item: $0.key, part: .response)] }
+        let items = Set(pr.items.map(\.key))
+        // Segments of the protocol, per file.
+        var segments: [String: [(column: Column, selection: CodeSelection)]] = [:]
+        for (file, list) in seg.selections {
+            for s in list {
+                guard let g = s.segment, items.contains(g.item) else { continue }
+                segments[file, default: []].append((Column(item: g.item, part: g.part), s))
+            }
+        }
+        // Each code's instances.
+        var instances: [(code: String, name: String, selections: [String])] = []
+        switch coding {
+        case .apriori:
+            for apc in p.sortedAprioriCodes {
+                instances.append((apc.key, apc.name, (codes.aprioriEvidence[apc.key] ?? []).map(\.target)))
+            }
+        case .open, .theorising:
+            let kind: CodeKind = coding == .open ? .open : .theorising
+            for c in codes.codes.values where c.kind == kind {
+                instances.append((c.key, c.name, Self.selections(of: c.key, in: codes)))
+            }
+            instances.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
+        var rows: [Row] = []
+        for entry in instances {
+            var row = Row(code: entry.code, cells: [:], elsewhere: [], instances: [])
+            var seen = Set<String>()
+            for key in entry.selections where seen.insert(key).inserted {
+                guard let s = codes.selection(key) else { continue }
+                row.instances.append(key)
+                var hit = false
+                var counted = Set<Column>()
+                for g in segments[s.fileKey] ?? [] where g.selection.overlaps(s) && counted.insert(g.column).inserted {
+                    row.cells[g.column, default: []].append(key)
+                    hit = true
+                }
+                if !hit { row.elsewhere.append(key) }
+            }
+            rows.append(row)
+        }
+        return ProtocolOutcomes(studyProtocol: pr, segmentLayer: segmentLayer, codeLayer: codeLayer, coding: coding,
+                                columns: columns, rows: rows)
+    }
+
+    /// The selections a code stands on: an open code's evidence; for a
+    /// theorising code, those of the codes it is built from, all the way
+    /// down. In evidence order, each once.
+    static func selections(of code: String, in layer: CodingLayer) -> [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+        var visited = Set<String>()
+        func walk(_ key: String) {
+            guard visited.insert(key).inserted, let c = layer.codes[key] else { return }
+            for e in c.evidence {
+                if layer.codes[e.target] != nil {
+                    walk(e.target)
+                } else if seen.insert(e.target).inserted {
+                    result.append(e.target)
+                }
+            }
+        }
+        walk(code)
+        return result
+    }
+
+    /// The report as CSV: working identifier and code, a column per item
+    /// and part, then elsewhere and the total.
+    public func csv(workingIDs: [String: String], title: (String) -> String) -> String {
+        let number = Dictionary(uniqueKeysWithValues: studyProtocol.items.enumerated().map { ($1.key, $0 + 1) })
+        let headings = columns.map { c in
+            "\(number[c.item] ?? 0) \(studyProtocol.item(c.item)?.label ?? "") (\(c.part.label))"
+        }
+        var lines = [CSV.line(["No.", "Code"] + headings + ["Elsewhere", "Total"])]
+        for r in rows {
+            lines.append(CSV.line([workingIDs[r.code] ?? "", title(r.code)] + columns.map { String(r.count($0)) }
+                                  + [String(r.elsewhere.count), String(r.instances.count)]))
         }
         return lines.joined(separator: "\n") + "\n"
     }

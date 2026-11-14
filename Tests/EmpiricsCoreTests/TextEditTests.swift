@@ -4,7 +4,7 @@ import XCTest
 
 /// Editing a full-text in place, writing it back as it was encoded, merging
 /// selections next to each other, page rotations, table layouts and the
-/// Protocol Report.
+/// Protocol Responses.
 final class TextEditTests: XCTestCase {
     func makeProject() -> (Project, layer: String, deductive: String, file: String) {
         var p = Project.new(title: "Edits")
@@ -193,7 +193,7 @@ final class TextEditTests: XCTestCase {
         XCTAssertThrowsError(try p.mergeSelections(a, b, pages: [text]))
     }
 
-    func testRotationsTableLayoutsAndProtocolReportRoundTrip() throws {
+    func testRotationsTableLayoutsAndProtocolResponsesRoundTrip() throws {
         var p = Project.new(title: "Round trip")
         let pdf = p.addFile(path: "articles/a.pdf", kind: .pdf)
         let txt = p.addFile(path: "interviews/b.txt", kind: .text)
@@ -222,13 +222,105 @@ final class TextEditTests: XCTestCase {
         let yaml = try String(contentsOf: dir.appendingPathComponent("files/\(pdf).yml"), encoding: .utf8)
         XCTAssertTrue(yaml.contains("rotations:\n  1: 270\n  3: 90"), yaml)
 
-        let report = try XCTUnwrap(ProtocolReport.make(p, protocol: pr, layer: d))
+        let report = try XCTUnwrap(ProtocolResponses.make(p, protocol: pr, layer: d))
         XCTAssertEqual(report.rows.map(\.file), [txt])
-        XCTAssertEqual(report.rows[0].cell(q1), ProtocolReport.Cell(summary: "Ten years in the field, “mostly” fieldwork.",
+        XCTAssertEqual(report.rows[0].cell(q1), ProtocolResponses.Cell(summary: "Ten years in the field, “mostly” fieldwork.",
                                                                     prompts: [prompt], responses: [response]))
         XCTAssertTrue(report.rows[0].cell(q2).isEmpty)
-        XCTAssertNil(ProtocolReport.make(p, protocol: pr, layer: p.inductiveLayers[0].key))
+        XCTAssertNil(ProtocolResponses.make(p, protocol: pr, layer: p.inductiveLayers[0].key))
         XCTAssertEqual(report.csv(workingIDs: [txt: "EF 2"], title: { _ in "B" }),
                        "No.,File,1 Background,2 Tools\nEF 2,B,\"Ten years in the field, “mostly” fieldwork.\",\n")
+    }
+}
+
+final class ProgressTests: XCTestCase {
+    func testTimeIndicators() {
+        let text = "We started. [~5 min] Then [~20 min] more [5 mins] and [~1.5 h], [~2–3 min] but not [5] or [min] or [~5 apples]."
+        let found = TimeIndicators.ranges(in: text).map { (text as NSString).substring(with: $0) }
+        XCTAssertEqual(found, ["[~5 min]", "[~20 min]", "[5 mins]", "[~1.5 h]", "[~2–3 min]"])
+        // Trimmed from the ends of a selection, not from its middle.
+        let ns = text as NSString
+        let all = TextSpan(start: ns.range(of: "[~5 min]").location, length: ns.range(of: " more").location - ns.range(of: "[~5 min]").location)
+        let trimmed = TimeIndicators.trim([all], pages: [text])
+        XCTAssertEqual(trimmed.map { ns.substring(with: NSRange(location: $0.start, length: $0.length)) }, ["Then"])
+        let middle = TextSpan(start: 0, length: ns.range(of: " Then").location + 5)
+        XCTAssertEqual(TimeIndicators.trim([middle], pages: [text]), [middle])
+        // Nothing but an indicator: nothing left.
+        let only = ns.range(of: "[5 mins]")
+        XCTAssertEqual(TimeIndicators.trim([TextSpan(start: only.location - 1, length: only.length + 2)], pages: [text]), [])
+    }
+
+    func testCodingProgress() throws {
+        var p = Project.new(title: "Progress")
+        let f = p.addFile(path: "a.txt", kind: .text)
+        let l = p.inductiveLayers[0].key
+        // 10 + 10 + 10 letters; spaces and the time indicator don't count.
+        let text = "aaaaaaaaaa [~5 min] bbbbbbbbbb cccccccccc"
+        let a = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 0, length: 10)])
+        _ = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 20, length: 10)], irrelevant: true)
+        _ = try p.addSelection(layer: l, file: f, spans: [TextSpan(start: 31, length: 5)])   // a highlight: pending
+        XCTAssertEqual(CodingProgress.of(p, layer: l, file: f, pages: [text]), CodingProgress(coded: 0, irrelevant: 10, pending: 20))
+        let c = try p.addCode(layer: l, kind: .open, name: "A")
+        try p.addEvidence(code: c, target: a)
+        let progress = CodingProgress.of(p, layer: l, file: f, pages: [text])
+        XCTAssertEqual(progress, CodingProgress(coded: 10, irrelevant: 10, pending: 10))
+        XCTAssertEqual(progress.fraction(progress.coded), 1.0 / 3.0, accuracy: 0.0001)
+        // Ignored spans (speaker headers) leave the count.
+        XCTAssertEqual(CodingProgress.of(p, layer: l, file: f, pages: [text], ignoring: [TextSpan(start: 31, length: 10)]).pending, 0)
+        // Another layer has its own progress.
+        XCTAssertEqual(CodingProgress.of(p, layer: p.deductiveLayers[0].key, file: f, pages: [text]).pending, 30)
+    }
+}
+
+final class ProtocolOutcomesTests: XCTestCase {
+    func testCountsPerItemAndPart() throws {
+        var p = Project.new(title: "Outcomes")
+        let f = p.addFile(path: "a.txt", kind: .text)
+        let g = p.addFile(path: "b.txt", kind: .text)
+        let d = p.deductiveLayers[0].key, i = p.inductiveLayers[0].key
+        let pr = p.addProtocol(title: "Interview")
+        let q1 = try XCTUnwrap(p.addProtocolItem(to: pr, label: "Tools"))
+        let q2 = try XCTUnwrap(p.addProtocolItem(to: pr, label: "Worries"))
+        // In a.txt: Q1 prompt 0–20, response 20–100; Q2 response 100–200.
+        _ = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 0, length: 20)], segment: ProtocolSegment(item: q1, part: .prompt))
+        _ = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 20, length: 80)], segment: ProtocolSegment(item: q1, part: .response))
+        _ = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 100, length: 100)], segment: ProtocolSegment(item: q2, part: .response))
+        // Open code "Speed": one instance in Q1's response, one across Q1's
+        // response and Q2's response, one in b.txt (no segments).
+        let speed = try p.addCode(layer: i, kind: .open, name: "Speed")
+        let s1 = try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 30, length: 10)])
+        let s2 = try p.addSelection(layer: i, file: f, spans: [TextSpan(start: 90, length: 20)])
+        let s3 = try p.addSelection(layer: i, file: g, spans: [TextSpan(start: 0, length: 10)])
+        for s in [s1, s2, s3] { try p.addEvidence(code: speed, target: s) }
+        let other = try p.addCode(layer: i, kind: .open, name: "Doubt")
+        try p.addEvidence(code: other, target: s2)
+        let theme = try p.addCode(layer: i, kind: .theorising, name: "Pace")
+        try p.addEvidence(code: theme, target: speed)
+        try p.addEvidence(code: theme, target: other)
+
+        let r = try XCTUnwrap(ProtocolOutcomes.make(p, protocol: pr, segmentLayer: d, coding: .open, codeLayer: i))
+        XCTAssertEqual(r.columns.count, 4)
+        XCTAssertEqual(r.rows.map(\.code), [other, speed])   // by name
+        let row = try XCTUnwrap(r.rows.first { $0.code == speed })
+        XCTAssertEqual(row.count(.init(item: q1, part: .prompt)), 0)
+        XCTAssertEqual(row.count(.init(item: q1, part: .response)), 2)
+        XCTAssertEqual(row.count(.init(item: q2, part: .response)), 1)
+        XCTAssertEqual(row.elsewhere, [s3])
+        XCTAssertEqual(row.instances.count, 3)
+        XCTAssertEqual(r.maxCount, 2)
+        // A theorising code counts the selections beneath it, once each.
+        let t = try XCTUnwrap(ProtocolOutcomes.make(p, protocol: pr, segmentLayer: d, coding: .theorising, codeLayer: i))
+        XCTAssertEqual(t.rows.first?.instances.count, 3)
+        XCTAssertEqual(t.rows.first?.count(.init(item: q2, part: .response)), 1)
+        // A priori codes, from a deductive layer.
+        let apc = try p.addAprioriCode(name: "Ease")
+        let e = try p.addSelection(layer: d, file: f, spans: [TextSpan(start: 5, length: 5)])
+        try p.addAprioriEvidence(code: apc, selection: e)
+        let a = try XCTUnwrap(ProtocolOutcomes.make(p, protocol: pr, segmentLayer: d, coding: .apriori, codeLayer: d))
+        XCTAssertEqual(a.rows.first?.count(.init(item: q1, part: .prompt)), 1)
+        // The wrong kind of layer gives nothing.
+        XCTAssertNil(ProtocolOutcomes.make(p, protocol: pr, segmentLayer: d, coding: .open, codeLayer: d))
+        XCTAssertTrue(r.csv(workingIDs: [:], title: { p.code($0)?.name ?? "" })
+            .hasPrefix("No.,Code,1 Tools (Prompt),1 Tools (Response),2 Worries (Prompt),2 Worries (Response),Elsewhere,Total\n,Doubt,0,1,0,1,0,1\n"))
     }
 }

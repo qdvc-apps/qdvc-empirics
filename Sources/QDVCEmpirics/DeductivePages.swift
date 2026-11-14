@@ -294,10 +294,10 @@ struct ProtocolSummary: View {
                 }
                 HStack {
                     Button("Edit Items…") { model.show(.studyProtocol(protocolKey)) }
-                    if model.sidebar != .protocolReport {
+                    if model.sidebar != .protocolResponses {
                         Button("Show Report") {
                             model.reportProtocol = protocolKey
-                            model.sidebar = .protocolReport
+                            model.sidebar = .protocolResponses
                         }
                     }
                 }

@@ -24,7 +24,8 @@ enum SidebarItem: Hashable {
     // Reports
     case codingChart
     case attributeSheetReport
-    case protocolReport
+    case protocolResponses
+    case protocolOutcomes
     // Pages of single items (in the Working Area)
     case file(String)
     case code(String)
@@ -58,7 +59,8 @@ enum SidebarItem: Hashable {
         case .theorisingCodes: return "theorisingCodes"
         case .codingChart: return "codingChart"
         case .attributeSheetReport: return "attributeSheetReport"
-        case .protocolReport: return "protocolReport"
+        case .protocolResponses: return "protocolResponses"
+        case .protocolOutcomes: return "protocolOutcomes"
         case .file(let k): return "file:" + k
         case .code(let k): return "code:" + k
         case .studyProtocol(let k): return "protocol:" + k
@@ -84,7 +86,8 @@ enum SidebarItem: Hashable {
         case ("theorisingCodes", _): self = .theorisingCodes
         case ("codingChart", _): self = .codingChart
         case ("attributeSheetReport", _): self = .attributeSheetReport
-        case ("protocolReport", _): self = .protocolReport
+        case ("protocolResponses", _): self = .protocolResponses
+        case ("protocolOutcomes", _): self = .protocolOutcomes
         case ("file", let k) where !k.isEmpty: self = .file(k)
         case ("code", let k) where !k.isEmpty: self = .code(k)
         case ("protocol", let k) where !k.isEmpty: self = .studyProtocol(k)
@@ -143,6 +146,31 @@ struct RevealRequest: Equatable {
     var revision: Int
 }
 
+/// How wide the reading column is, as in QDVC Manuscript (View › Margins):
+/// narrow margins give a wide column, wide margins a narrow one.
+enum MarginPreset: String, CaseIterable, Identifiable {
+    case narrow, medium, wide
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .narrow: return "Narrow Margins"
+        case .medium: return "Medium Margins"
+        case .wide: return "Wide Margins"
+        }
+    }
+
+    /// The text column's width, in points.
+    var columnWidth: CGFloat {
+        switch self {
+        case .narrow: return 860
+        case .medium: return 700
+        case .wide: return 580
+        }
+    }
+}
+
 enum ReadingFont: String, CaseIterable, Identifiable {
     case system, serif, mono
 
@@ -182,6 +210,11 @@ final class DocumentStore {
     /// Turns per file, with the speakers they were found for.
     var turns: [String: (speakers: Set<String>, turns: [Turn])] = [:]
     var candidates: [String: [SpeakerCandidate]] = [:]
+    /// Time indicators ("[~5 min]") per file, ignored for coding.
+    var timeIndicators: [String: [TextSpan]] = [:]
+    /// Coding progress per file and layer, with the change it was worked
+    /// out at (`AppModel.changeCount`).
+    var progress: [String: (change: Int, value: CodingProgress)] = [:]
 
     func clear() {
         pages = [:]
@@ -191,6 +224,8 @@ final class DocumentStore {
         errors = [:]
         turns = [:]
         candidates = [:]
+        timeIndicators = [:]
+        progress = [:]
     }
 
     func forget(_ file: String) {
@@ -201,6 +236,8 @@ final class DocumentStore {
         errors[file] = nil
         turns[file] = nil
         candidates[file] = nil
+        timeIndicators[file] = nil
+        progress = progress.filter { !$0.key.hasPrefix(file + "|") }
     }
 }
 
@@ -242,13 +279,16 @@ final class AppModel {
     private(set) var currentResearcher: String?
     var focusedSelection: String?
     /// The row selected in the table of the current list page (also the
-    /// item selected in the Coding Chart and the Attribute Sheet Report).
+    /// item selected in the Inductive Coding Chart and the Attribute Sheet Report).
     var tableSelection: String?
     /// The attribute sheet shown in the Attribute Sheet Report.
     var reportAttributeSheet: String?
-    /// The protocol, and the deductive layer, shown in the Protocol Report.
+    /// The protocol, and the deductive layer, shown in the Protocol Responses.
     var reportProtocol: String?
     var reportProtocolLayer: String?
+    /// The codes Protocol Outcomes counts, and the layer they come from.
+    var outcomeCoding: OutcomeCoding = .open
+    var outcomeCodeLayer: String?
     /// Items being worked on, in the sidebar's Working Area (this Mac).
     private(set) var workingArea: [SidebarItem] = []
     @ObservationIgnored private var backStack: [SidebarItem] = []
@@ -284,9 +324,12 @@ final class AppModel {
     var readingFont: ReadingFont = ReadingFont(rawValue: UserDefaults.standard.string(forKey: "readingFont") ?? "") ?? .serif {
         didSet { UserDefaults.standard.set(readingFont.rawValue, forKey: "readingFont") }
     }
-    var readingWidth: Double = UserDefaults.standard.object(forKey: "readingWidth") as? Double ?? 720 {
-        didSet { UserDefaults.standard.set(readingWidth, forKey: "readingWidth") }
+    /// The reading column's margins (View › Margins, Settings › Reading).
+    var margins: MarginPreset = MarginPreset(rawValue: UserDefaults.standard.string(forKey: "margins") ?? "") ?? .medium {
+        didSet { UserDefaults.standard.set(margins.rawValue, forKey: "margins") }
     }
+    /// The reading column's width, from the margins.
+    var readingWidth: Double { Double(margins.columnWidth) }
     var lineSpacing: Double = UserDefaults.standard.object(forKey: "lineSpacing") as? Double ?? 1.35 {
         didSet { UserDefaults.standard.set(lineSpacing, forKey: "lineSpacing") }
     }
@@ -321,6 +364,8 @@ final class AppModel {
     @ObservationIgnored var positions: [String: Int] = [:]
     @ObservationIgnored private var didStartUp = false
     @ObservationIgnored private var revealCounter = 0
+    /// Bumped by every change to the project (for caches that follow it).
+    @ObservationIgnored private(set) var changeCount = 0
     /// Tables' column arrangements changed but not saved yet, the work that
     /// will save them, and arrangements read back (by their JSON).
     @ObservationIgnored var pendingTableLayouts: [AttributeSheetTarget: String] = [:]
@@ -398,6 +443,7 @@ final class AppModel {
             let loaded = try Workspace.load(url)
             workspaceURL = url
             project = loaded.project
+            changeCount += 1
             index = ProjectIndex(project)
             signature = Workspace.signature(url)
             DeviceStore.addRecent(url)
@@ -464,6 +510,7 @@ final class AppModel {
         reportAttributeSheet = nil
         reportProtocol = nil
         reportProtocolLayer = nil
+        outcomeCodeLayer = nil
         workingArea = []
         backStack = []
         forwardStack = []
@@ -595,6 +642,7 @@ final class AppModel {
         let old = project
         guard new != old else { return }
         project = new
+        changeCount += 1
         index = ProjectIndex(new)
         markDirty(Workspace.changedParts(from: old, to: new))
         forgetStaleDocuments(old: old, new: new)
@@ -670,6 +718,7 @@ final class AppModel {
             let changed = loaded.project != project
             let old = project
             project = loaded.project
+            changeCount += 1
             index = ProjectIndex(project)
             signature = now
             // A file restored to its previous version through Git, say.
@@ -724,7 +773,7 @@ final class AppModel {
         project.inductiveLayers.first?.key ?? project.layers.first?.key ?? ""
     }
 
-    /// The inductive layer the Open Codes, Theorising Codes and Coding Chart pages
+    /// The inductive layer the Open Codes, Theorising Codes and Inductive Coding Chart pages
     /// show: the active layer if it is inductive, else the first inductive one.
     var inductiveLayer: CodingLayer? {
         if let l = activeLayer, l.isInductive { return l }
@@ -1342,6 +1391,7 @@ final class AppModel {
         documents.fingerprints[file] = "sha256:" + SHA256.hex(data)
         documents.turns[file] = nil
         documents.candidates[file] = nil
+        documents.timeIndicators[file] = nil
         documents.errors[file] = nil
         documentsRevision += 1
     }

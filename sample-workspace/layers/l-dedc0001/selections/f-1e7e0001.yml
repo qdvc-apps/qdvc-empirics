@@ -32,7 +32,7 @@ selections:
   - key: s-55f37227
     item: pi-0a000002
     part: prompt
-    start: 1093
+    start: 1103
     length: 56
     quote: And how do you find working with it over a long session?
     by: r-a11ce000
@@ -40,13 +40,13 @@ selections:
   - key: s-7137bddf
     item: pi-0a000002
     part: response
-    start: 1163
+    start: 1173
     length: 217
     quote: Much better than I expected. After three or four hours of coding my eyes usually give up, but the serif text and the wide margins help. The numbers for quick codes save a lot of clicking. I barely touch the mouse now.
     by: r-a11ce000
     created: 2026-11-01T09:00:00Z
   - key: s-6bc5b4c9
-    start: 1299
+    start: 1309
     length: 81
     quote: The numbers for quick codes save a lot of clicking. I barely touch the mouse now.
     by: r-a11ce000
@@ -54,7 +54,7 @@ selections:
   - key: s-706ce06d
     item: pi-0a000003
     part: prompt
-    start: 1393
+    start: 1403
     length: 44
     quote: Is there anything that worries you about it?
     by: r-a11ce000
@@ -62,13 +62,13 @@ selections:
   - key: s-577142ce
     item: pi-0a000003
     part: response
-    start: 1451
+    start: 1461
     length: 66
     quote: Only that I need to show my reviewers where each claim comes from.
     by: r-a11ce000
     created: 2026-11-01T09:00:00Z
   - key: s-19c7b0e8
-    start: 1518
+    start: 1528
     length: 56
     quote: If I can point them to the Git history of the YAML files
     by: r-a11ce000

@@ -697,3 +697,48 @@ struct MergeButton: View {
         }
     }
 }
+
+/// How far the open file's coding has come in the active layer: one stacked
+/// bar, coded (green), irrelevant (grey) and still to do (the empty track),
+/// with the figures on hover. Counted in characters that aren't white
+/// space, leaving out speaker header lines and time indicators.
+struct CodingProgressBar: View {
+    @Environment(AppModel.self) private var model
+    let fileKey: String
+    var height: CGFloat = 5
+
+    var body: some View {
+        if let progress = model.codingProgress(fileKey), progress.total > 0 {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let coded = w * progress.fraction(progress.coded)
+                let irrelevant = w * progress.fraction(progress.irrelevant)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.08))
+                    HStack(spacing: 0) {
+                        Rectangle().fill(Color.green.opacity(0.8)).frame(width: coded)
+                        Rectangle().fill(Color.secondary.opacity(0.45)).frame(width: irrelevant)
+                        Spacer(minLength: 0)
+                    }
+                    .clipShape(Capsule())
+                }
+            }
+            .frame(height: height)
+            .help(Self.summary(progress, layer: model.activeLayer?.name))
+            .accessibilityElement()
+            .accessibilityLabel("Coding progress")
+            .accessibilityValue(Self.summary(progress, layer: nil))
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+        }
+    }
+
+    static func percent(_ part: Int, of p: CodingProgress) -> String {
+        "\(Int((p.fraction(part) * 100).rounded()))%"
+    }
+
+    static func summary(_ p: CodingProgress, layer: String?) -> String {
+        "Coded \(percent(p.coded, of: p)) · irrelevant \(percent(p.irrelevant, of: p)) · still to do \(percent(p.pending, of: p))"
+            + (layer.map { " (in \($0))" } ?? "")
+    }
+}

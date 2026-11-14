@@ -5,7 +5,7 @@ import SwiftUI
 // One way of showing any item (empirical file, attribute sheet, open code, theorising
 // code, researcher, interviewee) on a single line: a neutral icon, its title
 // and its working-identifier badge ("EF 3", "OC 12"…). Used in the Working
-// Area, the Coding Chart, the Attribute Sheet Report and the inspector headers.
+// Area, the Inductive Coding Chart, the Attribute Sheet Report and the inspector headers.
 
 extension AppModel {
     /// The item's symbol (always drawn in one neutral colour).
@@ -15,7 +15,7 @@ extension AppModel {
         if project.attributeSheets[key] != nil { return "text.book.closed" }
         if project.protocols[key] != nil { return "list.bullet.rectangle" }
         if project.aprioriCodes[key] != nil { return "character.book.closed" }
-        if project.researcher(key) != nil { return "graduationcap" }
+        if project.researcher(key) != nil { return "person.text.rectangle" }
         if project.interviewee(key) != nil { return "person.bubble" }
         return "questionmark.circle"
     }

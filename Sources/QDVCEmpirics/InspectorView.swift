@@ -95,9 +95,19 @@ struct InspectorView: View {
             } else {
                 nothing("Choose an attribute sheet below the report.")
             }
-        case .protocolReport:
+        case .protocolResponses:
             if let key = model.tableSelection, model.project.files[key] != nil {
                 InspectorScroll { FileInspector(fileKey: key) }
+            } else if let pr = model.shownReportProtocol {
+                InspectorScroll { ProtocolSummary(protocolKey: pr) }
+            } else {
+                nothing("Choose a protocol below the report.")
+            }
+        case .protocolOutcomes:
+            if let key = model.tableSelection, model.project.code(key) != nil {
+                InspectorScroll { codeEditor(key) }
+            } else if let key = model.tableSelection, model.project.aprioriCodes[key] != nil {
+                InspectorScroll { AprioriCodeEditor(codeKey: key) }
             } else if let pr = model.shownReportProtocol {
                 InspectorScroll { ProtocolSummary(protocolKey: pr) }
             } else {

@@ -37,13 +37,13 @@ selections:
     by: r-a11ce000
     created: 2026-11-01T09:00:00Z
   - key: s-28604a5f
-    start: 1192
+    start: 1202
     length: 106
     quote: After three or four hours of coding my eyes usually give up, but the serif text and the wide margins help.
     by: r-a11ce000
     created: 2026-11-01T09:00:00Z
   - key: s-70a3f53e
-    start: 1518
+    start: 1528
     length: 114
     quote: If I can point them to the Git history of the YAML files, that would answer the usual "you made this up" question.
     by: r-a11ce000

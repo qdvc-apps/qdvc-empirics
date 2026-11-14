@@ -88,6 +88,12 @@ struct PlacedMark: Identifiable, Equatable {
     var layer: String = ""
     var item: String = ""
     var reference = false
+    /// The selection it stands for, when that isn't its id (a selection
+    /// across PDF pages has a mark per page).
+    var selection: String = ""
+
+    /// The selection to focus when it is clicked.
+    var target: String { selection.isEmpty ? id : selection }
 }
 
 /// How the file page's width is shared: speaker names, the text, coding
@@ -208,6 +214,7 @@ struct TextCodingView: View {
             .clipped()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
+            CodingProgressBar(fileKey: fileKey)
             CodingBar(fileKey: fileKey)
         }
     }
@@ -279,57 +286,30 @@ struct TextCodingView: View {
                 if focused { alpha = min(0.75, alpha + 0.25) }
                 d.fills.append(.init(range: NSRange(location: a, length: b - a), color: colours[inner].withAlphaComponent(alpha)))
             }
-            for s in list {
-                guard let first = s.spans.first, ok(first), let last = s.spans.last else { continue }
-                let range = NSRange(location: first.start, length: last.end - first.start)
-                let focused = s.key == model.focusedSelection
-                if s.irrelevant {
-                    d.stripes.append(StripeSpec(key: s.key, range: range, color: .systemGray,
-                                                help: "Irrelevant: can never be evidence in this layer", focused: focused,
-                                                label: "Irrelevant", dashed: true))
-                    continue
-                }
-                let codes = model.tags(of: s.key, in: layer)
-                let none = layer.isDeductive ? "No a priori code yet" : "No open code yet"
-                let help = codes.isEmpty ? "Highlighted, " + none.lowercased()
-                    : codes.map { model.itemLabel($0.key) }.joined(separator: "\n")
-                let label = codes.isEmpty ? none : codes.map(\.name).joined(separator: ", ")
-                let badges = codes.map { LabelBadge(text: model.wid($0.key), color: $0.nsColor) }.filter { !$0.text.isEmpty }
-                d.stripes.append(StripeSpec(key: s.key, range: range, color: model.selectionColour(s, in: layer), help: help,
-                                            focused: focused, label: label, badges: badges))
-            }
         }
-        // Protocol segments are structure, like speaker turns: the active
-        // layer's when it is deductive; while coding on an inductive layer,
-        // those of the deductive layers shown beside it, so the protocol
-        // labels stay in view.
-        let segmentLayers: [CodingLayer]
-        if let active = model.activeLayer, active.isDeductive {
-            segmentLayers = [active]
-        } else {
-            segmentLayers = p.deductiveLayers.filter { model.isLayerVisible($0.key) }
+        for st in model.stripeSources(file: fileKey) {
+            guard let first = st.spans.first, ok(first), let last = st.spans.last else { continue }
+            d.stripes.append(StripeSpec(key: st.key, range: NSRange(location: first.start, length: last.end - first.start),
+                                        color: st.color, help: st.help, focused: st.focused, label: st.label,
+                                        badges: st.badges, dashed: st.dashed))
         }
-        for layer in segmentLayers {
-            let reference = layer.key != model.activeLayerKey
-            for s in layer.selections[fileKey] ?? [] {
-                guard let segment = s.segment, let first = s.spans.first, ok(first), let last = s.spans.last else { continue }
-                let range = NSRange(location: first.start, length: last.end - first.start)
-                let focused = !reference && s.key == model.focusedSelection
-                if focused {
-                    for span in s.spans where ok(span) {
-                        d.fills.append(.init(range: NSRange(location: span.start, length: span.length),
-                                             color: NSColor.protocolSegment.withAlphaComponent(0.12)))
-                    }
+        // Protocol segments are structure, like speaker turns: in their own
+        // margin, with a light fill only while focused.
+        for g in model.segmentSources(file: fileKey) {
+            guard let first = g.spans.first, ok(first), let last = g.spans.last else { continue }
+            if g.focused {
+                for span in g.spans where ok(span) {
+                    d.fills.append(.init(range: NSRange(location: span.start, length: span.length),
+                                         color: NSColor.protocolSegment.withAlphaComponent(0.12)))
                 }
-                let item = p.protocolItem(segment.item)?.item
-                let number = p.protocolItemNumber(segment.item).map { "\($0) · " } ?? ""
-                var help = model.segmentTitle(segment) + (item.map { $0.text.isEmpty ? "" : "\n" + $0.text } ?? "")
-                if reference { help += "\n\nIn \(layer.name) (switch to it to change the segment)." }
-                d.segments.append(SegmentSpec(key: s.key, range: range, label: number + segment.part.label,
-                                              caption: item.map { $0.label.isEmpty ? "Untitled" : $0.label } ?? "Deleted item",
-                                              help: help, focused: focused, prompt: segment.part == .prompt,
-                                              layer: layer.key, item: segment.item, reference: reference))
             }
+            d.segments.append(SegmentSpec(key: g.key, range: NSRange(location: first.start, length: last.end - first.start),
+                                          label: g.label, caption: g.caption, help: g.help, focused: g.focused,
+                                          prompt: g.prompt, layer: g.layer, item: g.item, reference: g.reference))
+        }
+        // Time indicators ("[~5 min]") are ignored for coding: shown faint.
+        for span in model.timeIndicators(fileKey) where ok(span) {
+            d.dimmed.append(NSRange(location: span.start, length: span.length))
         }
         if model.showOtherLayers {
             for layer in p.layers where layer.key != model.activeLayerKey && model.isLayerVisible(layer.key) {
@@ -434,7 +414,15 @@ struct TextCodingView: View {
             NSSound.beep()
             return
         }
-        tv.setSelectedRange(NSRange(location: turn.body.start, length: turn.body.length))
+        tv.setSelectedRange(Self.withoutTimeIndicators(NSRange(location: turn.body.start, length: turn.body.length), in: tv.string))
+    }
+
+    /// A range without time indicators ("[~5 min]") or white space at its
+    /// ends (they are ignored for coding).
+    static func withoutTimeIndicators(_ r: NSRange, in text: String) -> NSRange {
+        let trimmed = TimeIndicators.trim([TextSpan(start: r.location, length: r.length)], pages: [text])
+        guard let span = trimmed.first else { return NSRange(location: r.location, length: 0) }
+        return NSRange(location: span.start, length: span.length)
     }
 
     /// Selects the paragraph (or sentence) at the insertion point, without
@@ -454,7 +442,7 @@ struct TextCodingView: View {
             }
             if let found { range = found }
         }
-        tv.setSelectedRange(Self.trimmed(range, in: ns))
+        tv.setSelectedRange(Self.withoutTimeIndicators(Self.trimmed(range, in: ns), in: tv.string))
     }
 
     static func trimmed(_ r: NSRange, in ns: NSString) -> NSRange {
@@ -481,7 +469,7 @@ struct StripeMargin: View {
                 Ribbon(color: Color(nsColor: m.color), focused: m.focused, dashed: m.dashed, height: max(6, m.height))
                     .padding(.horizontal, 3)
                     .contentShape(Rectangle())
-                    .onTapGesture { model.focusSelection(m.id) }
+                    .onTapGesture { model.focusSelection(m.target) }
                     .help(m.text)
                     .offset(x: 8 + CGFloat(m.lane) * 9, y: m.y)
             }
@@ -633,7 +621,7 @@ struct CodeNameMargin: View {
                         .padding(-3)
                 )
                 .contentShape(Rectangle())
-                .onTapGesture { model.focusSelection(p.mark.id) }
+                .onTapGesture { model.focusSelection(p.mark.target) }
                 .help(p.mark.text)
                 .offset(x: 6, y: p.y)
             }
@@ -642,7 +630,7 @@ struct CodeNameMargin: View {
 }
 
 /// The Interlocutor layer's margin: a line down each speaker's turn, with
-/// the speaker's name beside it on the right, turned a quarter to the left
+/// the speaker's name beside it on the left, turned a quarter to the left
 /// (reading upwards) so the margin can stay narrow. The name is centred on
 /// the part of the line that is on screen, so on a long turn it moves as the
 /// text scrolls and who is speaking stays in view, never leaving its turn.
@@ -656,9 +644,9 @@ struct SpeakerMargin: View {
     static let maxLength: CGFloat = 260
     static let kerning: CGFloat = 0.5
     static let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
-    /// Where the line runs, from the margin's left edge; the name sits just
-    /// right of it.
-    static let lineX: CGFloat = 9
+    /// Where the line runs, from the margin's right edge (next to the
+    /// text); the name sits just left of it.
+    static let lineInset: CGFloat = 9
     static let gap: CGFloat = 4
 
     /// A name's length along the line (in capitals).
@@ -684,6 +672,7 @@ struct SpeakerMargin: View {
         // the GeometryReader's content runs again as the text scrolls).
         var lengths: [String: CGFloat] = [:]
         for m in marks { lengths[m.id] = min(Self.length(m.text), max(Self.thickness, m.height)) }
+        let lineX = width - Self.lineInset
         return GeometryReader { geo in
             // The part of the document on screen, in this margin's
             // coordinates (from FillingScroll's coordinate space).
@@ -698,10 +687,10 @@ struct SpeakerMargin: View {
                     RoundedRectangle(cornerRadius: 1)
                         .fill(color.opacity(0.45))
                         .frame(width: 2, height: max(8, m.height))
-                        .offset(x: Self.lineX - 1, y: m.y)
+                        .offset(x: lineX - 1, y: m.y)
                     let length = lengths[m.id] ?? Self.thickness
                     SpeakerLabel(name: m.text, color: color, length: length)
-                        .offset(x: Self.lineX + Self.gap,
+                        .offset(x: lineX - Self.gap - Self.thickness,
                                 y: Self.centreY(m, length: length, visible: visible) - length / 2)
                 }
             }
@@ -711,7 +700,7 @@ struct SpeakerMargin: View {
 }
 
 /// A speaker's name in capitals, reading upwards (turned 90° anticlockwise),
-/// for the right of a turn's line.
+/// for the left of a turn's line.
 struct SpeakerLabel: View {
     var name: String
     var color: Color
@@ -788,7 +777,7 @@ struct SegmentMargin: View {
                 .frame(width: max(0, width - 10 - CGFloat(m.lane) * 7), alignment: .trailing)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if !m.reference { model.focusSelection(m.id) }
+                    if !m.reference { model.focusSelection(m.target) }
                 }
                 .help(m.text)
                 .offset(x: -6 - CGFloat(m.lane) * 7, y: m.y)
@@ -817,7 +806,7 @@ struct SummaryBubble: View {
         }
         .frame(width: 14, height: 14)
         .contentShape(Circle())
-        .help(empty ? "No summary yet: double-click to write one (it shows in the Protocol Report)."
+        .help(empty ? "No summary yet: double-click to write one (it shows in the Protocol Responses report)."
                     : summary + "\n\nDouble-click to edit.")
     }
 }
@@ -837,7 +826,7 @@ struct ProtocolSummaryEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.protocolItemTitle(item)).font(.headline)
-            Text("Summary of what “\(model.itemTitle(file))” says for this item, in \(model.project.layer(layer)?.name ?? "this layer"). It shows in the Protocol Report.")
+            Text("Summary of what “\(model.itemTitle(file))” says for this item, in \(model.project.layer(layer)?.name ?? "this layer"). It shows in the Protocol Responses report.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

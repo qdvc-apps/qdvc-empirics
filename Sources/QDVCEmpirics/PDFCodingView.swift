@@ -10,22 +10,13 @@ struct PDFHighlight: Equatable {
     var color: NSColor
 }
 
-/// A coding stripe beside a PDF's pages (one per selection of the active
-/// layer, as beside a text file).
-struct PDFStripe: Equatable {
-    var key: String
-    var spans: [TextSpan]
-    var color: NSColor
-    var help: String
-    var focused: Bool
-    /// Irrelevant text: dashed grey.
-    var dashed: Bool
-}
-
 /// A PDF, coded on its own pages: drag to select text, then code it as in
-/// a text file. Highlights are drawn by the view (`highlightedSelections`),
-/// coding stripes in the margin beside the pages (`PDFStripeOverlay`); the
-/// document itself is never changed, and it was loaded from memory, so
+/// a text file. Highlights are drawn by the view (`highlightedSelections`);
+/// beside the pages are the same margins as beside a text file (protocol
+/// segments with their labels and summary bubbles on the left, coding
+/// stripes and the codes' labels on the right: `PDFMarginsView`, hosted in
+/// the PDF's document view so it scrolls with the pages); the document
+/// itself is never changed, and it was loaded from memory, so
 /// nothing could be written back to the file anyway. Pages can be turned
 /// for reading (right-click a page): the turn is kept in the workspace and
 /// applied to the copy in memory.
@@ -41,8 +32,10 @@ struct PDFCodingView: View {
                 fileKey: fileKey,
                 document: document,
                 highlights: highlights(),
-                stripes: model.showStripes ? stripes() : [],
-                stripeMargin: model.showStripes,
+                stripes: model.showStripes ? model.stripeSources(file: fileKey) : [],
+                segments: model.segmentSources(file: fileKey),
+                showStripes: model.showStripes,
+                showLabels: model.showStripes && model.showCodeNames,
                 rotations: model.project.files[fileKey]?.rotations ?? [:],
                 baseRotations: model.documents.pageRotations[fileKey] ?? [],
                 reveal: model.reveal?.file == fileKey ? model.reveal : nil,
@@ -51,6 +44,7 @@ struct PDFCodingView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
+            CodingProgressBar(fileKey: fileKey)
             CodingBar(fileKey: fileKey)
         }
     }
@@ -68,35 +62,18 @@ struct PDFCodingView: View {
         if let layer = model.activeLayer {
             for s in (layer.selections[fileKey] ?? []).sorted(by: { $0.totalLength > $1.totalLength }) {
                 let focused = s.key == model.focusedSelection
-                // Protocol segments (no margin here): a light wash, stronger
-                // while focused.
+                // Protocol segments are in the margin; a light wash only
+                // while focused, as in text.
+                if s.segment != nil && !focused { continue }
                 let color: NSColor = s.irrelevant
                     ? NSColor.systemGray.withAlphaComponent(0.22)
                     : s.segment != nil
-                        ? NSColor.protocolSegment.withAlphaComponent(focused ? 0.28 : 0.1)
+                        ? NSColor.protocolSegment.withAlphaComponent(0.18)
                         : model.selectionColour(s, in: layer).withAlphaComponent(focused ? min(0.8, strength + 0.3) : strength + 0.1)
                 result.append(PDFHighlight(key: s.key, spans: s.spans, color: color))
             }
         }
         return result
-    }
-
-    /// Coding stripes for the active layer's selections (protocol segments
-    /// have their wash instead), as beside a text file.
-    func stripes() -> [PDFStripe] {
-        guard let layer = model.activeLayer else { return [] }
-        return (layer.selections[fileKey] ?? []).filter { $0.segment == nil }.map { s in
-            let focused = s.key == model.focusedSelection
-            if s.irrelevant {
-                return PDFStripe(key: s.key, spans: s.spans, color: .systemGray,
-                                 help: "Irrelevant: can never be evidence in this layer", focused: focused, dashed: true)
-            }
-            let codes = model.tags(of: s.key, in: layer)
-            let none = layer.isDeductive ? "No a priori code yet" : "No open code yet"
-            let help = codes.isEmpty ? "Highlighted, " + none.lowercased() : codes.map { model.itemLabel($0.key) }.joined(separator: "\n")
-            return PDFStripe(key: s.key, spans: s.spans, color: model.selectionColour(s, in: layer), help: help,
-                             focused: focused, dashed: false)
-        }
     }
 }
 
@@ -150,9 +127,11 @@ struct PDFCodingRepresentable: NSViewRepresentable {
     var fileKey: String
     var document: PDFDocument
     var highlights: [PDFHighlight]
-    var stripes: [PDFStripe]
-    /// Leave room beside the pages for stripes.
-    var stripeMargin: Bool
+    var stripes: [StripeSource]
+    var segments: [SegmentSource]
+    var showStripes: Bool
+    /// Show the codes' names beside the stripes (when there is room).
+    var showLabels: Bool
     /// Page turns from the workspace, and each page's own rotation.
     var rotations: [Int: Int]
     var baseRotations: [Int]
@@ -177,27 +156,17 @@ struct PDFCodingRepresentable: NSViewRepresentable {
         view.extraMenuItems = { [weak c] page in c?.menuItems(page: page) ?? [] }
         NotificationCenter.default.addObserver(c, selector: #selector(Coordinator.selectionChanged(_:)),
                                                name: .PDFViewSelectionChanged, object: view)
-        // Coding stripes in the margin beside the pages.
-        let overlay = PDFStripeOverlay(frame: view.bounds)
-        overlay.autoresizingMask = [.width, .height]
-        overlay.pdfView = view
-        overlay.onClick = { [weak c] key in c?.parent?.model.focusSelection(key) }
-        view.addSubview(overlay)
-        c.overlay = overlay
+        // The margins beside the pages follow zooming, new layouts and the
+        // view's size (they scroll with the pages by themselves).
         NotificationCenter.default.addObserver(c, selector: #selector(Coordinator.geometryChanged(_:)),
                                                name: .PDFViewScaleChanged, object: view)
         NotificationCenter.default.addObserver(c, selector: #selector(Coordinator.geometryChanged(_:)),
                                                name: .PDFViewDocumentChanged, object: view)
-        DispatchQueue.main.async { [weak c, weak view] in
-            // The scroll view inside the PDF view exists once it shows the
-            // document: follow its scrolling.
-            guard let c, let clip = view?.documentView?.enclosingScrollView?.contentView else { return }
-            clip.postsBoundsChangedNotifications = true
-            NotificationCenter.default.addObserver(c, selector: #selector(Coordinator.geometryChanged(_:)),
-                                                   name: NSView.boundsDidChangeNotification, object: clip)
-            c.overlay?.relayout()
-        }
+        view.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(c, selector: #selector(Coordinator.viewResized(_:)),
+                                               name: NSView.frameDidChangeNotification, object: view)
         apply(view, c, initial: true)
+        DispatchQueue.main.async { [weak c] in c?.layoutMargins() }
         model.documentView = view
         return view
     }
@@ -224,15 +193,21 @@ struct PDFCodingRepresentable: NSViewRepresentable {
                 if page.rotation != turned { page.rotation = turned }
             }
             if !initial { view.layoutDocumentView() }
-            c.overlay?.relayout()
+            c.marginsDirty = true
         }
-        // Room beside the pages for the coding stripes.
-        let margin: CGFloat = stripeMargin ? 60 : 5
-        if abs(view.pageBreakMargins.right - margin) > 0.5 {
-            view.pageBreakMargins = NSEdgeInsets(top: 5, left: margin, bottom: 5, right: margin)
-            if !initial { view.layoutDocumentView() }
+        if c.appliedStripes != stripes || c.appliedSegments != segments || c.appliedShow != [showStripes, showLabels] {
+            c.appliedStripes = stripes
+            c.appliedSegments = segments
+            c.appliedShow = [showStripes, showLabels]
+            c.marginsDirty = true
         }
-        c.overlay?.stripes = stripes
+        if c.marginsDirty, !initial {
+            // Not during the view update: it sets another hosting view's root.
+            DispatchQueue.main.async { [weak c] in
+                guard let c, c.marginsDirty else { return }
+                c.layoutMargins()
+            }
+        }
         if c.applied != highlights {
             c.applied = highlights
             view.highlightedSelections = highlights.flatMap { h in
@@ -282,11 +257,147 @@ struct PDFCodingRepresentable: NSViewRepresentable {
         var restored = false
         var programmatic = false
         var appliedRotations: [Int: Int]?
-        weak var overlay: PDFStripeOverlay?
+        var appliedStripes: [StripeSource]?
+        var appliedSegments: [SegmentSource]?
+        var appliedShow: [Bool] = []
+        var marginsDirty = true
+        /// The margins beside the pages, in the PDF's document view.
+        var host: PDFMarginsHostingView?
+        /// Where selections' text is on its page (page space), by span.
+        var spanRects: [TextSpan: NSRect] = [:]
+        var lastWidth: CGFloat = 0
 
-        /// Scrolling, zooming or a new document: the stripes follow the pages.
+        /// Zooming, a new layout or document: the margins follow the pages.
         @objc func geometryChanged(_ note: Notification) {
-            overlay?.relayout()
+            layoutMargins()
+        }
+
+        /// A new width may leave room for more, or less, beside the pages.
+        @objc func viewResized(_ note: Notification) {
+            guard let view, abs(view.bounds.width - lastWidth) > 0.5 else { return }
+            layoutMargins()
+        }
+
+        /// How wide the margins beside the pages are, for the view's width:
+        /// the protocol margin and code labels as beside text, narrower or
+        /// left out when the view is narrow.
+        func marginWidths(_ width: CGFloat) -> (segments: CGFloat, labels: CGFloat) {
+            let p = parent
+            let hasSegments = !(p?.segments.isEmpty ?? true)
+            let wide = width >= 900
+            let segments: CGFloat = hasSegments ? (wide ? ColumnLayout.protocolWidth : ColumnLayout.narrowProtocolWidth) : 0
+            let labels: CGFloat = (p?.showLabels ?? false) && width >= 760 ? min(ColumnLayout.maxLabelWidth, max(ColumnLayout.minLabelWidth, width * 0.18)) : 0
+            return (segments, labels)
+        }
+
+        /// Places the margins beside the pages: room for them (the PDF
+        /// view's page margins), then every stripe, label and segment level
+        /// with its text, in the document view's coordinates.
+        func layoutMargins() {
+            guard let view, let parent, let doc = view.document else { return }
+            marginsDirty = false
+            lastWidth = view.bounds.width
+            let widths = marginWidths(view.bounds.width)
+            let right: CGFloat = parent.showStripes ? ColumnLayout.stripeWidth + widths.labels + 6 : 6
+            let left: CGFloat = widths.segments > 0 ? widths.segments + 8 : 6
+            let margins = view.pageBreakMargins
+            if abs(margins.left - left) > 0.5 || abs(margins.right - right) > 0.5 {
+                view.pageBreakMargins = NSEdgeInsets(top: 6, left: left, bottom: 6, right: right)
+                view.layoutDocumentView()
+            }
+            guard let docView = view.documentView else { return }
+            if host == nil || host?.superview !== docView {
+                host?.removeFromSuperview()
+                let h = PDFMarginsHostingView(rootView: PDFMarginsView(model: parent.model, fileKey: parent.fileKey,
+                                                                       layout: PDFMarginLayout()))
+                h.sizingOptions = []
+                h.autoresizingMask = [.width, .height]
+                docView.addSubview(h)
+                host = h
+            }
+            guard let host else { return }
+            host.frame = docView.bounds
+            var pageRects: [Int: NSRect] = [:]
+            for i in 0..<doc.pageCount {
+                guard let page = doc.page(at: i) else { continue }
+                pageRects[i] = host.convert(view.convert(page.bounds(for: view.displayBox), from: page), from: view)
+            }
+            let leftEdge = pageRects.values.map(\.minX).min() ?? 0
+            let rightEdge = pageRects.values.map(\.maxX).max() ?? host.bounds.width
+            // Each selection's text, per page, in the host's coordinates.
+            func pieces(_ spans: [TextSpan]) -> [(page: Int, rect: NSRect)] {
+                var byPage: [Int: NSRect] = [:]
+                for span in spans {
+                    guard let p = span.page, p < doc.pageCount, let page = doc.page(at: p) else { continue }
+                    let r: NSRect
+                    if let cached = spanRects[span] {
+                        r = cached
+                    } else {
+                        guard span.start >= 0, span.end <= page.numberOfCharacters,
+                              let sel = page.selection(for: NSRange(location: span.start, length: span.length)) else { continue }
+                        r = sel.bounds(for: page)
+                        spanRects[span] = r
+                    }
+                    let inHost = host.convert(view.convert(r, from: page), from: view)
+                    byPage[p] = byPage[p].map { $0.union(inHost) } ?? inHost
+                }
+                return byPage.keys.sorted().map { (page: $0, rect: byPage[$0]!) }
+            }
+            // Stripes in lanes, as beside text; a selection across pages has
+            // a stripe on each, and its label on the first.
+            var stripes: [PlacedMark] = []
+            var laneEnds: [CGFloat] = []
+            var stripeInputs: [(rect: NSRect, page: Int, first: Bool, source: StripeSource)] = []
+            for st in parent.showStripes ? parent.stripes : [] {
+                for (i, piece) in pieces(st.spans).enumerated() { stripeInputs.append((piece.rect, piece.page, i == 0, st)) }
+            }
+            for input in stripeInputs.sorted(by: { $0.rect.minY < $1.rect.minY }) {
+                let y0 = input.rect.minY, y1 = input.rect.maxY
+                var lane = laneEnds.firstIndex { $0 < y0 - 2 } ?? laneEnds.count
+                if lane >= 5 { lane = 4 }
+                if lane == laneEnds.count { laneEnds.append(y1) } else { laneEnds[lane] = max(laneEnds[lane], y1) }
+                let st = input.source
+                stripes.append(PlacedMark(id: st.key + "#\(input.page)", y: y0 + 1, height: max(6, y1 - y0 - 2), lane: lane,
+                                          color: st.color, text: st.help, focused: st.focused,
+                                          label: input.first ? st.label : "", badges: input.first ? st.badges : [],
+                                          dashed: st.dashed, selection: st.key))
+            }
+            var segments: [PlacedMark] = []
+            var segmentEnds: [CGFloat] = []
+            var segmentInputs: [(rect: NSRect, page: Int, first: Bool, source: SegmentSource)] = []
+            for g in widths.segments > 0 ? parent.segments : [] {
+                for (i, piece) in pieces(g.spans).enumerated() { segmentInputs.append((piece.rect, piece.page, i == 0, g)) }
+            }
+            for input in segmentInputs.sorted(by: { $0.rect.minY < $1.rect.minY }) {
+                let y0 = input.rect.minY, y1 = input.rect.maxY
+                var lane = segmentEnds.firstIndex { $0 < y0 - 2 } ?? segmentEnds.count
+                if lane >= 3 { lane = 2 }
+                if lane == segmentEnds.count { segmentEnds.append(y1) } else { segmentEnds[lane] = max(segmentEnds[lane], y1) }
+                let g = input.source
+                segments.append(PlacedMark(id: g.key + "#\(input.page)", y: y0, height: max(10, y1 - y0), lane: lane,
+                                           color: .protocolSegment, text: g.help, focused: g.focused, label: g.label,
+                                           dashed: g.prompt, caption: g.caption, layer: g.layer,
+                                           item: input.first ? g.item : "", reference: g.reference, selection: g.key))
+            }
+            var layout = PDFMarginLayout()
+            layout.size = host.bounds.size
+            layout.stripes = stripes
+            layout.segments = segments
+            layout.segmentWidth = widths.segments
+            layout.segmentX = leftEdge - widths.segments - 2
+            layout.stripeX = rightEdge + 2
+            layout.labelWidth = parent.showStripes ? widths.labels : 0
+            layout.labelX = layout.stripeX + ColumnLayout.stripeWidth
+            var interactive: [NSRect] = []
+            if !segments.isEmpty {
+                interactive.append(NSRect(x: layout.segmentX, y: 0, width: layout.segmentWidth, height: layout.size.height))
+            }
+            if !stripes.isEmpty {
+                interactive.append(NSRect(x: layout.stripeX, y: 0, width: ColumnLayout.stripeWidth + layout.labelWidth,
+                                          height: layout.size.height))
+            }
+            host.interactive = interactive
+            host.rootView = PDFMarginsView(model: parent.model, fileKey: parent.fileKey, layout: layout)
         }
 
         /// Links in PDFs are never followed: nothing opens a browser.
@@ -363,120 +474,66 @@ struct PDFCodingRepresentable: NSViewRepresentable {
     }
 }
 
-/// Coding stripes in the margin beside a PDF's pages: one per selection, in
-/// lanes where they overlap, level with the selection's lines; dashed grey
-/// for irrelevant text. Click one to focus its selection; hover for its
-/// codes. A transparent view over the PDF view that takes only clicks on
-/// stripes; laid out again as the PDF scrolls or zooms.
-final class PDFStripeOverlay: NSView, NSViewToolTipOwner {
-    weak var pdfView: PDFView?
-    var onClick: (String) -> Void = { _ in }
-    var stripes: [PDFStripe] = [] {
-        didSet {
-            guard stripes != oldValue else { return }
-            spanRects = nil
-            relayout()
-        }
-    }
 
-    private struct Placed {
-        var rect: NSRect
-        var stripe: PDFStripe
-    }
+/// The margins beside a PDF's pages, placed in its document view's
+/// coordinates: where the protocol, stripe and label columns are, and the
+/// marks in them.
+struct PDFMarginLayout: Equatable {
+    var size: CGSize = .zero
+    var stripes: [PlacedMark] = []
+    var segments: [PlacedMark] = []
+    var stripeX: CGFloat = 0
+    var labelX: CGFloat = 0
+    /// 0: no code labels.
+    var labelWidth: CGFloat = 0
+    var segmentX: CGFloat = 0
+    /// 0: no protocol margin.
+    var segmentWidth: CGFloat = 0
+}
 
-    /// Each stripe's text, per page, in page space (worked out once per
-    /// change of stripes).
-    private var spanRects: [[(page: Int, rect: NSRect)]]?
-    private var placed: [Placed] = []
+/// The same margins as beside a text file (SegmentMargin, StripeMargin,
+/// CodeNameMargin), beside a PDF's pages. (Takes the model directly, and
+/// passes it on: it is hosted apart from the window's views.)
+struct PDFMarginsView: View {
+    let model: AppModel
+    var fileKey: String
+    var layout: PDFMarginLayout
 
-    override var isFlipped: Bool { true }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        relayout()
-    }
-
-    /// Only stripes take clicks; everything else goes to the PDF.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let p = convert(point, from: superview)
-        return placed.contains { $0.rect.insetBy(dx: -3, dy: 0).contains(p) } ? self : nil
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        if let hit = placed.last(where: { $0.rect.insetBy(dx: -3, dy: 0).contains(p) }) { onClick(hit.stripe.key) }
-    }
-
-    /// Where each stripe goes for the pages in view.
-    func relayout() {
-        removeAllToolTips()
-        placed = []
-        defer { needsDisplay = true }
-        guard let pdfView, let doc = pdfView.document, !stripes.isEmpty else { return }
-        if spanRects == nil {
-            spanRects = stripes.map { stripe in
-                var byPage: [Int: NSRect] = [:]
-                for span in stripe.spans {
-                    guard let p = span.page, p < doc.pageCount, let page = doc.page(at: p),
-                          span.end <= page.numberOfCharacters,
-                          let sel = page.selection(for: NSRange(location: span.start, length: span.length)) else { continue }
-                    let r = sel.bounds(for: page)
-                    byPage[p] = byPage[p].map { $0.union(r) } ?? r
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            if layout.segmentWidth > 0, !layout.segments.isEmpty {
+                SegmentMargin(fileKey: fileKey, marks: layout.segments, width: layout.segmentWidth)
+                    .frame(width: layout.segmentWidth, height: layout.size.height)
+                    .offset(x: layout.segmentX)
+            }
+            if !layout.stripes.isEmpty {
+                StripeMargin(marks: layout.stripes)
+                    .frame(width: ColumnLayout.stripeWidth, height: layout.size.height)
+                    .offset(x: layout.stripeX)
+                if layout.labelWidth > 0 {
+                    CodeNameMargin(marks: layout.stripes, width: layout.labelWidth)
+                        .frame(width: layout.labelWidth, height: layout.size.height)
+                        .offset(x: layout.labelX)
                 }
-                return byPage.keys.sorted().map { (page: $0, rect: byPage[$0]!) }
             }
         }
-        let visible = Set(pdfView.visiblePages.map { doc.index(for: $0) })
-        var pieces: [(rect: NSRect, pageMaxX: CGFloat, stripe: PDFStripe)] = []
-        for (i, stripe) in stripes.enumerated() {
-            for (p, r) in spanRects?[i] ?? [] where visible.contains(p) {
-                guard let page = doc.page(at: p) else { continue }
-                let rect = convert(pdfView.convert(r, from: page), from: pdfView)
-                let pageRect = convert(pdfView.convert(page.bounds(for: pdfView.displayBox), from: page), from: pdfView)
-                pieces.append((rect, pageRect.maxX, stripe))
-            }
-        }
-        // Lanes, as beside text: each piece takes the first lane free at its top.
-        var laneEnds: [CGFloat] = []
-        for piece in pieces.sorted(by: { $0.rect.minY < $1.rect.minY }) {
-            let y0 = piece.rect.minY, y1 = piece.rect.maxY
-            var lane = laneEnds.firstIndex { $0 < y0 - 2 } ?? laneEnds.count
-            if lane >= 5 { lane = 4 }
-            if lane == laneEnds.count { laneEnds.append(y1) } else { laneEnds[lane] = max(laneEnds[lane], y1) }
-            let width: CGFloat = piece.stripe.focused ? 6 : 4
-            let rect = NSRect(x: piece.pageMaxX + 10 + CGFloat(lane) * 9, y: y0 + 1, width: width, height: max(6, y1 - y0 - 2))
-            placed.append(Placed(rect: rect, stripe: piece.stripe))
-            _ = addToolTip(rect.insetBy(dx: -3, dy: 0), owner: self, userData: nil)
-        }
+        .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+        .environment(model)
     }
+}
 
-    override func draw(_ dirtyRect: NSRect) {
-        for p in placed where p.rect.intersects(dirtyRect.insetBy(dx: -4, dy: -4)) {
-            let s = p.stripe
-            if s.dashed {
-                let path = NSBezierPath()
-                path.move(to: NSPoint(x: p.rect.midX, y: p.rect.minY))
-                path.line(to: NSPoint(x: p.rect.midX, y: p.rect.maxY))
-                path.lineWidth = p.rect.width
-                path.setLineDash([5, 3], count: 2, phase: 0)
-                s.color.withAlphaComponent(s.focused ? 0.9 : 0.6).setStroke()
-                path.stroke()
-            } else {
-                let path = NSBezierPath(roundedRect: p.rect, xRadius: 2, yRadius: 2)
-                s.color.withAlphaComponent(s.focused ? 1 : 0.8).setFill()
-                path.fill()
-            }
-            if s.focused {
-                let ring = NSBezierPath(roundedRect: p.rect.insetBy(dx: -0.5, dy: -0.5), xRadius: 2, yRadius: 2)
-                ring.lineWidth = 1
-                NSColor.labelColor.withAlphaComponent(0.6).setStroke()
-                ring.stroke()
-            }
-        }
-    }
+/// Hosts the margins in the PDF's document view (so they scroll with the
+/// pages), taking clicks only in the margin columns: everything else goes
+/// to the PDF.
+final class PDFMarginsHostingView: NSHostingView<PDFMarginsView> {
+    /// Where the margins take clicks, in this view's coordinates.
+    var interactive: [NSRect] = []
 
-    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
-              userData data: UnsafeMutableRawPointer?) -> String {
-        placed.last { $0.rect.insetBy(dx: -3, dy: 0).contains(point) }?.stripe.help ?? ""
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let superview else { return nil }
+        let p = convert(point, from: superview)
+        guard interactive.contains(where: { $0.contains(p) }) else { return nil }
+        return super.hitTest(point)
     }
 }

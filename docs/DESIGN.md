@@ -6,10 +6,11 @@ Researchers code for hours at a time. The coding view is designed so that
 the common path needs no mouse and no dialogs, and so that nothing moves
 unexpectedly:
 
-- **Reading comfort.** A centred column (720 pt by default) on the text
-  background, a serif reading font (New York), 1.35 line spacing and
-  paragraph spacing; all adjustable (Settings › Reading) and remembered on
-  this Mac. Highlights are pale (28 %) by default and stronger only for the
+- **Reading comfort.** A centred column on the text background, its width
+  set by three margin presets as in QDVC Manuscript (narrow 860 pt, medium
+  700 pt by default, wide 580 pt; View › Margins, ⌃⌥⌘1–3), a serif reading
+  font (New York), 1.35 line spacing and paragraph spacing; all adjustable
+  (Settings › Reading) and remembered on this Mac. Highlights are pale (28 %) by default and stronger only for the
   focused selection; irrelevant text is dimmed, not struck through.
 - **One gesture per step.** Select (drag, or T / P / S for turn, paragraph,
   sentence), then Return and a few letters, or one digit. After coding, the
@@ -38,8 +39,8 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 - **Sidebar.** Five sections, in the spirit of Mail's mailboxes above its
   smart mailboxes: *Project* (Empirical Files, Researchers, Layers, Project
   Settings), *Deductive* (Protocols, Interviewees, Attribute Sheets, A Priori
-  Codes), *Inductive* (Open Codes, Theorising Codes), *Reports* (Coding Chart,
-  Attribute Sheet Report, Protocol Report; the Codebook, Coverage Report,
+  Codes), *Inductive* (Open Codes, Theorising Codes), *Reports* (Inductive Coding Chart,
+  Attribute Sheet Report, Protocol Responses; the Codebook, Coverage Report,
   Overlap Matrix and Framework Matrix to come), and the *Working Area*: the items being worked on, like open documents, one line each
   (neutral icon, title, working-identifier badge; colour only in the badge). Double-clicking a row in any table opens its page and puts it
   there; it is kept on this Mac (reorder from the context menu). Moving to the
@@ -75,7 +76,7 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
 - **Document.** Text in a readable column, the Interlocutor layer's speaker
   names in a narrow left margin (greyscale: interviewees dark, interviewers
   lighter): a line down each turn, the name in capitals beside it on the
-  right, turned to read upwards and centred on the part of the line on
+  left, turned to read upwards and centred on the part of the line on
   screen, so on a long turn the speaker stays in view (the margin reads
   the visible area from FillingScroll's named coordinate space),
   coding stripes in a right margin (dashed grey for irrelevant text), open
@@ -100,10 +101,12 @@ inspector, so it picks up Liquid Glass on macOS 26 without custom chrome.
   and never stored: they are for talking and thinking ("OC 12 and OC 14
   overlap"), short enough for badges, and keys remain the real identity.
   The UI always says "open code" or "theorising code", never just "code".
-- **Reports.** The Coding Chart (`CodingChart` in the core: columns by
+- **Reports.** Protocol Outcomes (`ProtocolOutcomes`: codes of one kind
+  against the parts of a protocol's items, counting instances by where
+  they lie in the text). The Inductive Coding Chart (`CodingChart` in the core: columns by
   level, M:N links, barycentre ordering to reduce crossings), the Attribute Sheet
   Report (`AttributeSheetReport`: rows per response sheet, CSV with pseudonyms)
-  and the Protocol Report (`ProtocolReport`: a protocol's items across the
+  and Protocol Responses (`ProtocolResponses`: a protocol's items across the
   files following it in a deductive layer, each cell the item's summary for
   the file, with the full answer a click away). A protocol item's summary
   for a file is that layer's Framework Matrix cell for the file and the
@@ -157,11 +160,17 @@ never modified, and it is loaded from memory (`PDFDocument(data:)`), so
 nothing could be written back to the file. Links in PDFs are never followed
 (`pdfViewWillClick(onLink:with:)` does nothing).
 
-Coding stripes sit in the background beside the pages, as beside text:
-`pageBreakMargins` leaves room, and a transparent view over the PDF view
-(`PDFStripeOverlay`) draws them from the selections' bounds on each visible
-page, in lanes, laid out again as the PDF scrolls or zooms; it takes clicks
-only on stripes. A page printed sideways can be turned for reading
+The margins are the same as beside text, the same SwiftUI views
+(`SegmentMargin`, `StripeMargin`, `CodeNameMargin`) fed from the same
+sources (`stripeSources`, `segmentSources`): protocol segments with their
+labels and summary bubbles on the left of the pages, coding stripes and the
+codes' labels on the right. `pageBreakMargins` makes room for them
+(narrower, or without labels, in a narrow window), and they are hosted in
+the PDF's document view (`PDFMarginsHostingView`), so they scroll with the
+pages without being laid out again; they are placed from the selections'
+bounds on their pages when the coding, the zoom or the layout changes. The
+hosting view takes clicks only in the margin columns. A selection across
+pages has a stripe (or bracket) on each, and its label on the first. A page printed sideways can be turned for reading
 (right-click it): the turn is stored per page in the file's YAML and added
 to the page's own rotation in the copy in memory; the PDF is still never
 written, and selections, which count into the page's text, don't move.
@@ -325,3 +334,14 @@ The Interlocutor layer is not a coding layer: it is derived from the text
   response alike), and stored as the layer's Framework Matrix cell.
 - While an inductive layer is active, the segments of every visible
   deductive layer show, in lanes if they overlap.
+- Coding progress counts characters that aren't white space (so a long
+  run of blank lines doesn't count as work to do), leaves out speaker
+  header lines and time indicators, and counts an uncoded highlight as
+  still to do (it is a note to come back to). It is per layer, the active
+  one.
+- Time indicators are recognised by their form (`[~5 min]`: square
+  brackets, an optional `~`, a number or range, and a unit of time), so a
+  bracketed note that isn't a time stays ordinary text.
+- Protocol Outcomes counts an instance once in every segment it overlaps,
+  and as elsewhere only when it overlaps none; its total counts each
+  instance once.

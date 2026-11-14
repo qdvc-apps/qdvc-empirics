@@ -58,9 +58,10 @@ struct ContentView: View {
         case .openCodes: return "Open Codes"
         case .theorisingCodes: return "Theorising Codes"
         case .layers: return "Layers"
-        case .codingChart: return "Coding Chart"
+        case .codingChart: return "Inductive Coding Chart"
         case .attributeSheetReport: return "Attribute Sheet Report"
-        case .protocolReport: return "Protocol Report"
+        case .protocolResponses: return "Protocol Responses"
+        case .protocolOutcomes: return "Protocol Outcomes"
         case .file(let k), .code(let k), .studyProtocol(let k), .aprioriCode(let k), .attributeSheet(let k),
              .researcher(let k), .interviewee(let k):
             return model.itemLabel(k)
@@ -125,7 +126,8 @@ struct DetailView: View {
         case .layers: LayersPage()
         case .codingChart: CodingChartPage()
         case .attributeSheetReport: AttributeSheetReportPage()
-        case .protocolReport: ProtocolReportPage()
+        case .protocolResponses: ProtocolResponsesPage()
+        case .protocolOutcomes: ProtocolOutcomesPage()
         case .file(let k): DocumentPage(fileKey: k)
         case .code(let k): CodePage(codeKey: k)
         case .studyProtocol(let k): ProtocolPage(protocolKey: k).id(k)
@@ -297,7 +299,7 @@ struct Sidebar: View {
             Section("Project") {
                 Label("Empirical Files", systemImage: "doc.on.doc")
                     .tag(SidebarItem.files)
-                Label("Researchers", systemImage: "graduationcap")
+                Label("Researchers", systemImage: "person.text.rectangle")
                     .tag(SidebarItem.researchers)
                 Label("Layers", systemImage: "square.3.layers.3d")
                     .tag(SidebarItem.layers)
@@ -321,12 +323,14 @@ struct Sidebar: View {
                     .tag(SidebarItem.theorisingCodes)
             }
             Section("Reports") {
-                Label("Coding Chart", systemImage: "point.3.connected.trianglepath.dotted")
+                Label("Inductive Coding Chart", systemImage: "point.3.connected.trianglepath.dotted")
                     .tag(SidebarItem.codingChart)
                 Label("Attribute Sheet Report", systemImage: "tablecells")
                     .tag(SidebarItem.attributeSheetReport)
-                Label("Protocol Report", systemImage: "list.bullet.rectangle.portrait")
-                    .tag(SidebarItem.protocolReport)
+                Label("Protocol Responses", systemImage: "list.bullet.rectangle.portrait")
+                    .tag(SidebarItem.protocolResponses)
+                Label("Protocol Outcomes", systemImage: "square.grid.3x3")
+                    .tag(SidebarItem.protocolOutcomes)
             }
             // Every sidebar row is a single line of fixed height. A wrapping
             // hint row here ("Double-click a file…") was measured at the wrong

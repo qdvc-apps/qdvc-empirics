@@ -64,4 +64,27 @@ extension AppModel {
         focusedSelection = merged
         inspectorTab = .selection
     }
+
+    // MARK: Time indicators and progress
+
+    /// The time indicators ("[~5 min]") in a file, ignored for coding.
+    func timeIndicators(_ file: String) -> [TextSpan] {
+        if let cached = documents.timeIndicators[file] { return cached }
+        guard let pages = pages(file), let f = project.files[file] else { return [] }
+        let spans = TimeIndicators.spans(in: pages, pdf: f.kind == .pdf)
+        documents.timeIndicators[file] = spans
+        return spans
+    }
+
+    /// How far a file's coding has come in the active layer (speaker header
+    /// lines and time indicators left out), or nil if its text can't be read.
+    func codingProgress(_ file: String) -> CodingProgress? {
+        let key = file + "|" + activeLayerKey
+        if let cached = documents.progress[key], cached.change == changeCount { return cached.value }
+        guard let pages = pages(file) else { return nil }
+        let headers = turns(file).map(\.header)
+        let value = CodingProgress.of(project, layer: activeLayerKey, file: file, pages: pages, ignoring: headers)
+        documents.progress[key] = (changeCount, value)
+        return value
+    }
 }

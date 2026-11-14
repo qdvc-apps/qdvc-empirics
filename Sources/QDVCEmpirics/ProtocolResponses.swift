@@ -4,13 +4,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension AppModel {
-    /// The protocol shown in the Protocol Report: the one chosen, or the
+    /// The protocol shown in Protocol Responses: the one chosen, or the
     /// first.
     var shownReportProtocol: String? {
         reportProtocol.flatMap { project.protocols[$0] != nil ? $0 : nil } ?? project.sortedProtocols.first?.key
     }
 
-    /// The deductive layer the Protocol Report reads: the one chosen, else
+    /// The deductive layer the Protocol Responses report reads: the one chosen, else
     /// the active layer if it is deductive, else the first deductive layer
     /// where files follow the shown protocol.
     var shownReportProtocolLayer: String? {
@@ -23,7 +23,7 @@ extension AppModel {
     }
 }
 
-/// Reports › Protocol Report: one protocol across the empirical files that
+/// Reports › Protocol Responses: one protocol across the empirical files that
 /// follow it in a deductive layer. A row per file, a column per protocol
 /// item; each cell shows the summary written for that item in that file
 /// (the bubble under a protocol label, in the file), with a button for the
@@ -31,14 +31,14 @@ extension AppModel {
 /// a cell to write or change its summary. The protocol and layer are chosen
 /// in the bar below: like every page, it starts with its scrolling content
 /// at the top (docs/MAINTENANCE.md §Layout).
-struct ProtocolReportPage: View {
+struct ProtocolResponsesPage: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         let protocols = model.project.sortedProtocols
         let key = model.shownReportProtocol
         let layer = model.shownReportProtocolLayer
-        let report = key.flatMap { k in layer.flatMap { ProtocolReport.make(model.project, protocol: k, layer: $0) } }
+        let report = key.flatMap { k in layer.flatMap { ProtocolResponses.make(model.project, protocol: k, layer: $0) } }
         VStack(spacing: 0) {
             if let report {
                 if report.studyProtocol.items.isEmpty {
@@ -50,7 +50,7 @@ struct ProtocolReportPage: View {
                                            description: Text("No empirical file follows “\(report.studyProtocol.title)” in \(model.project.layer(report.layer)?.name ?? "this layer") yet. Mark prompts and responses in a file (Q and A), or choose another layer below."))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ProtocolReportTable(model: model, report: report)
+                    ProtocolResponsesTable(model: model, report: report)
                 }
             } else if protocols.isEmpty {
                 ContentUnavailableView("No Protocols", systemImage: "list.bullet.rectangle",
@@ -65,7 +65,7 @@ struct ProtocolReportPage: View {
         }
     }
 
-    func footer(protocols: [StudyProtocol], key: String?, layer: String?, report: ProtocolReport?) -> some View {
+    func footer(protocols: [StudyProtocol], key: String?, layer: String?, report: ProtocolResponses?) -> some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 10) {
@@ -107,28 +107,28 @@ struct ProtocolReportPage: View {
         }
     }
 
-    func summary(_ r: ProtocolReport) -> String {
+    func summary(_ r: ProtocolResponses) -> String {
         let cells = r.rows.flatMap { row in r.studyProtocol.items.map { row.cell($0.key) } }
         let written = cells.filter { !$0.summary.isEmpty }.count
         let marked = cells.filter(\.isMarked).count
         return "\(r.rows.count) file\(r.rows.count == 1 ? "" : "s") · \(marked) item\(marked == 1 ? "" : "s") marked · \(written) summar\(written == 1 ? "y" : "ies")"
     }
 
-    func csv(_ r: ProtocolReport) -> String {
+    func csv(_ r: ProtocolResponses) -> String {
         r.csv(workingIDs: model.index.workingID, title: { model.pseudonymousTitle($0) })
     }
 
-    func copyCSV(_ r: ProtocolReport) {
+    func copyCSV(_ r: ProtocolResponses) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(csv(r), forType: .string)
-        model.notice = Notice(text: "Copied the Protocol Report for “\(r.studyProtocol.title)” as CSV (\(r.rows.count) row\(r.rows.count == 1 ? "" : "s")).")
+        model.notice = Notice(text: "Copied the Protocol Responses for “\(r.studyProtocol.title)” as CSV (\(r.rows.count) row\(r.rows.count == 1 ? "" : "s")).")
     }
 
-    func saveCSV(_ r: ProtocolReport) {
+    func saveCSV(_ r: ProtocolResponses) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.nameFieldStringValue = (r.studyProtocol.title.isEmpty ? "Protocol" : r.studyProtocol.title) + " report.csv"
-        panel.message = "Save the Protocol Report's summaries as CSV."
+        panel.message = "Save the Protocol Responses summaries as CSV."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try Data(csv(r).utf8).write(to: url, options: .atomic)
@@ -142,9 +142,9 @@ struct ProtocolReportPage: View {
 /// row per file. Fixed column widths so the header lines up; the whole
 /// table scrolls both ways. (Takes the model directly: rows carry context
 /// menus and popovers.)
-struct ProtocolReportTable: View {
+struct ProtocolResponsesTable: View {
     let model: AppModel
-    let report: ProtocolReport
+    let report: ProtocolResponses
 
     static let fileWidth: CGFloat = 230
     static let itemWidth: CGFloat = 240
@@ -190,7 +190,7 @@ struct ProtocolReportTable: View {
         .overlay(alignment: .bottom) { Divider() }
     }
 
-    func rowView(_ row: ProtocolReport.Row, index: Int) -> some View {
+    func rowView(_ row: ProtocolResponses.Row, index: Int) -> some View {
         let selected = model.tableSelection == row.file
         return HStack(alignment: .top, spacing: 0) {
             ItemLine(model: model, key: row.file, iconWidth: 16)
@@ -200,7 +200,7 @@ struct ProtocolReportTable: View {
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { model.show(.file(row.file)) }
             ForEach(report.studyProtocol.items) { item in
-                ProtocolReportCell(model: model, layer: report.layer, file: row.file, item: item.key, cell: row.cell(item.key))
+                ProtocolResponsesCell(model: model, layer: report.layer, file: row.file, item: item.key, cell: row.cell(item.key))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .frame(width: Self.itemWidth, alignment: .topLeading)
@@ -217,12 +217,12 @@ struct ProtocolReportTable: View {
 
 /// One cell: the item's summary for the file, a button for the full answer
 /// (when the item is marked there), and double-click to write the summary.
-struct ProtocolReportCell: View {
+struct ProtocolResponsesCell: View {
     let model: AppModel
     var layer: String
     var file: String
     var item: String
-    var cell: ProtocolReport.Cell
+    var cell: ProtocolResponses.Cell
     @State private var showAnswer = false
     @State private var editing = false
 
@@ -268,7 +268,7 @@ struct ProtocolAnswerView: View {
     let model: AppModel
     var file: String
     var item: String
-    var cell: ProtocolReport.Cell
+    var cell: ProtocolResponses.Cell
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

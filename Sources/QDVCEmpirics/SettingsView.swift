@@ -36,11 +36,8 @@ struct ReadingSettings: View {
                     Text(String(format: "%.2f", model.lineSpacing)).monospacedDigit().frame(width: 44, alignment: .trailing)
                 }
             }
-            LabeledContent("Column width") {
-                HStack {
-                    Slider(value: $model.readingWidth, in: 480...1400, step: 20)
-                    Text("\(Int(model.readingWidth)) pt").monospacedDigit().frame(width: 60, alignment: .trailing)
-                }
+            Picker("Margins", selection: $model.margins) {
+                ForEach(MarginPreset.allCases) { Text($0.label).tag($0) }
             }
             LabeledContent("Highlight strength") {
                 Slider(value: $model.highlightStrength, in: 0.12...0.5)

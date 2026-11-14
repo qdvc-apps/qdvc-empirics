@@ -134,6 +134,12 @@ struct EmpiricsCommands: Commands {
                 .keyboardShortcut("-")
             Button("Default Text Size") { model.readingSize = 15 }
                 .keyboardShortcut("0")
+            Menu("Margins") {
+                ForEach(Array(MarginPreset.allCases.enumerated()), id: \.element) { i, preset in
+                    Toggle(preset.label, isOn: Binding(get: { model.margins == preset }, set: { if $0 { model.margins = preset } }))
+                        .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .control, .option])
+                }
+            }
             Divider()
             Toggle("Show Coding Stripes", isOn: Binding(get: { model.showStripes }, set: { model.showStripes = $0 }))
             Toggle("Show Code Names Beside Stripes", isOn: Binding(get: { model.showCodeNames }, set: { model.showCodeNames = $0 }))
@@ -230,8 +236,8 @@ struct EmpiricsCommands: Commands {
                                                   ("Protocols", .protocols), ("Interviewees", .interviewees),
                                                   ("Attribute Sheets", .attributeSheets), ("A Priori Codes", .aprioriCodes),
                                                   ("Open Codes", .openCodes), ("Theorising Codes", .theorisingCodes),
-                                                  ("Coding Chart", .codingChart), ("Attribute Sheet Report", .attributeSheetReport),
-                                                  ("Protocol Report", .protocolReport)]
+                                                  ("Inductive Coding Chart", .codingChart), ("Attribute Sheet Report", .attributeSheetReport),
+                                                  ("Protocol Responses", .protocolResponses), ("Protocol Outcomes", .protocolOutcomes)]
             // ⌃⌘1 … ⌃⌘9, then ⌃⌘0 for the tenth; the rest have none.
             ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
                 Button(page.0) { model.sidebar = page.1 }

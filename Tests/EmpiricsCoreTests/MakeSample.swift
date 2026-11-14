@@ -76,7 +76,7 @@ final class MakeSampleTests: XCTestCase {
     Right. I think it's the layers. In other tools everything sits in one big tree of nodes, so I keep looking for the tree. Here I code in a layer and the codes only make sense inside it. Once it clicked, I liked it, because my supervisor and I can each have our own reading of the same transcript.
 
     Alice Bob
-    And how do you find working with it over a long session?
+    [~20 min] And how do you find working with it over a long session?
 
     John Smith:
     Much better than I expected. After three or four hours of coding my eyes usually give up, but the serif text and the wide margins help. The numbers for quick codes save a lot of clicking. I barely touch the mouse now.
@@ -387,7 +387,7 @@ final class MakeSampleTests: XCTestCase {
                                   layer: deductive, row: "i-0c0ffee0", column: "apc-7a0e0002")
 
         // Protocol summaries (the bubbles under protocol labels; the
-        // Protocol Report), one item left without one.
+        // Protocol Responses), one item left without one.
         try p.setFrameworkSummary("An improvement on other QDA tools, but still learning the interface.",
                                   layer: deductive, row: "f-1e7e0001", column: "pi-0a000001")
         try p.setFrameworkSummary("Easier than expected: reading comfort and quick-code numbers.",

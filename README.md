@@ -51,7 +51,8 @@ sections:
 - **Deductive** (defined upfront): Protocols, Interviewees, Attribute
   Sheets, A Priori Codes.
 - **Inductive** (emerging from the data): Open Codes, Theorising Codes.
-- **Reports:** Coding Chart, Attribute Sheet Report, Protocol Report.
+- **Reports:** Inductive Coding Chart, Attribute Sheet Report, Protocol
+  Responses, Protocol Outcomes.
 - **Working Area:** the files, open codes, theorising codes, attribute sheets and people
   you are working on, one line each: an icon, the title and the working
   identifier (coloured like the code, or orange or green for a file in
@@ -101,7 +102,9 @@ retrace your steps. The pages of single items are:
 **Coding a file** (text, Markdown or PDF):
 
 - Text and Markdown files are shown in a calm reading column (serif by
-  default, generous line spacing, adjustable in Settings › Reading), with
+  default, generous line spacing, adjustable in Settings › Reading; the
+  column's width follows View › **Margins**, narrow, medium or wide, as in
+  QDVC Manuscript, ⌃⌥⌘1–3), with
   **coding stripes** in the right margin, one per selection, in lanes where
   they overlap (irrelevant text has a dashed grey one); click a stripe to
   focus its selection. When the window is wide enough, each stripe has a
@@ -109,14 +112,27 @@ retrace your steps. The pages of single items are:
   on the first line, then their names in bold, wrapped so the whole label
   shows. As the window narrows, the wide outer margins go first, then the
   labels; the sidebar is never pushed off the window.
-- PDFs are coded on their own pages (PDFKit), with the same keys, and the
-  same coding stripes in the background beside the pages (click one to focus
-  its selection, hover for its codes). Right-click a page to **rotate** it
+- PDFs are coded on their own pages (PDFKit), with the same keys and the
+  same margins in the background beside the pages: protocol segments with
+  their labels and summary bubbles on the left, coding stripes and the
+  codes' labels on the right (they make room as the window allows, and
+  scroll with the pages). Right-click a page to **rotate** it
   left or right (a table printed sideways, say): the turn is saved in the
   workspace, so everyone sees the page that way; the PDF itself isn't
   changed.
+- A thin bar above the coding bar shows how far the file's coding has come
+  in the active layer: **coded** (green), **irrelevant** (grey) and still to
+  do (the empty part); hover for the percentages. It counts characters that
+  aren't white space, leaving out speaker header lines and time indicators.
+  Text counts as coded when a selection over it is evidence for a code, or
+  is a protocol segment; a highlight without a code is still to do.
+- **Time indicators** a transcriber leaves in the text, such as `[~5 min]`
+  or `[~20 min]` (also `[5 mins]`, `[~1.5 h]`, `[~2–3 min]`), are ignored for
+  coding: shown faint, trimmed from the ends of anything you select to code
+  (a selection of nothing but one is refused), and left out of the progress
+  bar.
 - On the Interlocutor layer, each speaker's turn has a line in the narrow
-  left margin, with the speaker's name in capitals on its right, running up
+  left margin, with the speaker's name in capitals on its left, running up
   the margin. The name is centred on the part of the line that is on
   screen, so on a long turn it moves as you scroll and who is speaking stays
   in view.
@@ -142,7 +158,7 @@ retrace your steps. The pages of single items are:
 - Under each protocol label is a small **summary bubble**: a dotted circle
   while the item has no summary for this file. Double-click it to write
   one (what this file says for the item, in a sentence or two); it then
-  fills in, and shows in the **Protocol Report**.
+  fills in, and shows in the **Protocol Responses** report.
 - **Editing the text itself**: select a part of a text or Markdown file,
   right-click it and choose **Edit Text…** (also in the Selection
   inspector) to correct it, a typo in a transcript say. Write the new text,
@@ -263,7 +279,7 @@ next updates.*
 **Project Settings** (⌃⌘4): title, description, the two folders, real-name
 mapping files, quote storage and interrelation types.
 
-**Coding Chart** (Go menu): an inductive layer at a glance (the
+**Inductive Coding Chart** (Go menu): an inductive layer at a glance (the
 active layer, or the first inductive one). Empirical files on the
 left, linked to the open codes with evidence in them, linked to the theorising
 codes they are evidence for; theorising codes built on other theorising codes sit
@@ -278,13 +294,27 @@ item nobody has answered yet), a column per question, with flagged
 mandatory questions marked. Double-click a row for its response sheet; copy
 or save the table as CSV (always with pseudonyms).
 
-**Protocol Report** (Go menu): choose a protocol and a deductive layer in
+**Protocol Responses** (Go menu): choose a protocol and a deductive layer in
 the bar below and see, for every empirical file following the protocol
 there, a row with each item's summary (written in the bubbles under the
 protocol labels in the file). A cell whose item is marked in the file has a
 **Full Answer** button: the prompt and response as they are in the text,
 with Show in File. Double-click a cell to write or change its summary; copy
 or save the summaries as CSV.
+
+**Protocol Outcomes** (Go menu): where codes are grounded, protocol-wise.
+Choose a protocol (and the deductive layer whose prompts and responses
+count) and a kind of code (a priori, open or theorising, and the layer they
+come from). Each code is a row; each item's prompt and response is a
+column, with the number of the code's instances in text marked as that part
+of that item, shaded by count; then the instances elsewhere, and the total.
+An instance is a selection the code is evidence for (for a theorising code,
+those of the codes it is built from, all the way down); it counts in every
+segment it overlaps, wherever the two were made, since they are compared
+by where they are in the file. Click a count to read its instances (with
+Show in File); copy or save the counts as CSV. Use it to trace, say, how far
+inductive codes rest on answers to particular questions, or on the
+interviewer's own prompts.
 
 ## Requirements
 
@@ -404,6 +434,7 @@ icon template, built like the other QDVC apps' icons. It appears in the
 | ⇧⌘R | Show real names |
 | ⌃⌘I | Show or hide interlocutors |
 | ⌘+ / ⌘− / ⌘0 | Larger / smaller / default text |
+| ⌃⌥⌘1 / 2 / 3 | Narrow / medium / wide margins |
 | ⌥⌘I | Inspector |
 | ⇧⌘1 | Welcome window |
 | ⌘R | Reload from disk |

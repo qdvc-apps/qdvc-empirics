@@ -56,9 +56,21 @@ extension AppModel {
     /// protocol segment if `segment` is given.
     func selectionFromText(irrelevant: Bool, segment: ProtocolSegment? = nil, in p: inout Project) throws -> String {
         guard let file = textSelectionFile else { throw RuleError("Select some text first.") }
-        let quote = irrelevant ? "" : textSelectionQuote
-        return try p.addSelection(layer: activeLayerKey, file: file, spans: textSelection, quote: quote,
+        let spans = try codingSpans(textSelection, file: file)
+        let quote = irrelevant ? "" : (pages(file).map { TextNormaliser.quote(spans, pages: $0) } ?? textSelectionQuote)
+        return try p.addSelection(layer: activeLayerKey, file: file, spans: spans, quote: quote,
                                   irrelevant: irrelevant, segment: segment, by: currentResearcher ?? "")
+    }
+
+    /// Text selected for coding, without time indicators ("[~5 min]") or
+    /// white space at its ends: they are ignored for coding.
+    func codingSpans(_ spans: [TextSpan], file: String) throws -> [TextSpan] {
+        guard let pages = pages(file) else { return spans }
+        let trimmed = TimeIndicators.trim(spans, pages: pages)
+        guard !trimmed.isEmpty else {
+            throw RuleError("Time indicators such as “[~5 min]” are ignored for coding. Select some of the text itself.")
+        }
+        return trimmed
     }
 
     /// Codes the text selection (or the focused selection) with a code: an
@@ -189,9 +201,15 @@ extension AppModel {
 
     /// Gives the focused selection the text now selected in the document.
     func resizeFocusedToTextSelection() {
-        guard let key = focusedSelection, hasTextSelection else { return }
-        let quote = textSelectionQuote
-        let spans = textSelection
+        guard let key = focusedSelection, hasTextSelection, let file = textSelectionFile else { return }
+        let spans: [TextSpan]
+        do {
+            spans = try codingSpans(textSelection, file: file)
+        } catch {
+            showProblem(error)
+            return
+        }
+        let quote = pages(file).map { TextNormaliser.quote(spans, pages: $0) } ?? textSelectionQuote
         if perform("Change Selection", { p in try p.resizeSelection(key, spans: spans, quote: quote) }) {
             lostSelections.remove(key)
             clearTextSelection()

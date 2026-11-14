@@ -2,7 +2,7 @@ import AppKit
 import EmpiricsCore
 import SwiftUI
 
-/// Reports › Coding Chart: the active layer's empirical files on the
+/// Reports › Inductive Coding Chart: the active layer's empirical files on the
 /// left, linked (M:N) to the open codes with evidence in them, linked to
 /// the theorising codes they are evidence for; theorising codes built on other theorising
 /// codes sit further right. Every item is one line (icon, title, working

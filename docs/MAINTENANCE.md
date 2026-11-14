@@ -78,10 +78,11 @@ changes nothing unless the generator changed.
 | `Encoding.swift` | each file's YAML, both ways |
 | `Interlocutors.swift` | `TurnDetector`: speaker candidates, turns, name suggestions |
 | `FullTexts.swift` | `FullTexts` (reading), `TextNormaliser`, `Anchoring` (re-finding selections) |
+| `Progress.swift` | `TimeIndicators` ("[~5 min]": finding and trimming), `CodingProgress` (coded, irrelevant, still to do, per file and layer) |
 | `TextEdits.swift` | edits that follow the full-text: `applyTextEdit` and `textEditImpact` (a text file corrected in place, every layer's selections adjusted), `TextNormaliser.data(for:like:)` (writing text back in the file's encoding and line endings), `FullTexts.write` (the one write), page rotations, merging selections next to each other (`mergeCandidates`, `mergeSelections`) |
 | `SHA256.swift` | fingerprints |
 | `RealNames.swift` | `CSV` reader and writer; `RealNames` (mapping files, templates) |
-| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `AttributeSheetReport` (rows, CSV), `ProtocolReport` (a protocol's summaries across files, CSV) |
+| `Reports.swift` | `CodingChart` (columns, levels, links, crossing reduction), `AttributeSheetReport` (rows, CSV), `ProtocolResponses` (a protocol's summaries across files, CSV), `ProtocolOutcomes` (codes against a protocol's items and parts, CSV) |
 
 `WorkingIDs` (in `Editing.swift`) numbers items alphabetically per kind;
 `ProjectIndex.workingID` holds them, `AppModel.wid(_:)` reads them.
@@ -106,11 +107,13 @@ with its own undo, which writes the file back), `DeviceStore` (UserDefaults and 
 titles, symbols and colours), `ListPages` (the list pages, SwiftUI Tables),
 `ItemPages` (code, attribute sheet and person pages), `DeductivePages`
 (Protocols and A Priori Codes: tables, pages, inspectors), `CodingChart`,
-`AttributeSheetReport` and `ProtocolReport` (the Reports pages),
+`AttributeSheetReport`, `ProtocolResponses` and `ProtocolOutcomes` (the Reports
+pages), `CodingMarks` (what stripes and protocol segments show, shared by
+the text and PDF views),
 `TextCodingView` (text view, decorations, margins: the speaker names that
 stay in view, protocol segments with their summary bubbles, stripes and labels;
-keys), `PDFCodingView` (with `PDFStripeOverlay`, the stripes beside the
-pages, and page turns), `EditTextSheet` (editing a text file in place),
+keys), `PDFCodingView` (with `PDFMarginsView` in `PDFMarginsHostingView`,
+the same margins beside the pages, and page turns), `EditTextSheet` (editing a text file in place),
 `CodingBar` (coding bar, quick codes, code palette, protocol palette), `InspectorView` (routed
 by page), `EvidencePane`, `AttributeSheetsPage` (the attribute sheet editor and the
 response sheet), `Pages` (Layers, Project Settings, real names), `Sheets`,
@@ -300,7 +303,7 @@ Nothing may touch the network:
 - The sample builds, saves and loads back unchanged.
 - Working identifiers are alphabetical per kind (natural number order) and
   renumber when an item is added.
-- The Coding Chart puts theorising codes by level, links files to open codes and
+- The Inductive Coding Chart puts theorising codes by level, links files to open codes and
   codes to the theorising codes they are evidence for (also across columns),
   leaves out unlinked items unless asked; the Attribute Sheet Report lists sheets
   and unanswered items, and its CSV quotes fields properly.
@@ -316,7 +319,15 @@ Nothing may touch the network:
   between at most) in the same layer and file, coded the same way; memos
   are joined, interrelations follow, and it is refused over irrelevant text.
 - Page rotations, table layouts and protocol summaries survive the round
-  trip; the Protocol Report lists the files following a protocol in a
+  trip; the Protocol Responses report lists the files following a protocol in a
   deductive layer, with summaries and segments per item, and its CSV.
+- Time indicators are found in their forms (and not in "[5]", "[min]" or
+  "[~5 apples]"), trimmed from the ends of selections but not their middles;
+  coding progress counts coded, irrelevant and pending characters, leaving
+  out white space, time indicators and ignored spans, per layer.
+- Protocol Outcomes counts each code's instances (a theorising code's
+  through the codes beneath it, once each) per item and part of the
+  protocol, elsewhere when outside every segment, refuses a layer of the
+  wrong kind, and writes CSV.
 - No networking API in the sources (a name that merely ends with one, such
   as `CodeLink(`, doesn't count), no dependencies.

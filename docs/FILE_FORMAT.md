@@ -269,7 +269,7 @@ A deductive layer's Framework Matrix summaries for one row: an empirical
 file or an interviewee. Each cell is a column (an a priori code or a
 protocol item) and the researcher's summary of the row's data for it. A
 file's cells for protocol items are the summaries written in the bubbles
-under its protocol labels, which the Protocol Report shows.
+under its protocol labels, which the Protocol Responses report shows.
 
 ```yaml
 row: f-1e7e0001
